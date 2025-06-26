@@ -87,27 +87,33 @@ export default function ProductDetails() {
     setAdded(false); // reset previous state
 
     try {
-      await ensureSession();
-      const token = getCsrf();
+      // 🔐 Ensure session cookie is initialized (Laravel sets it here)
+      await fetch(`${API_CART}/checkout/cart`, {
+        credentials: "include",
+      });
 
-      const r = await fetch(`${API_CART}/checkout/cart`, {
+      // 🛒 Add to cart using Bagisto guest route
+      const r = await fetch(`${API_CART}/checkout/cart/add/${product.id}`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "X-XSRF-TOKEN": token,
-          "X-Requested-With": "XMLHttpRequest",
         },
-        body: JSON.stringify({ product_id: product.id, quantity: qty }),
+        body: JSON.stringify({ quantity: qty }),
       });
 
-      if (!r.ok) throw new Error(`status ${r.status}`);
+      if (!r.ok) {
+        const errJson = await r.json().catch(() => null);
+        const msg = errJson?.message || `status ${r.status}`;
+        throw new Error(msg);
+      }
 
       setAdded(true);
       setTimeout(() => setAdded(false), 2500);
     } catch (err) {
       console.error("Add‑to‑cart failed", err);
-      alert("Failed to add to cart.");
+      alert("Failed to add to cart: " + err.message);
     } finally {
       setBusy(false);
     }
