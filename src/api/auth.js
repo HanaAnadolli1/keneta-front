@@ -1,4 +1,4 @@
-export const API_V1 = "https://keneta.laratest-app.com/api/v1";
+import { API_V1 } from "./config";
 
 export async function login({ email, password, device_name = "react" }) {
   const form = new FormData();
@@ -7,13 +7,15 @@ export async function login({ email, password, device_name = "react" }) {
   form.append("device_name", device_name);
   const res = await fetch(`${API_V1}/customer/login`, {
     method: "POST",
+    credentials: "include",
     body: form,
     headers: {
       Accept: "application/json",
     },
   });
-  if (!res.ok) throw new Error("Login failed");
-  return res.json();
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || "Login failed");
+  return json;
 }
 
 export async function register(data) {
@@ -30,6 +32,7 @@ export async function register(data) {
       Accept: "application/json",
     },
   });
-  if (!res.ok) throw new Error("Registration failed");
-  return res.json();
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || "Registration failed");
+  return json;
 }

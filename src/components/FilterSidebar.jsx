@@ -2,8 +2,7 @@ import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-
-const API_V1 = "https://keneta.laratest-app.com/api/v1";
+import { API_V1 } from "../api/config";
 
 /* ------------------------------------------------
    Hook: load & cache filterable attributes

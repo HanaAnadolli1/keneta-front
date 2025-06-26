@@ -18,7 +18,7 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       navigate("/");
     } catch (err) {
-      setError("Login failed");
+      setError(err.message);
     } finally {
       setLoading(false);
     }
