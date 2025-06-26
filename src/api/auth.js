@@ -1,5 +1,5 @@
 // src/api/auth.js
-import { API_V1 } from "../config";
+import { API_V1 } from "./config";
 
 /* ─────────────────────────────────────────────────────────── helpers ── */
 function persistToken(json) {
