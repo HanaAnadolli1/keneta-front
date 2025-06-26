@@ -4,7 +4,9 @@ import Header from "./components/Header";
 import Products from "./pages/Products";
 import Home from "./pages/Home";
 import Brands from "./pages/Brands";
-import ProductDetails from "./pages/ProductDetails"; // ✅ Add this
+import ProductDetails from "./pages/ProductDetails";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 
 function NotFound() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
         <Route path="/products" element={<Products />} />
         <Route path="/products/:id" element={<ProductDetails />} />
         <Route path="/brands" element={<Brands />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

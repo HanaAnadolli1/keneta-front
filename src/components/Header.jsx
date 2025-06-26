@@ -3,6 +3,7 @@ import { FiShoppingCart, FiSearch } from "react-icons/fi";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import logo from "../assets/logo.png";
+import { Link } from "react-router-dom";
 
 export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -43,9 +44,12 @@ export default function Header() {
 
             {/* Account & Cart */}
             <div className="flex items-center gap-4 md:gap-6">
-              <div className="text-[#0b2d39] text-sm md:text-lg font-medium cursor-pointer">
+              <Link
+                to="/login"
+                className="text-[#0b2d39] text-sm md:text-lg font-medium"
+              >
                 Llogaria ime
-              </div>
+              </Link>
               <div
                 onClick={() => setIsCartOpen(true)}
                 className="text-sky-500 text-2xl cursor-pointer"
