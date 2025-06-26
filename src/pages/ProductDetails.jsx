@@ -84,29 +84,39 @@ export default function ProductDetails() {
     if (!product || qty < 1) return;
 
     setBusy(true);
-    setAdded(false); // reset previous state
+    setAdded(false);
 
     try {
-      await ensureSession();
-      const token = getCsrf();
+      // Ensure Laravel sets guest session
+      await fetch(`${API_CART}/checkout/cart`, {
+        credentials: "include",
+      });
 
+      // Correct route: POST to /api/checkout/cart with payload
       const r = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
-        credentials: "include",
+        credentials: "include", // Needed to send/receive session cookie
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ quantity: qty }),
+        body: JSON.stringify({
+          product_id: product.id,
+          quantity: qty,
+        }),
       });
 
-      if (!r.ok) throw new Error(`status ${r.status}`);
+      if (!r.ok) {
+        const errJson = await r.json().catch(() => null);
+        const msg = errJson?.message || `status ${r.status}`;
+        throw new Error(msg);
+      }
 
       setAdded(true);
       setTimeout(() => setAdded(false), 2500);
     } catch (err) {
       console.error("Add‑to‑cart failed", err);
-      alert("Failed to add to cart.");
+      alert("Failed to add to cart: " + err.message);
     } finally {
       setBusy(false);
     }
