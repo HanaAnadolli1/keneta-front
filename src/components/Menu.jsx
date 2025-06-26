@@ -63,6 +63,12 @@ const Menu = () => {
         </div>
 
         {/* Static Menu Items with Links */}
+        <Link
+          to="/products"
+          className="text-indigo-900 font-bold cursor-pointer"
+        >
+          Produktet
+        </Link>
         <Link to="/brands" className="text-indigo-900 font-bold cursor-pointer">
           Brendet
         </Link>
