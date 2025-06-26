@@ -92,7 +92,6 @@ export default function ProductDetails() {
 
       const r = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
