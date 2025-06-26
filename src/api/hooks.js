@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-const API_V1 = "/api/v1";
-const API_CART = "/api";
+const API_V1 = "https://keneta.laratest-app.com/api/v1";
+const API_CART = "https://keneta.laratest-app.com/api";
 const PER_PAGE = 12;
 
 /* ───── products list ─────────────────────────────────────────── */

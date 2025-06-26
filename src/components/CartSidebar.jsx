@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "../api/hooks";
 
-const API_CART = "/api"; // proxy prefix
+const API_CART = "https://keneta.laratest-app.com/api";
 
 /* ───────── helpers ───────── */
 const getCsrf = () =>

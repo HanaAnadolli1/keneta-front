@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 
-const API_V1 = "/api/v1"; // catalog data
-const API_CART = "/api"; // cart actions
+const API_V1 = "https://keneta.laratest-app.com/api/v1"; // catalog data
+const API_CART = "https://keneta.laratest-app.com/api"; // cart actions
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5‑minute freshness window
 
 /**********************************************************************
