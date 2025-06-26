@@ -1,9 +1,11 @@
+// src/pages/Register.jsx
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { register } from "../api/auth";
 
 export default function Register() {
   const navigate = useNavigate();
+
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -14,19 +16,19 @@ export default function Register() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
     try {
-      await register(form);
-      navigate("/login");
+      await register(form); // token persisted internally
+      navigate("/"); // already authenticated – go home
     } catch (err) {
-      setError("Registration failed");
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -35,6 +37,7 @@ export default function Register() {
   return (
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4 text-center">Register</h1>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block mb-1 text-sm">First Name</label>
@@ -46,6 +49,7 @@ export default function Register() {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1 text-sm">Last Name</label>
           <input
@@ -56,6 +60,7 @@ export default function Register() {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1 text-sm">Email</label>
           <input
@@ -67,6 +72,7 @@ export default function Register() {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1 text-sm">Password</label>
           <input
@@ -78,6 +84,7 @@ export default function Register() {
             required
           />
         </div>
+
         <div>
           <label className="block mb-1 text-sm">Confirm Password</label>
           <input
@@ -89,15 +96,18 @@ export default function Register() {
             required
           />
         </div>
+
         {error && <p className="text-red-600 text-sm">{error}</p>}
+
         <button
           type="submit"
           className="w-full bg-[#0b2d39] text-white py-2 rounded"
           disabled={loading}
         >
-          {loading ? "Loading..." : "Register"}
+          {loading ? "Loading…" : "Register"}
         </button>
       </form>
+
       <p className="mt-4 text-center text-sm">
         Already have an account?{" "}
         <Link to="/login" className="text-blue-600">
