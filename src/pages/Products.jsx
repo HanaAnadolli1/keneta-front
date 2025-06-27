@@ -40,9 +40,14 @@ export default function Products() {
 
   /* ---------- UI ---------- */
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 flex gap-8">
+    <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8">
+      {/* Filter sidebar + mobile bar */}
       <FilterSidebar />
 
+      {/* horizontal rule on mobile to separate filter bar and products */}
+      <hr className="md:hidden border-t" />
+
+      {/* Product list */}
       <section className="flex-1">
         {isPending ? (
           <p className="text-center p-4">Loading…</p>
@@ -87,8 +92,6 @@ export default function Products() {
                       </p>
                     </div>
                   </Link>
-
-                  {/* your existing add-to-cart button stays unchanged */}
                 </article>
               ))}
             </div>
