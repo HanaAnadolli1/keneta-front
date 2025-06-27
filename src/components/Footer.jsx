@@ -1,36 +1,44 @@
 import React from "react";
 
 /**
- * Basic site footer with some placeholder links.
+ * Basic site footer with white background and your custom palette.
  */
 export default function Footer() {
   return (
-    <footer className="bg-gray-100 border-t mt-16">
+    <footer className="bg-white border-t border-[#1a3c5c] mt-16">
       <div className="max-w-7xl mx-auto px-4 py-10 grid gap-8 md:grid-cols-3">
         {/* Company description */}
         <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Keneta</h3>
-          <p className="text-sm text-gray-600">
+          <h3 className="text-lg font-semibold text-[#132232] mb-4">Keneta</h3>
+          <p className="text-sm text-[#152a41]">
             Mjetet dhe pajisjet më të mira për hapësirën tuaj të gjelbër.
           </p>
         </div>
 
         {/* Navigation */}
         <div>
-          <h4 className="text-sm font-semibold text-gray-800 mb-2">Navigimi</h4>
-          <ul className="space-y-2 text-sm text-gray-600">
+          <h4 className="text-sm font-semibold text-[#132232] mb-2">
+            Navigimi
+          </h4>
+          <ul className="space-y-2 text-sm text-[#152a41]">
             <li>
-              <a href="/products" className="hover:underline">
+              <a
+                href="/products"
+                className="hover:underline hover:text-[#1d446b]"
+              >
                 Produktet
               </a>
             </li>
             <li>
-              <a href="/brands" className="hover:underline">
+              <a
+                href="/brands"
+                className="hover:underline hover:text-[#1d446b]"
+              >
                 Brendet
               </a>
             </li>
             <li>
-              <a href="#" className="hover:underline">
+              <a href="#" className="hover:underline hover:text-[#1d446b]">
                 Kontakt
               </a>
             </li>
@@ -39,12 +47,16 @@ export default function Footer() {
 
         {/* Social links */}
         <div>
-          <h4 className="text-sm font-semibold text-gray-800 mb-2">
+          <h4 className="text-sm font-semibold text-[#132232] mb-2">
             Na ndiqni
           </h4>
-          <ul className="flex space-x-4 text-gray-600">
+          <ul className="flex space-x-4">
             <li>
-              <a href="#" aria-label="Facebook" className="hover:text-gray-800">
+              <a
+                href="#"
+                aria-label="Facebook"
+                className="text-[#152a41] hover:text-[#1a3c5c]"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -59,7 +71,7 @@ export default function Footer() {
               <a
                 href="#"
                 aria-label="Instagram"
-                className="hover:text-gray-800"
+                className="text-[#152a41] hover:text-[#1a3c5c]"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -74,7 +86,7 @@ export default function Footer() {
           </ul>
         </div>
       </div>
-      <div className="border-t py-4 text-center text-xs text-gray-500">
+      <div className="border-t border-[#1a3c5c] py-4 text-center text-xs text-[#152a41]">
         &copy; {new Date().getFullYear()} Keneta. Të gjitha të drejtat e
         rezervuara.
       </div>

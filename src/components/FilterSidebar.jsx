@@ -31,7 +31,7 @@ export default function FilterSidebar() {
   const { data: attributes = [], isLoading, error } = useFilterAttributes();
   const [searchParams, setSearchParams] = useSearchParams();
   const [open, setOpen] = React.useState({});
-  const [mobileVisible, setMobileVisible] = React.useState(false); // whole accordion on mobile
+  const [mobileVisible, setMobileVisible] = React.useState(false);
 
   /* open every section once we know the attributes */
   React.useEffect(() => {
@@ -64,28 +64,28 @@ export default function FilterSidebar() {
   /* ------------- Markup builders ------------- */
   const renderFilters = () => (
     <>
-      <div className="flex justify-between items-center font-bold text-lg border-b pb-2">
-        <span>Filters:</span>
+      <div className="flex justify-between items-center font-bold text-lg border-b border-[#1a3c5c] pb-2">
+        <span className="text-[#132232]">Filters:</span>
         <button
           onClick={clearAll}
-          className="text-sm text-indigo-600 hover:underline"
+          className="text-sm text-[#1e456c] hover:text-[#1d446b] hover:underline"
         >
           Clear All
         </button>
       </div>
 
       {attributes.map((attr) => (
-        <div key={attr.id} className="border-b pb-3">
+        <div key={attr.id} className="border-b border-[#1a3c5c] pb-3">
           {/* header */}
           <div
             onClick={() => toggleSection(attr.code)}
-            className="flex justify-between items-center cursor-pointer font-semibold text-gray-800 mb-1"
+            className="flex justify-between items-center cursor-pointer font-semibold mb-1"
           >
-            <span>{attr.name}</span>
+            <span className="text-[#193653]">{attr.name}</span>
             {open[attr.code] ? (
-              <ChevronUp size={18} />
+              <ChevronUp className="text-[#1e456c]" size={18} />
             ) : (
-              <ChevronDown size={18} />
+              <ChevronDown className="text-[#1e456c]" size={18} />
             )}
           </div>
 
@@ -95,15 +95,15 @@ export default function FilterSidebar() {
               {attr.options.map((opt) => (
                 <label
                   key={opt.id}
-                  className="flex items-center space-x-2 text-sm text-gray-700"
+                  className="flex items-center space-x-2 text-sm"
                 >
                   <input
                     type="checkbox"
                     checked={isChecked(attr.code, opt.id)}
                     onChange={() => updateFilter(attr.code, opt.id)}
-                    className="rounded border-gray-300"
+                    className="rounded border-[#1d3d62] text-[#1d3d62] focus:ring-[#1d3d62]"
                   />
-                  <span>{opt.label}</span>
+                  <span className="text-[#152a41]">{opt.label}</span>
                 </label>
               ))}
             </div>
@@ -117,14 +117,14 @@ export default function FilterSidebar() {
   if (isLoading) {
     return (
       <aside className="w-72 p-4 md:block hidden">
-        <p className="text-gray-500">Loading filters…</p>
+        <p className="text-[#152a41]">Loading filters…</p>
       </aside>
     );
   }
   if (error) {
     return (
       <aside className="w-72 p-4 md:block hidden">
-        <p className="text-red-600 text-sm">Failed to load filters.</p>
+        <p className="text-[#1e456c] text-sm">Failed to load filters.</p>
       </aside>
     );
   }
@@ -137,16 +137,20 @@ export default function FilterSidebar() {
       </aside>
 
       {/* Mobile collapsible header */}
-      <div className="md:hidden border bg-sky-50">
+      <div className="md:hidden border border-[#1a3c5c] bg-[#193653]">
         <button
           onClick={() => setMobileVisible((v) => !v)}
-          className="w-full flex items-center justify-between py-3 px-4 text-indigo-900 font-semibold"
+          className="w-full flex items-center justify-between py-3 px-4 text-white font-semibold"
         >
           <span>FILTRAT</span>
-          {mobileVisible ? <ChevronUp /> : <ChevronDown />}
+          {mobileVisible ? (
+            <ChevronUp className="text-white" />
+          ) : (
+            <ChevronDown className="text-white" />
+          )}
         </button>
         {mobileVisible && (
-          <div className="p-4 space-y-4 border-t bg-white shadow-inner">
+          <div className="p-4 space-y-4 border-t border-[#1a3c5c] bg-white shadow-inner">
             {renderFilters()}
           </div>
         )}
