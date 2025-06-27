@@ -12,14 +12,17 @@ export function useProducts(searchParams) {
     keepPreviousData: true,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams(searchParams);
-      qs.set("limit", PER_PAGE); // Bagisto uses “limit”, not “per_page”
+      qs.set("limit", PER_PAGE);
 
       const res = await fetch(`${API_V1}/products?${qs}`, {
         signal,
-        headers: { Accept: "application/json" }, // 👈 **ADD THIS**
+        headers: { Accept: "application/json" },
       });
 
-      if (!res.ok) throw new Error("network");
+      if (!res.ok) {
+        const text = await res.text(); // try to read the body (often JSON)
+        throw new Error(`${res.status} ${res.statusText}\n${text}`);
+      }
       return res.json(); // will now succeed
     },
     select: (json) => ({
