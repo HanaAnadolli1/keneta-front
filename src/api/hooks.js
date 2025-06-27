@@ -29,16 +29,29 @@ export function useProducts(searchParams) {
 }
 
 /* ───── single product ────────────────────────────────────────── */
-export function useProduct(id) {
+/* hooks.js – products list */
+export function useProducts(searchParams) {
+  const key = ["products", searchParams.toString()];
+
   return useQuery({
-    enabled: !!id,
-    queryKey: ["product", id],
+    queryKey: key,
+    keepPreviousData: true,
     queryFn: async ({ signal }) => {
-      const res = await fetch(`${API_V1}/products/${id}`, { signal });
-      if (!res.ok) throw new Error("404");
-      return res.json();
+      const qs = new URLSearchParams(searchParams);
+      qs.set("limit", PER_PAGE); // Bagisto uses “limit”, not “per_page”
+
+      const res = await fetch(`${API_V1}/products?${qs}`, {
+        signal,
+        headers: { Accept: "application/json" }, // 👈 **ADD THIS**
+      });
+
+      if (!res.ok) throw new Error("network");
+      return res.json(); // will now succeed
     },
-    select: (json) => json.data,
+    select: (json) => ({
+      items: json.data || [],
+      total: json?.meta?.total ?? 0,
+    }),
   });
 }
 
