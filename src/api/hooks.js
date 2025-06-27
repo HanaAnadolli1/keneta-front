@@ -14,7 +14,7 @@ export function useProducts(searchParams) {
       const qs = new URLSearchParams(searchParams);
       qs.set("limit", PER_PAGE);
 
-      const res = await fetch(`${API_V1}/products?${qs}`, {
+      const res = await fetch(`${API_CART}/products?${qs}`, {
         signal,
         headers: { Accept: "application/json" },
       });
@@ -38,7 +38,7 @@ export function useProduct(id) {
     enabled: !!id,
     queryKey: ["product", id],
     queryFn: async ({ signal }) => {
-      const res = await fetch(`${API_V1}/products/${id}`, { signal });
+      const res = await fetch(`${API_CART}/products/${id}`, { signal });
       if (!res.ok) throw new Error("404");
       return res.json();
     },
