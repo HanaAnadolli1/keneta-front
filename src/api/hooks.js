@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_V1, API_CART } from "./config";
 
+const API_V1 = "/api/v1";
+const API_CART = "/api";
 const PER_PAGE = 12;
 
-/* products list */
+/* ───── products list ─────────────────────────────────────────── */
 export function useProducts(searchParams) {
   const key = ["products", searchParams.toString()];
 
@@ -12,22 +13,18 @@ export function useProducts(searchParams) {
     keepPreviousData: true,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams(searchParams);
-      qs.set("limit", PER_PAGE);
-
-      const res = await fetch(`${API_V1}/products?${qs}`, {
-        signal,
-        headers: { Accept: "application/json" },
-      });
-
-      if (!res.ok) {
-        const text = await res.text(); // try to read the body (often JSON)
-        throw new Error(`${res.status} ${res.statusText}\n${text}`);
-      }
-      return res.json(); // will now succeed
+      qs.set("per_page", PER_PAGE);
+      const res = await fetch(`${API_V1}/products?sort=id&${qs}`, { signal });
+      if (!res.ok) throw new Error("network");
+      return res.json();
     },
     select: (json) => ({
       items: json.data || [],
-      total: json?.meta?.total ?? 0,
+      total:
+        json?.meta?.pagination?.total ??
+        json?.meta?.pagination?.total_items ??
+        json?.meta?.total ??
+        0,
     }),
   });
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { API_V1, API_CART } from "../api/config";
+
+const API_V1 = "/api/v1"; // catalog data
+const API_CART = "/api"; // cart actions
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5‑minute freshness window
 
 /**********************************************************************
@@ -82,39 +84,31 @@ export default function ProductDetails() {
     if (!product || qty < 1) return;
 
     setBusy(true);
-    setAdded(false);
+    setAdded(false); // reset previous state
 
     try {
-      // Ensure Laravel sets guest session
-      await fetch(`${API_CART}/checkout/cart`, {
-        credentials: "include",
-      });
+      await ensureSession();
+      const token = getCsrf();
 
-      // Correct route: POST to /api/checkout/cart with payload
       const r = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
-        credentials: "include", // Needed to send/receive session cookie
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          "X-XSRF-TOKEN": token,
+          "X-Requested-With": "XMLHttpRequest",
         },
-        body: JSON.stringify({
-          product_id: product.id,
-          quantity: qty,
-        }),
+        body: JSON.stringify({ product_id: product.id, quantity: qty }),
       });
 
-      if (!r.ok) {
-        const errJson = await r.json().catch(() => null);
-        const msg = errJson?.message || `status ${r.status}`;
-        throw new Error(msg);
-      }
+      if (!r.ok) throw new Error(`status ${r.status}`);
 
       setAdded(true);
       setTimeout(() => setAdded(false), 2500);
     } catch (err) {
       console.error("Add‑to‑cart failed", err);
-      alert("Failed to add to cart: " + err.message);
+      alert("Failed to add to cart.");
     } finally {
       setBusy(false);
     }
@@ -143,45 +137,43 @@ export default function ProductDetails() {
 
         {/* details */}
         <div className="w-full lg:w-1/2 space-y-4">
-          <h1 className="text-2xl font-semibold text-[#132232]">
-            {product.name}
-          </h1>
+          <h1 className="text-2xl font-semibold">{product.name}</h1>
           <div
-            className="text-[#152a41]"
+            className="text-gray-600"
             dangerouslySetInnerHTML={{ __html: product.short_description }}
           />
-          <div className="text-xl font-bold text-[#1a3c5c]">
+          <div className="text-xl font-bold text-indigo-600">
             {product.formatted_price}
           </div>
 
           <div className="flex items-center gap-4 mt-4">
             {/* quantity chooser */}
-            <div className="flex items-center border border-[#1d446b] rounded select-none">
+            <div className="flex items-center border rounded select-none">
               <button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
-                className="px-3 py-1 text-[#132232] hover:text-[#1a3c5c]"
+                className="px-3 py-1"
               >
                 −
               </button>
-              <div className="px-4 py-1 w-10 text-center text-[#132232]">
-                {qty}
-              </div>
+              <div className="px-4 py-1 w-10 text-center">{qty}</div>
               <button
                 onClick={() => setQty((q) => q + 1)}
-                className="px-3 py-1 text-[#132232] hover:text-[#1a3c5c]"
+                className="px-3 py-1"
               >
                 +
               </button>
             </div>
 
-            {/* add-to-cart */}
+            {/* add‑to‑cart */}
             <div className="flex flex-col gap-1 items-center min-w-[160px]">
               <button
                 onClick={addToCart}
                 disabled={busy}
-                className="relative bg-[#1a3c5c] text-white px-6 py-2 rounded disabled:opacity-50"
+                className="relative bg-indigo-600 text-white px-6 py-2 rounded disabled:opacity-50"
               >
                 {busy ? "Adding…" : "Add to Cart"}
+
+                {/* spinner overlays button text while busy */}
                 {busy && (
                   <svg
                     className="animate-spin h-5 w-5 text-white absolute inset-y-0 right-3 my-auto"
@@ -196,24 +188,24 @@ export default function ProductDetails() {
                       r="10"
                       stroke="currentColor"
                       strokeWidth="4"
-                    />
+                    ></circle>
                     <path
                       className="opacity-75"
                       fill="currentColor"
                       d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                    />
+                    ></path>
                   </svg>
                 )}
               </button>
 
               {/* status messages */}
               {busy && !added && (
-                <div className="text-[#1d446b] text-sm mt-1">
+                <div className="text-blue-600 text-sm mt-1">
                   Adding to cart…
                 </div>
               )}
               {added && (
-                <div className="text-[#1e456c] text-sm mt-1 transition-opacity duration-300">
+                <div className="text-green-600 text-sm mt-1 transition-opacity duration-300">
                   Product added to cart!
                 </div>
               )}

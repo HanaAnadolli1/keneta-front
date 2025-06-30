@@ -1,11 +1,22 @@
+// src/components/ProductCard.jsx
 import React from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "../index.css";
+import { useCartMutations } from "../api/hooks"; // adjust path as needed
 
 /**
  * ProductCard: displays a product with slide-up details on hover
  */
 export default function ProductCard({ product, prefetch }) {
+  const { addItem } = useCartMutations();
+
+  const handleAdd = () => {
+    addItem.mutate({
+      productId: product.id,
+      quantity: 1,
+    });
+  };
+
   return (
     <article
       className="group relative bg-white rounded-lg shadow overflow-hidden"
@@ -28,9 +39,21 @@ export default function ProductCard({ product, prefetch }) {
         <p className="text-[#132232] font-semibold text-lg">
           {product.formatted_price}
         </p>
-        <button className="mt-2 w-full border border-[#1a3c5c] text-[#1a3c5c] py-2 rounded hover:bg-[#1a3c5c] hover:text-white transition">
-          Add To Cart
+        <button
+          onClick={handleAdd}
+          disabled={addItem.isLoading}
+          className={
+            "mt-2 w-full border border-[#1a3c5c] text-[#1a3c5c] py-2 rounded transition " +
+            (addItem.isLoading
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-[#1a3c5c] hover:text-white")
+          }
+        >
+          {addItem.isLoading ? "Adding…" : "Add To Cart"}
         </button>
+        {addItem.isError && (
+          <p className="text-red-500 text-sm mt-1">Error adding to cart</p>
+        )}
       </div>
 
       {/* static info */}
