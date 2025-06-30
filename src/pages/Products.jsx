@@ -58,7 +58,7 @@ export default function Products() {
       <section className="flex-1">
         {products.length === 0 ? (
           <p className="text-center text-gray-500">
-            No product with that filter.
+            No products match that filter.
           </p>
         ) : (
           <>
@@ -76,7 +76,7 @@ export default function Products() {
                     <img
                       src={
                         p.base_image?.medium_image_url ||
-                        "https://via.placeholder.com/300x200?text=No+Image"
+                        "https://via.placeholder.com/300x200"
                       }
                       alt={p.name}
                       className="w-full h-48 object-contain bg-gray-100"
@@ -85,18 +85,11 @@ export default function Products() {
                       <h2 className="text-base font-semibold mb-1 line-clamp-2">
                         {p.name}
                       </h2>
-                      <div
-                        className="text-sm text-gray-600 line-clamp-3"
-                        dangerouslySetInnerHTML={{
-                          __html: p.short_description,
-                        }}
-                      />
-                      <p className="font-bold text-indigo-600 mt-2">
+                      <p className="font-bold text-indigo-600">
                         {p.formatted_price}
                       </p>
                     </div>
                   </Link>
-
                   <div className="p-4 border-t flex justify-between items-center">
                     <button
                       onClick={() =>

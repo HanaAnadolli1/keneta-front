@@ -1,15 +1,13 @@
 // src/api/hooks.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
+import { API_V1, API_CART } from "./config";
 
-const API_V1 = "/api/v1";
-const API_CART = "/api";
 const PER_PAGE = 12;
-
 const SESSION_COOKIE = "bagisto_session";
 const SESSION_LENGTH = 40;
 
-// ─── SESSION HELPERS ───────────────────────────────────────────────────────────
+// ─── Session helpers ──────────────────────────────────────────────────────────
 function generateSessionValue(len = SESSION_LENGTH) {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -29,7 +27,7 @@ function ensureSession() {
   return sess;
 }
 
-// ─── PRODUCTS LIST ─────────────────────────────────────────────────────────────
+// ─── Products list ────────────────────────────────────────────────────────────
 export function useProducts(searchParams) {
   const key = ["products", searchParams.toString()];
   return useQuery({
@@ -37,37 +35,35 @@ export function useProducts(searchParams) {
     keepPreviousData: true,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams(searchParams);
-      qs.set("per_page", PER_PAGE);
-      const res = await fetch(`${API_V1}/products?sort=id&${qs}`, { signal });
-      if (!res.ok) throw new Error("network");
+      qs.set("limit", PER_PAGE); // ← correct param name
+      const res = await fetch(`${API_V1}/products?${qs.toString()}`, {
+        signal,
+      });
+      if (!res.ok) throw new Error("Failed to fetch products");
       return res.json();
     },
     select: (json) => ({
       items: json.data || [],
-      total:
-        json?.meta?.pagination?.total ??
-        json?.meta?.pagination?.total_items ??
-        json?.meta?.total ??
-        0,
+      total: json.meta?.total ?? 0,
     }),
   });
 }
 
-// ─── SINGLE PRODUCT ────────────────────────────────────────────────────────────
+// ─── Single product ───────────────────────────────────────────────────────────
 export function useProduct(id) {
   return useQuery({
     enabled: !!id,
     queryKey: ["product", id],
     queryFn: async ({ signal }) => {
       const res = await fetch(`${API_V1}/products/${id}`, { signal });
-      if (!res.ok) throw new Error("404");
+      if (!res.ok) throw new Error("Product not found");
       return res.json();
     },
     select: (json) => json.data,
   });
 }
 
-// ─── CART CONTENTS ─────────────────────────────────────────────────────────────
+// ─── Cart contents ───────────────────────────────────────────────────────────
 export function useCart() {
   return useQuery({
     queryKey: ["cart"],
@@ -78,14 +74,14 @@ export function useCart() {
         signal,
         headers: { Accept: "application/json" },
       });
-      if (!res.ok) throw new Error("network");
+      if (!res.ok) throw new Error("Failed to fetch cart");
       return res.json();
     },
     select: (json) => json.data,
   });
 }
 
-// ─── PREFETCH HELPER ───────────────────────────────────────────────────────────
+// ─── Prefetch helper ──────────────────────────────────────────────────────────
 export function usePrefetchProduct() {
   const qc = useQueryClient();
   return (id) =>
@@ -98,7 +94,7 @@ export function usePrefetchProduct() {
     });
 }
 
-// ─── CART MUTATIONS ────────────────────────────────────────────────────────────
+// ─── Cart mutations ───────────────────────────────────────────────────────────
 export function useCartMutations() {
   const qc = useQueryClient();
 
@@ -116,13 +112,11 @@ export function useCartMutations() {
       });
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`add failed: ${res.status} ${text}`);
+        throw new Error(`Add to cart failed: ${res.status} ${text}`);
       }
       return res.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries(["cart"]);
-    },
+    onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
   const removeItem = useMutation({
@@ -136,12 +130,10 @@ export function useCartMutations() {
           headers: { Accept: "application/json" },
         }
       );
-      if (!res.ok) throw new Error("remove failed");
+      if (!res.ok) throw new Error("Remove from cart failed");
       return res.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries(["cart"]);
-    },
+    onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
   const updateItemQuantity = useMutation({
@@ -156,7 +148,7 @@ export function useCartMutations() {
             headers: { Accept: "application/json" },
           }
         );
-        if (!res.ok) throw new Error("remove failed");
+        if (!res.ok) throw new Error("Remove from cart failed");
         return res.json();
       }
       const res = await fetch(`${API_CART}/checkout/cart/update`, {
@@ -170,12 +162,10 @@ export function useCartMutations() {
           items: [{ cartItemId: lineItemId, quantity }],
         }),
       });
-      if (!res.ok) throw new Error("update failed");
+      if (!res.ok) throw new Error("Update cart failed");
       return res.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries(["cart"]);
-    },
+    onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
   return { addItem, removeItem, updateItemQuantity };
