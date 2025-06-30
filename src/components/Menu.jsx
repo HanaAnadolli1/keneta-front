@@ -3,23 +3,13 @@ import { Link } from "react-router-dom";
 import { Menu as MenuIcon, X as CloseIcon, ChevronDown } from "lucide-react";
 
 /**
- * Responsive navigation bar.
- *
- * Behaviour:
- *  - Desktop (md and up): shows inline menu exactly like the original implementation.
- *  - Mobile (< md): shows a hamburger button that toggles a slide-down panel.
- *    Inside the panel the “Kategoritë” item expands / collapses to reveal the
- *    fetched categories list.
+ * Responsive navigation bar with custom palette and left-origin underline animation.
  */
 const Menu = () => {
-  const [dropdownOpen, setDropdownOpen] = useState(false); // desktop categories dropdown
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [mobileOpen, setMobileOpen] = useState(false); // whole menu on mobile
-  const [mobileCatsOpen, setMobileCatsOpen] = useState(false); // categories accordion on mobile
-
-  const toggleDropdown = () => setDropdownOpen(!dropdownOpen);
-  const toggleMobileMenu = () => setMobileOpen(!mobileOpen);
-  const toggleMobileCats = () => setMobileCatsOpen(!mobileCatsOpen);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileCatsOpen, setMobileCatsOpen] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -36,28 +26,26 @@ const Menu = () => {
         console.error("Failed to load categories:", error);
       }
     };
-
     fetchCategories();
   }, []);
 
-  // Reusable categories markup (grid for desktop, list for mobile)
   const renderCategories = (isMobile = false) => (
     <div
       className={
         isMobile
-          ? "flex flex-col space-y-1 mt-2 pl-4" // accordion list
-          : "absolute left-0 mt-2 w-[700px] rounded-xs bg-white border shadow-lg grid grid-cols-3 gap-4 p-4 z-50"
+          ? "flex flex-col space-y-1 mt-2 pl-4"
+          : "absolute left-0 mt-2 w-[700px] bg-white border shadow-lg grid grid-cols-3 gap-4 p-4 z-50"
       }
     >
       {categories.map((cat) => (
         <Link
           to={`/products?category=${cat.id}`}
           key={cat.id}
-          className={
-            isMobile
-              ? "flex items-center space-x-3 hover:bg-gray-100 p-2 rounded"
-              : "flex items-center space-x-3 hover:bg-gray-100 p-2 rounded"
-          }
+          className={`flex items-center space-x-3 p-2
+            text-sm text-[#132232]
+            border-b-2 border-transparent
+            hover:border-[#1a3c5c]
+            transition-all duration-200`}
           onClick={() => {
             setDropdownOpen(false);
             setMobileOpen(false);
@@ -71,64 +59,59 @@ const Menu = () => {
               className="w-8 h-8 object-contain"
             />
           )}
-          <span className="text-sm text-gray-800 truncate">{cat.name}</span>
+          <span className="truncate">{cat.name}</span>
         </Link>
       ))}
     </div>
   );
 
+  const labels = [
+    { label: "Produktet", to: "/products" },
+    { label: "Brendet", to: "/brands" },
+    { label: "Deals", to: "#" },
+    { label: "Të rejat", to: "#" },
+    { label: "Outlet", to: "#" },
+  ];
+
   return (
     <nav className="bg-white p-4 shadow relative">
-      {/* Top bar */}
       <div className="flex items-center justify-between max-w-7xl mx-auto">
-        {/* LEFT: desktop menu */}
+        {/* Desktop menu */}
         <div className="hidden md:flex items-center space-x-8">
-          {/* Kategoritë dropdown */}
           <div className="relative">
             <button
-              className="flex items-center font-bold text-lg text-indigo-900"
-              onClick={toggleDropdown}
+              onClick={() => setDropdownOpen((o) => !o)}
+              className="flex items-center font-bold text-lg text-[#132232] hover:text-[#1a3c5c]"
             >
-              <span className="mr-2">&#9776;</span> Kategoritë
+              <span className="mr-2">☰</span>
+              Kategoritë
               <ChevronDown
-                className={`ml-1 transition-transform ${
-                  dropdownOpen ? "rotate-180" : "rotate-0"
-                }`}
                 size={18}
+                className={`ml-1 transition-transform ${
+                  dropdownOpen ? "rotate-180 text-[#1d446b]" : "rotate-0"
+                }`}
               />
             </button>
             {dropdownOpen && renderCategories(false)}
           </div>
 
-          {/* Static menu items */}
-          <Link
-            to="/products"
-            className="text-indigo-900 font-bold cursor-pointer"
-          >
-            Produktet
-          </Link>
-          <Link
-            to="/brands"
-            className="text-indigo-900 font-bold cursor-pointer"
-          >
-            Brendet
-          </Link>
-          <Link to="#" className="text-indigo-900 font-bold cursor-pointer">
-            Deals
-          </Link>
-          <Link to="#" className="text-indigo-900 font-bold cursor-pointer">
-            Të rejat
-          </Link>
-          <Link to="#" className="text-indigo-900 font-bold cursor-pointer">
-            Outlet
-          </Link>
+          {labels.map(({ label, to }, idx) => (
+            <Link
+              to={to}
+              key={idx}
+              className="group relative text-[#132232] font-bold"
+            >
+              {label}
+              <span className="absolute left-0 bottom-0 h-0.5 w-full bg-[#1a3c5c] transform scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-300" />
+            </Link>
+          ))}
         </div>
 
-        {/* RIGHT: Hamburger for mobile */}
+        {/* Mobile toggle */}
         <button
-          className="flex items-center md:hidden text-indigo-900"
-          onClick={toggleMobileMenu}
-          aria-label="Toggle navigation menu"
+          onClick={() => setMobileOpen((o) => !o)}
+          className="md:hidden text-[#132232] hover:text-[#1a3c5c]"
+          aria-label="Toggle menu"
         >
           {mobileOpen ? <CloseIcon size={28} /> : <MenuIcon size={28} />}
         </button>
@@ -137,61 +120,36 @@ const Menu = () => {
       {/* Mobile panel */}
       {mobileOpen && (
         <div className="md:hidden absolute left-0 top-full w-full bg-white shadow-lg p-4 flex flex-col space-y-4 z-40">
-          {/* Kategoritë accordion */}
           <div>
             <button
-              className="flex items-center justify-between w-full font-bold text-indigo-900"
-              onClick={toggleMobileCats}
+              onClick={() => setMobileCatsOpen((o) => !o)}
+              className="flex items-center justify-between w-full font-bold text-[#132232] hover:text-[#1a3c5c]"
             >
               <span className="flex items-center">
-                <span className="mr-2">&#9776;</span> Kategoritë
+                <span className="mr-2">☰</span>
+                Kategoritë
               </span>
               <ChevronDown
-                className={`transition-transform ${
-                  mobileCatsOpen ? "rotate-180" : "rotate-0"
-                }`}
                 size={18}
+                className={`transition-transform ${
+                  mobileCatsOpen ? "rotate-180 text-[#1d446b]" : "rotate-0"
+                }`}
               />
             </button>
             {mobileCatsOpen && renderCategories(true)}
           </div>
 
-          {/* Static links */}
-          <Link
-            to="/products"
-            className="text-indigo-900 font-bold"
-            onClick={() => setMobileOpen(false)}
-          >
-            Produktet
-          </Link>
-          <Link
-            to="/brands"
-            className="text-indigo-900 font-bold"
-            onClick={() => setMobileOpen(false)}
-          >
-            Brendet
-          </Link>
-          <Link
-            to="#"
-            className="text-indigo-900 font-bold"
-            onClick={() => setMobileOpen(false)}
-          >
-            Deals
-          </Link>
-          <Link
-            to="#"
-            className="text-indigo-900 font-bold"
-            onClick={() => setMobileOpen(false)}
-          >
-            Të rejat
-          </Link>
-          <Link
-            to="#"
-            className="text-indigo-900 font-bold"
-            onClick={() => setMobileOpen(false)}
-          >
-            Outlet
-          </Link>
+          {labels.map(({ label, to }, idx) => (
+            <Link
+              to={to}
+              key={idx}
+              onClick={() => setMobileOpen(false)}
+              className="group relative text-[#132232] font-bold"
+            >
+              {label}
+              <span className="absolute left-0 bottom-0 h-0.5 w-full bg-[#1a3c5c] transform scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-300" />
+            </Link>
+          ))}
         </div>
       )}
     </nav>
