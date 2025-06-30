@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart } from "../api/hooks";
 
-const API_CART = "https://keneta.laratest-app.com/api";
+const API_CART = "/api"; // proxy prefix
 
 /* ───────── helpers ───────── */
 const getCsrf = () =>
@@ -89,14 +89,14 @@ export default function CartSidebar({ open, onClose }) {
   /* ───────── UI ───────── */
   return (
     <div
-      className={`fixed top-0 right-0 h-full w-[24rem] bg-[#132232] shadow-2xl z-50 transform duration-300 ${
+      className={`fixed top-0 right-0 h-full w-[24rem] bg-white shadow-2xl z-50 transform duration-300 ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
     >
       <div className="flex flex-col h-full">
         {/* update banner */}
         {banner && (
-          <div className="absolute top-3 right-4 flex items-center gap-2 text-xs text-[#1d446b] z-10">
+          <div className="absolute top-3 right-4 flex items-center gap-2 text-xs text-blue-600 z-10">
             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
               <circle
                 className="opacity-25"
@@ -117,14 +117,14 @@ export default function CartSidebar({ open, onClose }) {
         )}
 
         {/* header */}
-        <div className="p-5 border-b border-[#1a3c5c] flex justify-between items-center shrink-0">
-          <h2 className="text-xl font-extrabold text-white">Shopping Cart</h2>
+        <div className="p-5 border-b flex justify-between items-center shrink-0">
+          <h2 className="text-xl font-extrabold">Shopping Cart</h2>
           <button onClick={onClose}>
-            <X size={22} className="text-white" />
+            <X size={22} />
           </button>
         </div>
 
-        <p className="px-5 py-3 text-sm text-white font-medium shrink-0">
+        <p className="px-5 py-3 text-sm text-gray-700 font-medium shrink-0">
           Get Up To <span className="font-semibold">30% OFF</span> on your 1st
           order
         </p>
@@ -132,11 +132,11 @@ export default function CartSidebar({ open, onClose }) {
         {/* scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 pb-4">
           {isLoading ? (
-            <div className="p-6 text-white">Loading…</div>
+            <div className="p-6">Loading…</div>
           ) : cart?.items?.length === 0 ? (
-            <div className="p-6 text-white">No products in the cart!</div>
+            <div className="p-6">No products in the cart!</div>
           ) : !cart?.items ? (
-            <div className="p-6 text-[#1e456c]">Failed to load cart.</div>
+            <div className="p-6 text-red-600">Failed to load cart.</div>
           ) : (
             cart.items.map((row) => (
               <div key={row.id} className="flex gap-4 mb-6 last:mb-0">
@@ -146,14 +146,14 @@ export default function CartSidebar({ open, onClose }) {
                   className="w-20 h-20 shrink-0 rounded object-cover bg-gray-100"
                 />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold leading-tight line-clamp-3 mb-1 text-white">
+                  <div className="text-sm font-semibold leading-tight line-clamp-3 mb-1">
                     {row.name}
                   </div>
-                  <div className="text-right text-sm font-semibold text-[#1e456c]">
+                  <div className="text-right text-sm font-semibold">
                     {row.formatted_price}
                   </div>
                   <div className="flex items-center gap-3 mt-2">
-                    <div className="flex items-center border rounded-full px-3 py-1 text-sm select-none border-[#1d446b] text-white">
+                    <div className="flex items-center border rounded-full px-3 py-1 text-sm select-none">
                       <button
                         disabled={busy === row.id}
                         onClick={() => change(row, row.quantity - 1)}
@@ -175,7 +175,7 @@ export default function CartSidebar({ open, onClose }) {
                     <button
                       disabled={busy === row.id}
                       onClick={() => change(row, 0)}
-                      className="text-[#1d3d62] text-sm font-medium hover:underline"
+                      className="text-indigo-700 text-sm font-medium hover:underline"
                     >
                       Remove
                     </button>
@@ -188,18 +188,18 @@ export default function CartSidebar({ open, onClose }) {
 
         {/* subtotal and actions fixed at bottom */}
         {cart?.items?.length > 0 && (
-          <div className="shrink-0 border-t border-[#1a3c5c]">
+          <div className="shrink-0 border-t">
             <div className="px-5 py-4 flex justify-between items-center">
-              <span className="text-[#193653] font-medium">Subtotal</span>
-              <span className="text-lg font-extrabold text-white">
+              <span className="text-gray-500 font-medium">Subtotal</span>
+              <span className="text-lg font-extrabold">
                 {cart.formatted_sub_total}
               </span>
             </div>
             <div className="px-5 py-6 space-y-2">
-              <button className="w-full bg-[#1a3c5c] text-white py-3 rounded-xl text-sm font-semibold shadow">
+              <button className="w-full bg-[#0b0e29] text-white py-3 rounded-xl text-sm font-semibold shadow">
                 Continue to Checkout
               </button>
-              <button className="w-full text-center text-sm text-[#1d446b] underline">
+              <button className="w-full text-center text-sm text-[#0b0e29] underline">
                 View Cart
               </button>
             </div>

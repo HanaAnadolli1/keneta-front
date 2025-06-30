@@ -1,4 +1,4 @@
-// src/hooks.js
+// src/api/hooks.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
@@ -29,7 +29,7 @@ function ensureSession() {
   return sess;
 }
 
-// ─── QUERY: products list ───────────────────────────────────────────────────────
+// ─── PRODUCTS LIST ─────────────────────────────────────────────────────────────
 export function useProducts(searchParams) {
   const key = ["products", searchParams.toString()];
   return useQuery({
@@ -38,7 +38,6 @@ export function useProducts(searchParams) {
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams(searchParams);
       qs.set("per_page", PER_PAGE);
-      // optional sort
       const res = await fetch(`${API_V1}/products?sort=id&${qs}`, { signal });
       if (!res.ok) throw new Error("network");
       return res.json();
@@ -54,7 +53,7 @@ export function useProducts(searchParams) {
   });
 }
 
-// ─── QUERY: single product ─────────────────────────────────────────────────────
+// ─── SINGLE PRODUCT ────────────────────────────────────────────────────────────
 export function useProduct(id) {
   return useQuery({
     enabled: !!id,
@@ -68,7 +67,7 @@ export function useProduct(id) {
   });
 }
 
-// ─── QUERY: cart contents ──────────────────────────────────────────────────────
+// ─── CART CONTENTS ─────────────────────────────────────────────────────────────
 export function useCart() {
   return useQuery({
     queryKey: ["cart"],
@@ -99,12 +98,12 @@ export function usePrefetchProduct() {
     });
 }
 
-// ─── MUTATIONS: add, remove, update cart ──────────────────────────────────────
+// ─── CART MUTATIONS ────────────────────────────────────────────────────────────
 export function useCartMutations() {
   const qc = useQueryClient();
 
-  const addItem = useMutation(
-    async ({ productId, quantity = 1 }) => {
+  const addItem = useMutation({
+    mutationFn: async ({ productId, quantity = 1 }) => {
       ensureSession();
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
@@ -116,16 +115,18 @@ export function useCartMutations() {
         body: JSON.stringify({ product_id: productId, quantity }),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`add failed: ${res.status} ${txt}`);
+        const text = await res.text();
+        throw new Error(`add failed: ${res.status} ${text}`);
       }
       return res.json();
     },
-    { onSuccess: () => qc.invalidateQueries(["cart"]) }
-  );
+    onSuccess: () => {
+      qc.invalidateQueries(["cart"]);
+    },
+  });
 
-  const removeItem = useMutation(
-    async (lineItemId) => {
+  const removeItem = useMutation({
+    mutationFn: async (lineItemId) => {
       ensureSession();
       const res = await fetch(
         `${API_CART}/checkout/cart/remove/${lineItemId}`,
@@ -138,11 +139,13 @@ export function useCartMutations() {
       if (!res.ok) throw new Error("remove failed");
       return res.json();
     },
-    { onSuccess: () => qc.invalidateQueries(["cart"]) }
-  );
+    onSuccess: () => {
+      qc.invalidateQueries(["cart"]);
+    },
+  });
 
-  const updateItemQuantity = useMutation(
-    async ({ lineItemId, quantity }) => {
+  const updateItemQuantity = useMutation({
+    mutationFn: async ({ lineItemId, quantity }) => {
       ensureSession();
       if (quantity === 0) {
         const res = await fetch(
@@ -170,8 +173,10 @@ export function useCartMutations() {
       if (!res.ok) throw new Error("update failed");
       return res.json();
     },
-    { onSuccess: () => qc.invalidateQueries(["cart"]) }
-  );
+    onSuccess: () => {
+      qc.invalidateQueries(["cart"]);
+    },
+  });
 
   return { addItem, removeItem, updateItemQuantity };
 }
