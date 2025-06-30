@@ -1,14 +1,13 @@
 // src/pages/ProductDetails.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
+import { API_V1, API_CART } from "../config";
 
-const API_V1 = "/api/v1"; // your catalog endpoint
-const API_CART = "/api"; // your cart endpoint
-const CSRF_ROUTE = "/sanctum/csrf-cookie"; // Laravel Sanctum CSRF cookie route
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const CACHE_STORE = new Map(); // id → { data, ts }
+const CSRF_ROUTE = "/sanctum/csrf-cookie";
+const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_STORE = new Map();
 
-// safe JSON parse helper
+// helper to parse JSON safely
 async function safeJson(res) {
   try {
     return await res.json();
@@ -17,10 +16,9 @@ async function safeJson(res) {
   }
 }
 
-// pull the token value out of the XSRF-TOKEN cookie
 function getCsrfToken() {
-  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  const m = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
 export default function ProductDetails() {
@@ -31,16 +29,18 @@ export default function ProductDetails() {
   const [added, setAdded] = useState(false);
   const [error, setError] = useState(null);
 
-  // ensure we only hit the CSRF endpoint once per session
+  // ensure we only hit CSRF endpoint once
   const csrfReady = useRef(false);
-  const ensureCsrfCookie = async () => {
+  const ensureCsrf = async () => {
     if (!csrfReady.current) {
-      await fetch(`${API_CART}${CSRF_ROUTE}`, { credentials: "include" });
+      await fetch(`${API_CART}${CSRF_ROUTE}`, {
+        credentials: "include",
+      });
       csrfReady.current = true;
     }
   };
 
-  // load + cache product details
+  // load & cache product
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -54,42 +54,34 @@ export default function ProductDetails() {
 
       const res = await fetch(`${API_V1}/products/${id}`);
       if (!res.ok) {
-        setError(`Failed to load product (status ${res.status})`);
+        setError(`Failed to load (status ${res.status})`);
         return;
       }
-
       const json = await safeJson(res);
       if (!json?.data) {
         setError("Product not found");
         return;
       }
-
       if (!ignore) {
         setProduct(json.data);
         CACHE_STORE.set(id, { data: json.data, ts: Date.now() });
       }
     })();
-
     return () => {
       ignore = true;
     };
   }, [id]);
 
-  // click handler for “Add to Cart”
+  // add to cart
   const addToCart = async () => {
     if (!product || qty < 1) return;
-
     setBusy(true);
     setAdded(false);
 
     try {
-      // 1) get a fresh XSRF cookie
-      await ensureCsrfCookie();
-
-      // 2) read the token out of the cookie
+      await ensureCsrf();
       const token = getCsrfToken();
 
-      // 3) POST to the /checkout/cart endpoint
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",
@@ -104,47 +96,37 @@ export default function ProductDetails() {
         }),
       });
 
-      // parse JSON so we can read any “message” field
       const json = await safeJson(res);
-
       if (!res.ok) {
-        // show the server’s message (e.g. “CSRF token mismatch”)
         throw new Error(json?.message || `Status ${res.status}`);
       }
 
-      // success flash
       setAdded(true);
-      setTimeout(() => setAdded(false), 2500);
+      setTimeout(() => setAdded(false), 2000);
     } catch (err) {
-      console.error("Add-to-cart failed:", err);
+      console.error("Add to cart error:", err);
       alert(`Failed to add to cart: ${err.message}`);
     } finally {
       setBusy(false);
     }
   };
 
-  // render errors / loading
   if (error) return <div className="p-8 text-red-600">{error}</div>;
   if (!product) return <div className="p-8">Loading…</div>;
 
-  // main UI
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Image */}
-        <div className="w-full lg:w-1/2">
-          <img
-            src={
-              product.base_image?.original_image_url ||
-              product.base_image?.medium_image_url ||
-              "https://via.placeholder.com/600x400?text=No+Image"
-            }
-            alt={product.name}
-            className="w-full h-auto rounded-lg object-contain bg-gray-100"
-          />
-        </div>
+        <img
+          src={
+            product.base_image?.original_image_url ||
+            product.base_image?.medium_image_url ||
+            "https://via.placeholder.com/600x400?text=No+Image"
+          }
+          alt={product.name}
+          className="w-full lg:w-1/2 object-contain bg-gray-100 rounded-lg"
+        />
 
-        {/* Details */}
         <div className="w-full lg:w-1/2 space-y-4">
           <h1 className="text-2xl font-semibold">{product.name}</h1>
           <div
@@ -156,7 +138,6 @@ export default function ProductDetails() {
           </div>
 
           <div className="flex items-center gap-4 mt-4">
-            {/* Quantity */}
             <div className="flex items-center border rounded select-none">
               <button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
@@ -172,25 +153,20 @@ export default function ProductDetails() {
                 +
               </button>
             </div>
-
-            {/* Add to cart */}
             <button
               onClick={addToCart}
               disabled={busy}
-              className="relative bg-indigo-600 text-white px-6 py-2 rounded disabled:opacity-50"
+              className="bg-indigo-600 text-white px-6 py-2 rounded disabled:opacity-50"
             >
               {busy ? "Adding…" : "Add to Cart"}
             </button>
           </div>
 
-          {/* feedback */}
-          {busy && !added && (
+          {busy && (
             <div className="text-blue-600 text-sm mt-1">Adding to cart…</div>
           )}
           {added && (
-            <div className="text-green-600 text-sm mt-1">
-              Product added to cart!
-            </div>
+            <div className="text-green-600 text-sm mt-1">Product added!</div>
           )}
         </div>
       </div>
