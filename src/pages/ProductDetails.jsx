@@ -1,7 +1,7 @@
 // src/pages/ProductDetails.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { API_V1, API_CART } from "../config";
+import { API_V1, API_CART } from "../api/config";
 
 const CSRF_ROUTE = "/sanctum/csrf-cookie";
 const CACHE_TTL = 5 * 60 * 1000;
