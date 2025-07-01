@@ -2,8 +2,8 @@
 import { API_V1 } from "./config";
 
 /**
- * Save token to localStorage (if present) and return the unwrapped payload.
- * If the server wrapped your user in `data`, this returns json.data.
+ * Persist token (if present) into localStorage, then return
+ * json.data (if it exists) or the raw json.
  */
 function persistToken(json) {
   if (json?.token) {
@@ -14,7 +14,7 @@ function persistToken(json) {
 
 /**
  * Register a new customer.
- * Resolves to your user object.
+ * Returns your user object.
  */
 export async function register(data) {
   const form = new FormData();
@@ -27,17 +27,13 @@ export async function register(data) {
     body: form,
   });
   const json = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(json.message || "Registration failed");
-  }
-
+  if (!res.ok) throw new Error(json.message || "Registration failed");
   return persistToken(json);
 }
 
 /**
  * Log in an existing customer.
- * Resolves to your user object.
+ * Returns your user object.
  */
 export async function login({ email, password, device_name = "react" }) {
   const form = new FormData();
@@ -47,22 +43,18 @@ export async function login({ email, password, device_name = "react" }) {
 
   const res = await fetch(`${API_V1}/customer/login`, {
     method: "POST",
-    credentials: "include", // if you’re using cookies
+    credentials: "include", // if your API uses cookie auth
     headers: { Accept: "application/json" },
     body: form,
   });
   const json = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(json.message || "Login failed");
-  }
-
+  if (!res.ok) throw new Error(json.message || "Login failed");
   return persistToken(json);
 }
 
 /**
- * Convenience wrapper for authenticated fetches.
- * Adds the Bearer header, unwraps `data`, and throws on errors using `json.message`.
+ * A wrapper for authenticated fetch calls.
+ * Adds Bearer header, unwraps json.data, surfaces json.message on error.
  */
 export async function apiFetch(url, options = {}) {
   const token = localStorage.getItem("token");
@@ -74,17 +66,13 @@ export async function apiFetch(url, options = {}) {
 
   const res = await fetch(url, { ...options, headers });
   const json = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(json.message || "API request failed");
-  }
-
+  if (!res.ok) throw new Error(json.message || "API request failed");
   return json.data ?? json;
 }
 
 /**
  * Fetch the currently authenticated user.
- * Your AuthContext can call this on mount to rehydrate state.
+ * Your AuthContext will call this on mount.
  */
 export async function fetchCurrentUser() {
   return apiFetch(`${API_V1}/customer/me`);

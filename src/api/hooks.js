@@ -1,9 +1,35 @@
 // src/api/hooks.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Cookies from "js-cookie";
 import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import { API_V1, API_CART } from "./config";
 
 const PER_PAGE = 12;
+const SESSION_COOKIE = "bagisto_session";
+const SESSION_LENGTH = 40;
+
+/** ── (Optional) Guest-session helper ───────────────────────────────── */
+function generateSessionValue(len = SESSION_LENGTH) {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let s = "";
+  for (let i = 0; i < len; i++) {
+    s += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return s;
+}
+
+function ensureSession() {
+  let sess = Cookies.get(SESSION_COOKIE);
+  if (!sess) {
+    sess = generateSessionValue();
+    Cookies.set(SESSION_COOKIE, sess, {
+      expires: 365,
+      sameSite: "Lax",
+    });
+  }
+  return sess;
+}
 
 /** ── Products list ───────────────────────────────────────────────────── */
 export function useProducts(searchParams) {
@@ -56,9 +82,13 @@ export function useProduct(id) {
 export function useCart() {
   return useQuery({
     queryKey: ["cart"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      // ensure guest session ID cookie
+      ensureSession();
+
       const res = await fetch(`${API_CART}/checkout/cart`, {
         credentials: "include",
+        signal,
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
@@ -86,15 +116,17 @@ export function usePrefetchProduct() {
     });
 }
 
-/** ── Cart mutations (CSRF-aware) ──────────────────────────────────────── */
+/** ── Cart mutations (CSRF + session aware) ───────────────────────────── */
 export function useCartMutations() {
   const qc = useQueryClient();
 
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1 }) => {
-      // ▷ fetch real CSRF cookie
+      // 1️⃣ guest-session cookie
+      ensureSession();
+      // 2️⃣ CSRF cookie + laravel_session
       await ensureCsrfCookie();
-      // ▷ read the token Laravel set
+      // 3️⃣ read token
       const token = getCsrfToken();
 
       const res = await fetch(`${API_CART}/checkout/cart`, {
@@ -119,6 +151,7 @@ export function useCartMutations() {
 
   const updateItemQuantity = useMutation({
     mutationFn: async ({ lineItemId, quantity }) => {
+      ensureSession();
       await ensureCsrfCookie();
       const token = getCsrfToken();
 
