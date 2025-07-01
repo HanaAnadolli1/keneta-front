@@ -1,4 +1,5 @@
 import { API_V1 } from "./config";
+import { apiFetch } from "./auth"; // we'll define apiFetch below, so this file has no cyclical import
 
 /**
  * Save token to localStorage (if present) and return user object.
@@ -80,4 +81,11 @@ export async function apiFetch(url, options = {}) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.message || "API request failed");
   return json.data ?? json;
+}
+
+/**
+ * Fetch the current authenticated user via /customer/me
+ */
+export async function fetchCurrentUser() {
+  return apiFetch(`${API_V1}/customer/me`);
 }

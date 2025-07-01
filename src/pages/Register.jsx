@@ -17,7 +17,6 @@ export default function Register() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ← fixed spread operator here
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -40,67 +39,8 @@ export default function Register() {
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4 text-center">Register</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* First Name */}
-        <div>
-          <label className="block mb-1 text-sm">First Name</label>
-          <input
-            name="first_name"
-            className="w-full border rounded p-2"
-            value={form.first_name}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        {/* Last Name */}
-        <div>
-          <label className="block mb-1 text-sm">Last Name</label>
-          <input
-            name="last_name"
-            className="w-full border rounded p-2"
-            value={form.last_name}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        {/* Email */}
-        <div>
-          <label className="block mb-1 text-sm">Email</label>
-          <input
-            type="email"
-            name="email"
-            className="w-full border rounded p-2"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        {/* Password */}
-        <div>
-          <label className="block mb-1 text-sm">Password</label>
-          <input
-            type="password"
-            name="password"
-            className="w-full border rounded p-2"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        {/* Confirm Password */}
-        <div>
-          <label className="block mb-1 text-sm">Confirm Password</label>
-          <input
-            type="password"
-            name="password_confirmation"
-            className="w-full border rounded p-2"
-            value={form.password_confirmation}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
+        {/* first_name, last_name, email, password, password_confirmation inputs */}
         {error && <p className="text-red-600 text-sm">{error}</p>}
-
         <button
           type="submit"
           className="w-full bg-[#0b2d39] text-white py-2 rounded"

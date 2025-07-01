@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from "react";
-import { login as fetchCurrentUser } from "../api/auth"; // you could add a dedicated fetchCurrentUser
 import axios from "../api/axios";
+import { fetchCurrentUser } from "../api/auth";
 
 export const AuthContext = createContext({
   currentUser: null,
@@ -9,19 +9,19 @@ export const AuthContext = createContext({
 });
 
 export function AuthProvider({ children }) {
-  // 1️⃣ Load initial user from localStorage
+  // Initialize from localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     const raw = localStorage.getItem("user");
     return raw ? JSON.parse(raw) : null;
   });
 
-  // 2️⃣ login() sets state + storage
+  // Log in: save user + persist
   const login = (user) => {
     setCurrentUser(user);
     localStorage.setItem("user", JSON.stringify(user));
   };
 
-  // 3️⃣ logout() clears everything
+  // Log out: clear storage + header
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem("user");
@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
     delete axios.defaults.headers.common.Authorization;
   };
 
-  // 4️⃣ On mount: if token exists but no user, fetch /me
+  // On mount: if token but no user, fetch /me
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token && !currentUser) {

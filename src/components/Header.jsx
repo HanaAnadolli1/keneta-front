@@ -13,7 +13,7 @@ export default function Header() {
   return (
     <>
       <header className="flex flex-col w-full">
-        {/* … top bar & logo & search as before … */}
+        {/* Top Bar & Logo/Search omitted for brevity */}
         <div className="flex items-center gap-4 md:gap-6">
           <Link
             to="/login"
@@ -29,7 +29,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-
       <Menu />
       <CartSidebar open={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </>
