@@ -57,7 +57,6 @@ export function useCart() {
   return useQuery({
     queryKey: ["cart"],
     queryFn: async () => {
-      // (optional) you could await ensureCsrfCookie() here if your API requires it on GETs
       const res = await fetch(`${API_CART}/checkout/cart`, {
         credentials: "include",
         headers: { Accept: "application/json" },
@@ -77,32 +76,27 @@ export function usePrefetchProduct() {
   return (id) =>
     qc.prefetchQuery({
       queryKey: ["product", id],
-      queryFn: () =>
-        fetch(`${API_V1}/products/${id}`)
-          .then((r) => {
-            if (!r.ok) throw new Error("404");
-            return r.json();
-          })
-          .then((j) => {
-            if (!j?.data) throw new Error("Product not found");
-            return j.data;
-          }),
+      queryFn: async () => {
+        const r = await fetch(`${API_V1}/products/${id}`);
+        if (!r.ok) throw new Error("404");
+        const j = await r.json();
+        if (!j?.data) throw new Error("Product not found");
+        return j.data;
+      },
     });
 }
 
-/** ── Cart mutations ──────────────────────────────────────────────────── */
+/** ── Cart mutations (CSRF-aware) ──────────────────────────────────────── */
 export function useCartMutations() {
   const qc = useQueryClient();
 
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1 }) => {
-      // 1️⃣ ensure we have the real CSRF cookie
+      // ▷ fetch real CSRF cookie
       await ensureCsrfCookie();
-
-      // 2️⃣ grab the token
+      // ▷ read the token Laravel set
       const token = getCsrfToken();
 
-      // 3️⃣ send the POST
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",

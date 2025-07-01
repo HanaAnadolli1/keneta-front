@@ -1,29 +1,20 @@
 // src/utils/csrf.js
+import Cookies from "js-cookie";
+import { API_ROOT } from "./config";
 
-/** generate a random alphanumeric string */
-export function generateToken(length = 40) {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let token = "";
-  for (let i = 0; i < length; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return token;
+/**
+ * 1️⃣ Hits /sanctum/csrf-cookie (credentials: include)
+ *    → Sets XSRF-TOKEN cookie + laravel_session cookie.
+ */
+export async function ensureCsrfCookie() {
+  await fetch(`${API_ROOT}/sanctum/csrf-cookie`, {
+    credentials: "include",
+  });
 }
 
-/** if no XSRF-TOKEN cookie exists, create one */
-export function ensureCsrfCookie() {
-  if (!document.cookie.includes("XSRF-TOKEN=")) {
-    const token = generateToken();
-    // Path=/ and no Secure flag so it works on localhost over http
-    document.cookie = `XSRF-TOKEN=${encodeURIComponent(
-      token
-    )}; Path=/; SameSite=Lax`;
-  }
-}
-
-/** read the XSRF-TOKEN cookie back out */
+/**
+ * 2️⃣ Reads the plaintext XSRF-TOKEN cookie that Laravel issued.
+ */
 export function getCsrfToken() {
-  const m = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : "";
+  return Cookies.get("XSRF-TOKEN") || "";
 }
