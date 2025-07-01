@@ -63,7 +63,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-
       <Menu />
 
       {/* Cart Sidebar */}
