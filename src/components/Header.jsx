@@ -1,15 +1,34 @@
 // src/components/Header.jsx
-import React, { useState, useContext } from "react";
-import { FiShoppingCart, FiSearch } from "react-icons/fi";
+import React, { useState, useContext, useRef, useEffect } from "react";
+import { FiShoppingCart, FiSearch, FiChevronDown } from "react-icons/fi";
+import { useNavigate, Link } from "react-router-dom";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import logo from "../assets/logo.png";
-import { Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 
 export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const { currentUser } = useContext(AuthContext);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { currentUser, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
 
   return (
     <>
@@ -47,12 +66,46 @@ export default function Header() {
 
             {/* Account & Cart */}
             <div className="flex items-center gap-4 md:gap-6">
-              <Link
-                to={currentUser ? "/" : "/login"}
-                className="text-[#1e456c] text-sm md:text-lg font-medium"
-              >
-                {currentUser?.first_name || currentUser?.name || "Llogaria ime"}
-              </Link>
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen((open) => !open)}
+                  className="flex items-center text-[#1e456c] text-sm md:text-lg font-medium focus:outline-none"
+                >
+                  {currentUser?.first_name ||
+                    currentUser?.name ||
+                    "Llogaria ime"}
+                  <FiChevronDown className="ml-1" />
+                </button>
+                {isDropdownOpen && currentUser && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded shadow-lg z-50">
+                    <Link
+                      to="/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsDropdownOpen(false)}
+                    >
+                      Profilin tim
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Dil
+                    </button>
+                  </div>
+                )}
+                {!currentUser && isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-lg z-50">
+                    <Link
+                      to="/login"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsDropdownOpen(false)}
+                    >
+                      Kyçu
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               <div
                 onClick={() => setIsCartOpen(true)}
                 className="text-[#1d3d62] text-2xl cursor-pointer"
@@ -63,6 +116,7 @@ export default function Header() {
           </div>
         </div>
       </header>
+
       <Menu />
 
       {/* Cart Sidebar */}
