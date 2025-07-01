@@ -10,74 +10,106 @@ export function makeServer({ environment = "development" } = {}) {
     },
 
     seeds(server) {
-      // seed 20 products
+      // create 20 products with random 8-char IDs
       for (let i = 1; i <= 20; i++) {
+        const id = Math.random().toString(36).slice(2, 10);
         server.create("product", {
-          id: i,
-          name: `Product ${i}`,
-          short_description: `<p>Description for product ${i}</p>`,
+          id,
+          name: `Product ${id}`,
+          short_description: `<p>Details for ${id}</p>`,
           formatted_price: `$${(i * 5).toFixed(2)}`,
           base_image: {
-            medium_image_url: `https://via.placeholder.com/300?text=Prod+${i}`,
+            medium_image_url: `https://via.placeholder.com/300?text=${id}`,
           },
         });
       }
     },
 
     routes() {
-      // catalog under /api/v1
+      // ── Catalog under /api/v1 ─────────────────────────────────────────────
       this.namespace = "api/v1";
 
-      this.get("/products", (schema, request) => {
-        let all = schema.products.all().models;
-        let limit = Number(request.queryParams.limit) || 12;
-        let page = Number(request.queryParams.page) || 1;
-        let start = (page - 1) * limit;
-        let data = all.slice(start, start + limit);
-        return { data, meta: { total: all.length } };
+      this.get("/products", (schema, req) => {
+        const all = schema.products.all().models.map((m) => m.attrs);
+        const limit = Number(req.queryParams.limit) || 12;
+        const page = Number(req.queryParams.page) || 1;
+        const start = (page - 1) * limit;
+        return {
+          data: all.slice(start, start + limit),
+          meta: { total: all.length },
+        };
       });
 
-      this.get("/products/:id", (schema, request) => {
-        let prod = schema.products.find(request.params.id);
+      this.get("/products/:id", (schema, req) => {
+        const prod = schema.products.find(req.params.id);
+        if (!prod) return new Response(404, {}, { errors: ["Not found"] });
         return { data: prod.attrs };
       });
 
-      // cart under /api
+      // ── Cart & CSRF under /api ─────────────────────────────────────────────
       this.namespace = "api";
+      this.timing = 400; // simulate latency
 
-      // sanity endpoint only
       this.get("/sanctum/csrf-cookie", () => new Response(204));
 
-      // simple in-memory cart list
       this.get("/checkout/cart", (schema) => {
-        return { data: schema.cartItems.all().models.map((m) => m.attrs) };
+        const items = schema.cartItems.all().models.map((m) => m.attrs);
+        const subtotal = items.reduce(
+          (sum, i) =>
+            sum +
+            parseFloat(i.formatted_price.replace(/[^0-9.]/g, "")) * i.quantity,
+          0
+        );
+        return {
+          data: items,
+          formatted_sub_total: `$${subtotal.toFixed(2)}`,
+        };
       });
 
       this.post("/checkout/cart", (schema, request) => {
-        let attrs = JSON.parse(request.requestBody);
-        let item = schema.cartItems.create({
-          id: Math.random().toString(36).slice(2, 8),
+        const attrs = JSON.parse(request.requestBody);
+
+        // Try primary-key lookup first, then fallback to findBy
+        const prod =
+          schema.products.find(attrs.product_id) ||
+          schema.products.findBy({ id: attrs.product_id });
+
+        if (!prod) {
+          return new Response(400, {}, { message: "Product not found" });
+        }
+
+        const pi = prod.attrs;
+        const item = schema.cartItems.create({
+          id: Math.random().toString(36).slice(2, 10),
           quantity: attrs.quantity,
-          product: schema.products.find(attrs.product_id).attrs,
+          name: pi.name,
+          formatted_price: pi.formatted_price,
+          base_image: pi.base_image,
         });
         return { data: item.attrs };
       });
 
       this.put("/checkout/cart/update", (schema, request) => {
-        let { items } = JSON.parse(request.requestBody);
+        const { items } = JSON.parse(request.requestBody);
         items.forEach(({ cartItemId, quantity }) => {
-          let ci = schema.cartItems.find(cartItemId);
+          const ci = schema.cartItems.find(cartItemId);
           if (ci) {
             if (quantity > 0) ci.update({ quantity });
             else ci.destroy();
           }
         });
-        return { data: schema.cartItems.all().models.map((m) => m.attrs) };
+        const all = schema.cartItems.all().models.map((m) => m.attrs);
+        const subtotal = all.reduce(
+          (sum, i) =>
+            sum +
+            parseFloat(i.formatted_price.replace(/[^0-9.]/g, "")) * i.quantity,
+          0
+        );
+        return { data: all, formatted_sub_total: `$${subtotal.toFixed(2)}` };
       });
 
-      this.delete("/checkout/cart/remove/:id", (schema, request) => {
-        let id = request.params.id;
-        schema.cartItems.find(id)?.destroy();
+      this.delete("/checkout/cart/remove/:id", (schema, req) => {
+        schema.cartItems.find(req.params.id)?.destroy();
         return new Response(204);
       });
     },

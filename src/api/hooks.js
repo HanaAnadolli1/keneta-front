@@ -7,7 +7,7 @@ const PER_PAGE = 12;
 const SESSION_COOKIE = "bagisto_session";
 const SESSION_LENGTH = 40;
 
-// ─── Session helpers ──────────────────────────────────────────────────────────
+/** ── Session helper ───────────────────────────────────────────────── */
 function generateSessionValue(len = SESSION_LENGTH) {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -22,48 +22,71 @@ function ensureSession() {
   let sess = Cookies.get(SESSION_COOKIE);
   if (!sess) {
     sess = generateSessionValue();
-    Cookies.set(SESSION_COOKIE, sess, { expires: 365, sameSite: "Lax" });
+    Cookies.set(SESSION_COOKIE, sess, {
+      expires: 365,
+      sameSite: "Lax",
+    });
   }
   return sess;
 }
 
-// ─── Products list ────────────────────────────────────────────────────────────
+/** ── fetch helper ────────────────────────────────────────────────────── */
+async function safeJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** ── Products list ───────────────────────────────────────────────────── */
 export function useProducts(searchParams) {
-  const key = ["products", searchParams.toString()];
   return useQuery({
-    queryKey: key,
+    queryKey: ["products", searchParams.toString()],
     keepPreviousData: true,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams(searchParams);
-      qs.set("limit", PER_PAGE); // ← correct param name
-      const res = await fetch(`${API_V1}/products?${qs.toString()}`, {
+      qs.set("limit", PER_PAGE);
+      const res = await fetch(`${API_V1}/products?${qs}`, {
         signal,
+        headers: { Accept: "application/json" },
       });
-      if (!res.ok) throw new Error("Failed to fetch products");
-      return res.json();
+      if (!res.ok) {
+        const err = await res.text().catch(() => "");
+        throw new Error(`Fetch products failed: ${res.status} ${err}`);
+      }
+      const json = await res.json();
+      return {
+        items: json.data || [],
+        total: json.meta?.total ?? 0,
+      };
     },
-    select: (json) => ({
-      items: json.data || [],
-      total: json.meta?.total ?? 0,
-    }),
   });
 }
 
-// ─── Single product ───────────────────────────────────────────────────────────
+/** ── Single product ──────────────────────────────────────────────────── */
 export function useProduct(id) {
   return useQuery({
     enabled: !!id,
     queryKey: ["product", id],
     queryFn: async ({ signal }) => {
-      const res = await fetch(`${API_V1}/products/${id}`, { signal });
-      if (!res.ok) throw new Error("Product not found");
-      return res.json();
+      const res = await fetch(`${API_V1}/products/${id}`, {
+        signal,
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) {
+        throw new Error(`Fetch product failed: ${res.status}`);
+      }
+      const json = await res.json();
+      if (!json?.data) {
+        throw new Error("Product not found");
+      }
+      return json.data;
     },
-    select: (json) => json.data,
   });
 }
 
-// ─── Cart contents ───────────────────────────────────────────────────────────
+/** ── Cart contents ───────────────────────────────────────────────────── */
 export function useCart() {
   return useQuery({
     queryKey: ["cart"],
@@ -74,14 +97,16 @@ export function useCart() {
         signal,
         headers: { Accept: "application/json" },
       });
-      if (!res.ok) throw new Error("Failed to fetch cart");
-      return res.json();
+      if (!res.ok) {
+        throw new Error(`Fetch cart failed: ${res.status}`);
+      }
+      const json = await res.json();
+      return json.data; // your API returns { data: { … } }
     },
-    select: (json) => json.data,
   });
 }
 
-// ─── Prefetch helper ──────────────────────────────────────────────────────────
+/** ── Prefetch single product ─────────────────────────────────────────── */
 export function usePrefetchProduct() {
   const qc = useQueryClient();
   return (id) =>
@@ -89,12 +114,18 @@ export function usePrefetchProduct() {
       queryKey: ["product", id],
       queryFn: () =>
         fetch(`${API_V1}/products/${id}`)
-          .then((r) => r.json())
-          .then((j) => j.data),
+          .then((r) => {
+            if (!r.ok) throw new Error("404");
+            return r.json();
+          })
+          .then((j) => {
+            if (!j?.data) throw new Error("Product not found");
+            return j.data;
+          }),
     });
 }
 
-// ─── Cart mutations ───────────────────────────────────────────────────────────
+/** ── Cart mutations ──────────────────────────────────────────────────── */
 export function useCartMutations() {
   const qc = useQueryClient();
 
@@ -111,26 +142,9 @@ export function useCartMutations() {
         body: JSON.stringify({ product_id: productId, quantity }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Add to cart failed: ${res.status} ${text}`);
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || `Add failed: ${res.status}`);
       }
-      return res.json();
-    },
-    onSuccess: () => qc.invalidateQueries(["cart"]),
-  });
-
-  const removeItem = useMutation({
-    mutationFn: async (lineItemId) => {
-      ensureSession();
-      const res = await fetch(
-        `${API_CART}/checkout/cart/remove/${lineItemId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        }
-      );
-      if (!res.ok) throw new Error("Remove from cart failed");
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries(["cart"]),
@@ -140,7 +154,7 @@ export function useCartMutations() {
     mutationFn: async ({ lineItemId, quantity }) => {
       ensureSession();
       if (quantity === 0) {
-        const res = await fetch(
+        const r = await fetch(
           `${API_CART}/checkout/cart/remove/${lineItemId}`,
           {
             method: "DELETE",
@@ -148,8 +162,8 @@ export function useCartMutations() {
             headers: { Accept: "application/json" },
           }
         );
-        if (!res.ok) throw new Error("Remove from cart failed");
-        return res.json();
+        if (!r.ok) throw new Error(`Remove failed: ${r.status}`);
+        return r.json();
       }
       const res = await fetch(`${API_CART}/checkout/cart/update`, {
         method: "PUT",
@@ -162,11 +176,11 @@ export function useCartMutations() {
           items: [{ cartItemId: lineItemId, quantity }],
         }),
       });
-      if (!res.ok) throw new Error("Update cart failed");
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
-  return { addItem, removeItem, updateItemQuantity };
+  return { addItem, updateItemQuantity };
 }

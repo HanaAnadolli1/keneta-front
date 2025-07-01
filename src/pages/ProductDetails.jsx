@@ -1,13 +1,13 @@
 // src/pages/ProductDetails.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import { API_V1, API_CART } from "../api/config";
 
-const CSRF_ROUTE = "/sanctum/csrf-cookie";
 const CACHE_TTL = 5 * 60 * 1000;
 const CACHE_STORE = new Map();
 
-// helper to parse JSON safely
 async function safeJson(res) {
   try {
     return await res.json();
@@ -16,33 +16,25 @@ async function safeJson(res) {
   }
 }
 
-function getCsrfToken() {
-  const m = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
 export default function ProductDetails() {
   const { id } = useParams();
+  const queryClient = useQueryClient();
+
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
   const [error, setError] = useState(null);
 
-  // ensure we only hit CSRF endpoint once
-  const csrfReady = useRef(false);
-  const ensureCsrf = async () => {
-    if (!csrfReady.current) {
-      await fetch(`${API_CART}${CSRF_ROUTE}`, {
-        credentials: "include",
-      });
-      csrfReady.current = true;
-    }
-  };
+  // 1) generate our fake CSRF token once on mount
+  useEffect(() => {
+    ensureCsrfCookie();
+  }, []);
 
-  // load & cache product
+  // 2) load + cache product detail
   useEffect(() => {
     let ignore = false;
+
     (async () => {
       setError(null);
 
@@ -54,7 +46,7 @@ export default function ProductDetails() {
 
       const res = await fetch(`${API_V1}/products/${id}`);
       if (!res.ok) {
-        setError(`Failed to load (status ${res.status})`);
+        setError(`Load failed (status ${res.status})`);
         return;
       }
       const json = await safeJson(res);
@@ -67,21 +59,20 @@ export default function ProductDetails() {
         CACHE_STORE.set(id, { data: json.data, ts: Date.now() });
       }
     })();
+
     return () => {
       ignore = true;
     };
   }, [id]);
 
-  // add to cart
+  // 3) add-to-cart + invalidate cart query
   const addToCart = async () => {
     if (!product || qty < 1) return;
     setBusy(true);
     setAdded(false);
 
     try {
-      await ensureCsrf();
       const token = getCsrfToken();
-
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",
@@ -101,32 +92,40 @@ export default function ProductDetails() {
         throw new Error(json?.message || `Status ${res.status}`);
       }
 
+      // 🎉 Tell React-Query to refetch the cart
+      queryClient.invalidateQueries(["cart"]);
+
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
     } catch (err) {
-      console.error("Add to cart error:", err);
       alert(`Failed to add to cart: ${err.message}`);
     } finally {
       setBusy(false);
     }
   };
 
+  // render error or loading states
   if (error) return <div className="p-8 text-red-600">{error}</div>;
   if (!product) return <div className="p-8">Loading…</div>;
 
+  // main UI
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-col lg:flex-row gap-8">
-        <img
-          src={
-            product.base_image?.original_image_url ||
-            product.base_image?.medium_image_url ||
-            "https://via.placeholder.com/600x400?text=No+Image"
-          }
-          alt={product.name}
-          className="w-full lg:w-1/2 object-contain bg-gray-100 rounded-lg"
-        />
+        {/* Product Image */}
+        <div className="w-full lg:w-1/2">
+          <img
+            src={
+              product.base_image?.original_image_url ||
+              product.base_image?.medium_image_url ||
+              "https://via.placeholder.com/600x400?text=No+Image"
+            }
+            alt={product.name}
+            className="w-full h-auto rounded-lg object-contain bg-gray-100"
+          />
+        </div>
 
+        {/* Product Details */}
         <div className="w-full lg:w-1/2 space-y-4">
           <h1 className="text-2xl font-semibold">{product.name}</h1>
           <div
@@ -138,6 +137,7 @@ export default function ProductDetails() {
           </div>
 
           <div className="flex items-center gap-4 mt-4">
+            {/* Quantity Selector */}
             <div className="flex items-center border rounded select-none">
               <button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
@@ -153,6 +153,8 @@ export default function ProductDetails() {
                 +
               </button>
             </div>
+
+            {/* Add to Cart Button */}
             <button
               onClick={addToCart}
               disabled={busy}
@@ -162,11 +164,14 @@ export default function ProductDetails() {
             </button>
           </div>
 
+          {/* Status Messages */}
           {busy && (
             <div className="text-blue-600 text-sm mt-1">Adding to cart…</div>
           )}
           {added && (
-            <div className="text-green-600 text-sm mt-1">Product added!</div>
+            <div className="text-green-600 text-sm mt-1">
+              Product added to cart!
+            </div>
           )}
         </div>
       </div>

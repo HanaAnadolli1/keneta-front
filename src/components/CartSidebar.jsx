@@ -1,211 +1,131 @@
-import React, { useEffect, useRef, useState } from "react";
+// src/components/CartSidebar.jsx
+import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCart } from "../api/hooks";
+import { useCart, useCartMutations } from "../api/hooks";
+import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
+import { API_CART } from "../api/config";
 
-const API_CART = "/api"; // proxy prefix
-
-/* ───────── helpers ───────── */
-const getCsrf = () =>
-  decodeURIComponent(
-    (document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || ""
-  );
-
-function hdr() {
-  return {
-    "Content-Type": "application/x-www-form-urlencoded",
-    Accept: "application/json",
-    "X-XSRF-TOKEN": getCsrf(),
-    "X-Requested-With": "XMLHttpRequest",
-  };
-}
-
-async function putQty(id, qty, signal) {
-  const form = new URLSearchParams();
-  form.append(`qty[${id}]`, qty);
-  const r = await fetch(`${API_CART}/checkout/cart`, {
-    method: "PUT",
-    credentials: "include",
-    signal,
-    headers: hdr(),
-    body: form,
-  });
-  if (!r.ok) throw new Error(`status ${r.status}`);
-  return r.json();
-}
-
-/* ───────── component ───────── */
 export default function CartSidebar({ open, onClose }) {
   const qc = useQueryClient();
-  const { data: cart, isLoading } = useCart();
-  const [busy, setBusy] = useState(null);
-  const [banner, setBanner] = useState(false);
+  const { data: cart, isLoading, isError } = useCart();
+  const { updateItemQuantity } = useCartMutations();
+  const [busyId, setBusyId] = useState(null);
 
-  /* bootstrap guest cart once */
-  const ready = useRef(false);
+  // ensure our fake or real CSRF/session is in place
   useEffect(() => {
-    if (ready.current) return;
-    fetch(`${API_CART}/checkout/cart`, { credentials: "include" });
-    ready.current = true;
+    ensureCsrfCookie();
   }, []);
 
-  /* refetch when sidebar opens */
+  // refetch when sidebar opens
   useEffect(() => {
-    if (open) qc.invalidateQueries({ queryKey: ["cart"] });
+    if (open) qc.invalidateQueries(["cart"]);
   }, [open, qc]);
 
-  /* optimistic helper */
-  const optimistic = (id, qty) => {
-    const prev = qc.getQueryData(["cart"]);
-    if (!prev?.items) return prev;
-    qc.setQueryData(["cart"], {
-      ...prev,
-      items: prev.items
-        .map((i) => (i.id === id ? { ...i, quantity: qty } : i))
-        .filter((i) => i.quantity > 0),
-    });
-    return prev;
+  // safely extract items[] or fallback to empty array
+  const items = Array.isArray(cart?.items) ? cart.items : [];
+
+  // change quantity or remove
+  const changeItem = async (item, newQty) => {
+    if (newQty < 0) return;
+    setBusyId(item.id);
+    try {
+      // header token is applied inside hook; we still call it directly here
+      await updateItemQuantity.mutateAsync({
+        lineItemId: item.id,
+        quantity: newQty,
+      });
+    } catch (err) {
+      alert("Could not update cart: " + err.message);
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  /* ± qty (0 removes) */
-  async function change(row, qty) {
-    if (qty < 0) return;
-    const rollback = optimistic(row.id, qty);
-    setBusy(row.id);
-    setBanner(true);
-    try {
-      await putQty(row.id, qty);
-      qc.invalidateQueries({ queryKey: ["cart"] });
-    } catch (e) {
-      if (rollback) qc.setQueryData(["cart"], rollback);
-      console.error(e);
-      alert("Could not update cart.");
-    } finally {
-      setBusy(null);
-      setBanner(false);
-    }
-  }
-
-  /* ───────── UI ───────── */
   return (
     <div
-      className={`fixed top-0 right-0 h-full w-[24rem] bg-white shadow-2xl z-50 transform duration-300 ${
+      className={`fixed top-0 right-0 h-full w-96 bg-[#132232] shadow-2xl z-50 transform duration-300 ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
     >
-      <div className="flex flex-col h-full">
-        {/* update banner */}
-        {banner && (
-          <div className="absolute top-3 right-4 flex items-center gap-2 text-xs text-blue-600 z-10">
-            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-              ></path>
-            </svg>
-            Updating cart…
-          </div>
+      {/* Header */}
+      <div className="p-5 border-b border-[#1a3c5c] flex justify-between items-center">
+        <h2 className="text-white text-xl font-bold">Shopping Cart</h2>
+        <button onClick={onClose}>
+          <X size={22} className="text-white" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 text-white">
+        {isLoading && <p>Loading…</p>}
+        {!isLoading && isError && <p>Failed to load cart.</p>}
+
+        {!isLoading && !isError && items.length === 0 && (
+          <p>Your cart is empty.</p>
         )}
 
-        {/* header */}
-        <div className="p-5 border-b flex justify-between items-center shrink-0">
-          <h2 className="text-xl font-extrabold">Shopping Cart</h2>
-          <button onClick={onClose}>
-            <X size={22} />
-          </button>
-        </div>
-
-        <p className="px-5 py-3 text-sm text-gray-700 font-medium shrink-0">
-          Get Up To <span className="font-semibold">30% OFF</span> on your 1st
-          order
-        </p>
-
-        {/* scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 pb-4">
-          {isLoading ? (
-            <div className="p-6">Loading…</div>
-          ) : cart?.items?.length === 0 ? (
-            <div className="p-6">No products in the cart!</div>
-          ) : !cart?.items ? (
-            <div className="p-6 text-red-600">Failed to load cart.</div>
-          ) : (
-            cart.items.map((row) => (
-              <div key={row.id} className="flex gap-4 mb-6 last:mb-0">
-                <img
-                  src={row.base_image.small_image_url}
-                  alt={row.name}
-                  className="w-20 h-20 shrink-0 rounded object-cover bg-gray-100"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold leading-tight line-clamp-3 mb-1">
-                    {row.name}
-                  </div>
-                  <div className="text-right text-sm font-semibold">
-                    {row.formatted_price}
-                  </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="flex items-center border rounded-full px-3 py-1 text-sm select-none">
-                      <button
-                        disabled={busy === row.id}
-                        onClick={() => change(row, row.quantity - 1)}
-                        className="px-1"
-                      >
-                        −
-                      </button>
-                      <span className="mx-2 w-5 text-center">
-                        {row.quantity}
-                      </span>
-                      <button
-                        disabled={busy === row.id}
-                        onClick={() => change(row, row.quantity + 1)}
-                        className="px-1"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <button
-                      disabled={busy === row.id}
-                      onClick={() => change(row, 0)}
-                      className="text-indigo-700 text-sm font-medium hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </div>
+        {!isLoading &&
+          !isError &&
+          items.length > 0 &&
+          items.map((item) => (
+            <div key={item.id} className="flex gap-4 mb-6">
+              <img
+                src={item.base_image.small_image_url}
+                alt={item.name}
+                className="w-20 h-20 rounded bg-gray-100 object-cover"
+              />
+              <div className="flex-1">
+                <p className="font-semibold">{item.name}</p>
+                <p className="text-sm text-[#1e456c] text-right">
+                  {item.formatted_price}
+                </p>
+                <div className="flex items-center gap-3 mt-2">
+                  <button
+                    disabled={busyId === item.id}
+                    onClick={() => changeItem(item, item.quantity - 1)}
+                    className="px-1 text-white"
+                  >
+                    −
+                  </button>
+                  <span className="text-white">{item.quantity}</span>
+                  <button
+                    disabled={busyId === item.id}
+                    onClick={() => changeItem(item, item.quantity + 1)}
+                    className="px-1 text-white"
+                  >
+                    +
+                  </button>
+                  <button
+                    disabled={busyId === item.id}
+                    onClick={() => changeItem(item, 0)}
+                    className="ml-auto underline text-sm text-white"
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-
-        {/* subtotal and actions fixed at bottom */}
-        {cart?.items?.length > 0 && (
-          <div className="shrink-0 border-t">
-            <div className="px-5 py-4 flex justify-between items-center">
-              <span className="text-gray-500 font-medium">Subtotal</span>
-              <span className="text-lg font-extrabold">
-                {cart.formatted_sub_total}
-              </span>
             </div>
-            <div className="px-5 py-6 space-y-2">
-              <button className="w-full bg-[#0b0e29] text-white py-3 rounded-xl text-sm font-semibold shadow">
-                Continue to Checkout
-              </button>
-              <button className="w-full text-center text-sm text-[#0b0e29] underline">
-                View Cart
-              </button>
-            </div>
-          </div>
-        )}
+          ))}
       </div>
+
+      {/* Footer */}
+      {!isLoading && !isError && items.length > 0 && (
+        <div className="border-t border-[#1a3c5c] p-5">
+          <div className="flex justify-between text-white mb-4">
+            <span>Subtotal</span>
+            <span>
+              {cart.formatted_grand_total ?? cart.formatted_sub_total ?? ""}
+            </span>
+          </div>
+          <button className="w-full bg-[#1a3c5c] py-3 text-white rounded mb-2">
+            Continue to Checkout
+          </button>
+          <button className="w-full underline text-sm text-white">
+            View Cart
+          </button>
+        </div>
+      )}
     </div>
   );
 }
