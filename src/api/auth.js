@@ -2,36 +2,23 @@
 import { API_V1 } from "./config";
 
 /**
- * Save token to localStorage (if present) and return the actual user object.
+ * Save token to localStorage (if present) and return the unwrapped payload.
+ * If the server wrapped your user in `data`, this returns json.data.
  */
-function persistTokenAndExtractUser(json) {
+function persistToken(json) {
   if (json?.token) {
     localStorage.setItem("token", json.token);
   }
-  // Laravel wraps your user in `data`, so unwrap it.
   return json.data ?? json;
 }
 
 /**
- * Generate a random hex token (to mirror Laravel’s api_token length).
- */
-function randomToken(len = 60) {
-  const bytes = new Uint8Array(len / 2);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/**
  * Register a new customer.
- * Returns the user object.
+ * Resolves to your user object.
  */
 export async function register(data) {
   const form = new FormData();
   Object.entries(data).forEach(([k, v]) => form.append(k, v));
-
-  // Laravel expects both api_token & token on your customers table:
-  form.append("api_token", randomToken());
-  form.append("token", randomToken());
   form.append("device_name", "react");
 
   const res = await fetch(`${API_V1}/customer/register`, {
@@ -45,12 +32,12 @@ export async function register(data) {
     throw new Error(json.message || "Registration failed");
   }
 
-  return persistTokenAndExtractUser(json);
+  return persistToken(json);
 }
 
 /**
  * Log in an existing customer.
- * Returns the user object.
+ * Resolves to your user object.
  */
 export async function login({ email, password, device_name = "react" }) {
   const form = new FormData();
@@ -60,7 +47,7 @@ export async function login({ email, password, device_name = "react" }) {
 
   const res = await fetch(`${API_V1}/customer/login`, {
     method: "POST",
-    credentials: "include", // if you rely on cookies
+    credentials: "include", // if you’re using cookies
     headers: { Accept: "application/json" },
     body: form,
   });
@@ -70,12 +57,12 @@ export async function login({ email, password, device_name = "react" }) {
     throw new Error(json.message || "Login failed");
   }
 
-  return persistTokenAndExtractUser(json);
+  return persistToken(json);
 }
 
 /**
- * A convenience wrapper for authenticated fetches.
- * Automatically adds Authorization header and unwraps { data }.
+ * Convenience wrapper for authenticated fetches.
+ * Adds the Bearer header, unwraps `data`, and throws on errors using `json.message`.
  */
 export async function apiFetch(url, options = {}) {
   const token = localStorage.getItem("token");
@@ -93,4 +80,12 @@ export async function apiFetch(url, options = {}) {
   }
 
   return json.data ?? json;
+}
+
+/**
+ * Fetch the currently authenticated user.
+ * Your AuthContext can call this on mount to rehydrate state.
+ */
+export async function fetchCurrentUser() {
+  return apiFetch(`${API_V1}/customer/me`);
 }
