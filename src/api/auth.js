@@ -1,14 +1,14 @@
+// src/api/auth.js
 import { API_V1 } from "./config";
-import { apiFetch } from "./auth"; // we'll define apiFetch below, so this file has no cyclical import
 
 /**
- * Save token to localStorage (if present) and return user object.
+ * Save token to localStorage (if present) and return the actual user object.
  */
 function persistTokenAndExtractUser(json) {
   if (json?.token) {
     localStorage.setItem("token", json.token);
   }
-  // Laravel returns { data: { …user… }, message, token }
+  // Laravel wraps your user in `data`, so unwrap it.
   return json.data ?? json;
 }
 
@@ -22,13 +22,14 @@ function randomToken(len = 60) {
 }
 
 /**
- * Register a new customer. Returns the user object.
+ * Register a new customer.
+ * Returns the user object.
  */
 export async function register(data) {
   const form = new FormData();
   Object.entries(data).forEach(([k, v]) => form.append(k, v));
 
-  // Laravel expects both api_token & token on customers table
+  // Laravel expects both api_token & token on your customers table:
   form.append("api_token", randomToken());
   form.append("token", randomToken());
   form.append("device_name", "react");
@@ -40,12 +41,16 @@ export async function register(data) {
   });
   const json = await res.json().catch(() => ({}));
 
-  if (!res.ok) throw new Error(json.message || "Registration failed");
+  if (!res.ok) {
+    throw new Error(json.message || "Registration failed");
+  }
+
   return persistTokenAndExtractUser(json);
 }
 
 /**
- * Log in an existing customer. Returns the user object.
+ * Log in an existing customer.
+ * Returns the user object.
  */
 export async function login({ email, password, device_name = "react" }) {
   const form = new FormData();
@@ -55,19 +60,22 @@ export async function login({ email, password, device_name = "react" }) {
 
   const res = await fetch(`${API_V1}/customer/login`, {
     method: "POST",
-    credentials: "include",
+    credentials: "include", // if you rely on cookies
     headers: { Accept: "application/json" },
     body: form,
   });
   const json = await res.json().catch(() => ({}));
 
-  if (!res.ok) throw new Error(json.message || "Login failed");
+  if (!res.ok) {
+    throw new Error(json.message || "Login failed");
+  }
+
   return persistTokenAndExtractUser(json);
 }
 
 /**
- * Convenience wrapper for authenticated fetches.
- * Unwraps { data } and surfaces server errors.
+ * A convenience wrapper for authenticated fetches.
+ * Automatically adds Authorization header and unwraps { data }.
  */
 export async function apiFetch(url, options = {}) {
   const token = localStorage.getItem("token");
@@ -79,13 +87,10 @@ export async function apiFetch(url, options = {}) {
 
   const res = await fetch(url, { ...options, headers });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message || "API request failed");
-  return json.data ?? json;
-}
 
-/**
- * Fetch the current authenticated user via /customer/me
- */
-export async function fetchCurrentUser() {
-  return apiFetch(`${API_V1}/customer/me`);
+  if (!res.ok) {
+    throw new Error(json.message || "API request failed");
+  }
+
+  return json.data ?? json;
 }
