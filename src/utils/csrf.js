@@ -1,6 +1,6 @@
 // src/utils/csrf.js
 import Cookies from "js-cookie";
-import { API_ROOT } from "./config";
+import { API_ROOT } from "../api/config";
 
 /**
  * 1️⃣ Hits /sanctum/csrf-cookie (credentials: include)
