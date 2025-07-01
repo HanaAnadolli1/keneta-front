@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { FiShoppingCart, FiSearch } from "react-icons/fi";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import logo from "../assets/logo.png";
 import { Link } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const { currentUser } = useContext(AuthContext);
 
   return (
     <>
@@ -48,7 +50,7 @@ export default function Header() {
                 to="/login"
                 className="text-[#1e456c] text-sm md:text-lg font-medium"
               >
-                Llogaria ime
+                {currentUser?.first_name || currentUser?.name || "Llogaria ime"}
               </Link>
               <div
                 onClick={() => setIsCartOpen(true)}

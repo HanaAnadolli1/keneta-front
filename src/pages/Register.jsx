@@ -1,10 +1,11 @@
-// src/pages/Register.jsx
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { register } from "../api/auth";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Register() {
   const navigate = useNavigate();
+  const { login: setUser } = useContext(AuthContext);
 
   const [form, setForm] = useState({
     first_name: "",
@@ -25,7 +26,8 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await register(form); // token persisted internally
+      const data = await register(form); // token persisted internally
+      setUser(data?.user ?? data);
       navigate("/"); // already authenticated – go home
     } catch (err) {
       setError(err.message);

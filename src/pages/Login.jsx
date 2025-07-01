@@ -1,10 +1,12 @@
 // src/pages/Login.jsx
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login } from "../api/auth";
+import { AuthContext } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login: setUser } = useContext(AuthContext);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
@@ -16,7 +18,8 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login({ email, password }); // token persisted internally
+      const data = await login({ email, password }); // token persisted internally
+      setUser(data?.user ?? data);
       navigate("/");
     } catch (err) {
       setError(err.message);
