@@ -1,17 +1,17 @@
-// src/main.jsx  (or index.js)
 import React from "react";
 import ReactDOM from "react-dom/client";
+import App from "./App";
+import axios from "./api/axios";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
-import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 300000,
-      cacheTime: 1800000,
+      staleTime: 300_000,
+      cacheTime: 1_800_000,
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -21,7 +21,7 @@ const queryClient = new QueryClient({
 persistQueryClient({
   queryClient,
   persister: createSyncStoragePersister({ storage: window.localStorage }),
-  maxAge: 1800000,
+  maxAge: 1_800_000,
 });
 
 ReactDOM.createRoot(document.getElementById("root")).render(

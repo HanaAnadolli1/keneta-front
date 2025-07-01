@@ -1,7 +1,6 @@
-// src/pages/Login.jsx
 import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login } from "../api/auth";
+import { login as apiLogin } from "../api/auth";
 import { AuthContext } from "../context/AuthContext";
 
 export default function Login() {
@@ -16,13 +15,12 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
-      const data = await login({ email, password }); // token persisted internally
-      setUser(data?.user ?? data);
+      const user = await apiLogin({ email, password });
+      setUser(user);
       navigate("/");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -31,8 +29,8 @@ export default function Login() {
   return (
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4 text-center">Login</h1>
-
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Email */}
         <div>
           <label className="block mb-1 text-sm">Email</label>
           <input
@@ -43,7 +41,7 @@ export default function Login() {
             required
           />
         </div>
-
+        {/* Password */}
         <div>
           <label className="block mb-1 text-sm">Password</label>
           <input
@@ -54,9 +52,7 @@ export default function Login() {
             required
           />
         </div>
-
         {error && <p className="text-red-600 text-sm">{error}</p>}
-
         <button
           type="submit"
           className="w-full bg-[#0b2d39] text-white py-2 rounded"
@@ -65,9 +61,8 @@ export default function Login() {
           {loading ? "Loading…" : "Login"}
         </button>
       </form>
-
       <p className="mt-4 text-center text-sm">
-        Don't have an account?{" "}
+        Don’t have an account?{" "}
         <Link to="/register" className="text-blue-600">
           Register
         </Link>

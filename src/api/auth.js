@@ -1,13 +1,18 @@
 import { API_V1 } from "./config";
 
-function persistToken(json) {
-  if (json?.token) localStorage.setItem("token", json.token);
-  return json;
+/**
+ * Save token to localStorage (if present) and return user object.
+ */
+function persistTokenAndExtractUser(json) {
+  if (json?.token) {
+    localStorage.setItem("token", json.token);
+  }
+  // Laravel returns { data: { …user… }, message, token }
+  return json.data ?? json;
 }
 
 /**
- * Generate a random hexadecimal string (default 60 chars).
- * Mirrors Laravel's default token column size so it fits directly.
+ * Generate a random hex token (to mirror Laravel’s api_token length).
  */
 function randomToken(len = 60) {
   const bytes = new Uint8Array(len / 2);
@@ -15,29 +20,32 @@ function randomToken(len = 60) {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/* ─────────────────────────────────────────────────────────── register ─ */
+/**
+ * Register a new customer. Returns the user object.
+ */
 export async function register(data) {
   const form = new FormData();
   Object.entries(data).forEach(([k, v]) => form.append(k, v));
 
-  // add the two tokens Laravel expects to persist on the `customers` table
+  // Laravel expects both api_token & token on customers table
   form.append("api_token", randomToken());
   form.append("token", randomToken());
-
-  form.append("device_name", "react"); // device tag for the token
+  form.append("device_name", "react");
 
   const res = await fetch(`${API_V1}/customer/register`, {
     method: "POST",
-    body: form,
     headers: { Accept: "application/json" },
+    body: form,
   });
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) throw new Error(json.message || "Registration failed");
-  return persistToken(json); // saves token → passes payload on
+  return persistTokenAndExtractUser(json);
 }
 
-/* ─────────────────────────────────────────────────────────── login ──── */
+/**
+ * Log in an existing customer. Returns the user object.
+ */
 export async function login({ email, password, device_name = "react" }) {
   const form = new FormData();
   form.append("email", email);
@@ -47,24 +55,29 @@ export async function login({ email, password, device_name = "react" }) {
   const res = await fetch(`${API_V1}/customer/login`, {
     method: "POST",
     credentials: "include",
-    body: form,
     headers: { Accept: "application/json" },
+    body: form,
   });
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) throw new Error(json.message || "Login failed");
-  return persistToken(json);
+  return persistTokenAndExtractUser(json);
 }
 
-/* ────────────────────────── convenience wrapper for authed fetch ───── */
+/**
+ * Convenience wrapper for authenticated fetches.
+ * Unwraps { data } and surfaces server errors.
+ */
 export async function apiFetch(url, options = {}) {
   const token = localStorage.getItem("token");
   const headers = {
+    Accept: "application/json",
     ...(options.headers || {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   const res = await fetch(url, { ...options, headers });
-  if (!res.ok) throw new Error("API request failed");
-  return res.json();
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || "API request failed");
+  return json.data ?? json;
 }

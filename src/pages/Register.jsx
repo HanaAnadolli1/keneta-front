@@ -1,6 +1,6 @@
 import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { register } from "../api/auth";
+import { register as apiRegister } from "../api/auth";
 import { AuthContext } from "../context/AuthContext";
 
 export default function Register() {
@@ -17,6 +17,7 @@ export default function Register() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // ← fixed spread operator here
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -24,13 +25,12 @@ export default function Register() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
-      const data = await register(form); // token persisted internally
-      setUser(data?.user ?? data);
-      navigate("/"); // already authenticated – go home
+      const user = await apiRegister(form);
+      setUser(user);
+      navigate("/");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -39,8 +39,8 @@ export default function Register() {
   return (
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4 text-center">Register</h1>
-
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* First Name */}
         <div>
           <label className="block mb-1 text-sm">First Name</label>
           <input
@@ -51,7 +51,7 @@ export default function Register() {
             required
           />
         </div>
-
+        {/* Last Name */}
         <div>
           <label className="block mb-1 text-sm">Last Name</label>
           <input
@@ -62,7 +62,7 @@ export default function Register() {
             required
           />
         </div>
-
+        {/* Email */}
         <div>
           <label className="block mb-1 text-sm">Email</label>
           <input
@@ -74,7 +74,7 @@ export default function Register() {
             required
           />
         </div>
-
+        {/* Password */}
         <div>
           <label className="block mb-1 text-sm">Password</label>
           <input
@@ -86,7 +86,7 @@ export default function Register() {
             required
           />
         </div>
-
+        {/* Confirm Password */}
         <div>
           <label className="block mb-1 text-sm">Confirm Password</label>
           <input
@@ -109,7 +109,6 @@ export default function Register() {
           {loading ? "Loading…" : "Register"}
         </button>
       </form>
-
       <p className="mt-4 text-center text-sm">
         Already have an account?{" "}
         <Link to="/login" className="text-blue-600">
