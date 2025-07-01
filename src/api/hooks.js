@@ -1,43 +1,9 @@
 // src/api/hooks.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Cookies from "js-cookie";
+import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import { API_V1, API_CART } from "./config";
 
 const PER_PAGE = 12;
-const SESSION_COOKIE = "bagisto_session";
-const SESSION_LENGTH = 40;
-
-/** ── Session helper ───────────────────────────────────────────────── */
-function generateSessionValue(len = SESSION_LENGTH) {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let s = "";
-  for (let i = 0; i < len; i++) {
-    s += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return s;
-}
-
-function ensureSession() {
-  let sess = Cookies.get(SESSION_COOKIE);
-  if (!sess) {
-    sess = generateSessionValue();
-    Cookies.set(SESSION_COOKIE, sess, {
-      expires: 365,
-      sameSite: "Lax",
-    });
-  }
-  return sess;
-}
-
-/** ── fetch helper ────────────────────────────────────────────────────── */
-async function safeJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
 
 /** ── Products list ───────────────────────────────────────────────────── */
 export function useProducts(searchParams) {
@@ -90,18 +56,17 @@ export function useProduct(id) {
 export function useCart() {
   return useQuery({
     queryKey: ["cart"],
-    queryFn: async ({ signal }) => {
-      ensureSession();
+    queryFn: async () => {
+      // (optional) you could await ensureCsrfCookie() here if your API requires it on GETs
       const res = await fetch(`${API_CART}/checkout/cart`, {
         credentials: "include",
-        signal,
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
         throw new Error(`Fetch cart failed: ${res.status}`);
       }
       const json = await res.json();
-      return json.data; // your API returns { data: { … } }
+      return json.data;
     },
   });
 }
@@ -131,16 +96,24 @@ export function useCartMutations() {
 
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1 }) => {
-      ensureSession();
+      // 1️⃣ ensure we have the real CSRF cookie
+      await ensureCsrfCookie();
+
+      // 2️⃣ grab the token
+      const token = getCsrfToken();
+
+      // 3️⃣ send the POST
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          "X-XSRF-TOKEN": token,
         },
         body: JSON.stringify({ product_id: productId, quantity }),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.message || `Add failed: ${res.status}`);
@@ -152,25 +125,32 @@ export function useCartMutations() {
 
   const updateItemQuantity = useMutation({
     mutationFn: async ({ lineItemId, quantity }) => {
-      ensureSession();
+      await ensureCsrfCookie();
+      const token = getCsrfToken();
+
       if (quantity === 0) {
         const r = await fetch(
           `${API_CART}/checkout/cart/remove/${lineItemId}`,
           {
             method: "DELETE",
             credentials: "include",
-            headers: { Accept: "application/json" },
+            headers: {
+              Accept: "application/json",
+              "X-XSRF-TOKEN": token,
+            },
           }
         );
         if (!r.ok) throw new Error(`Remove failed: ${r.status}`);
         return r.json();
       }
+
       const res = await fetch(`${API_CART}/checkout/cart/update`, {
         method: "PUT",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          "X-XSRF-TOKEN": token,
         },
         body: JSON.stringify({
           items: [{ cartItemId: lineItemId, quantity }],
