@@ -15,7 +15,7 @@ function useHeroSlides() {
     staleTime: 5 * 60 * 1000, // 5-minute fresh window
     queryFn: async () => {
       const res = await fetch(
-        "https://keneta.laratest-app.com${API_V1}theme/customizations"
+        "https://keneta.laratest-app.com/api/v1/theme/customizations"
       );
       if (!res.ok) throw new Error("network");
       const json = await res.json();

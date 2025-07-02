@@ -7,7 +7,7 @@ const Brands = () => {
     const fetchBrands = async () => {
       try {
         const response = await fetch(
-          "https://keneta.laratest-app.com${API_V1}attributes?sort=id"
+          "https://keneta.laratest-app.com/api/v1/attributes?sort=id"
         );
         const data = await response.json();
 

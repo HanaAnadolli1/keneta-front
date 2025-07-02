@@ -16,9 +16,18 @@ function useFilterAttributes() {
       if (!res.ok) throw new Error("network");
       const json = await res.json();
 
-      /** keep only attributes that can actually be filtered */
-      return (json.data || []).filter(
-        (a) => a.is_filterable && Array.isArray(a.options) && a.options.length
+      // — DEBUG: log the full payload to the console
+      console.log("🛠️ raw attributes payload:", json);
+
+      const rawAttrs = json.data || [];
+
+      // — OPTION A: bypass filtering entirely to verify UI rendering
+      // return rawAttrs;
+
+      // — OPTION B: apply your original filter
+      return rawAttrs.filter(
+        (a) =>
+          a.is_filterable && Array.isArray(a.options) && a.options.length > 0
       );
     },
   });
@@ -41,7 +50,8 @@ export default function FilterSidebar() {
   }, [attributes]);
 
   /* ------------- helpers ------------- */
-  const toggleSection = (code) => setOpen((p) => ({ ...p, [code]: !p[code] }));
+  const toggleSection = (code) =>
+    setOpen((prev) => ({ ...prev, [code]: !prev[code] }));
 
   const isChecked = (code, id) =>
     (searchParams.get(code)?.split(",") || []).includes(String(id));
