@@ -14,7 +14,7 @@ const Offers = () => {
     const fetchOfferAndDeals = async () => {
       try {
         const res = await fetch(
-          "https://keneta.laratest-app.com/api/v1/theme/customizations"
+          "https://keneta.laratest-app.com${API_V1}theme/customizations"
         );
         const json = await res.json();
 
@@ -40,7 +40,7 @@ const Offers = () => {
 
           // Fetch products using those filters
           const productRes = await fetch(
-            `https://keneta.laratest-app.com/api/v1/products?sort=${filters.sort}&limit=${filters.limit}`
+            `https://keneta.laratest-app.com${API_V1}products?sort=${filters.sort}&limit=${filters.limit}`
           );
           const productJson = await productRes.json();
           setProducts(productJson.data || []);

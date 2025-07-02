@@ -15,7 +15,7 @@ const Menu = () => {
     const fetchCategories = async () => {
       try {
         const response = await fetch(
-          "https://keneta.laratest-app.com/api/v1/categories?sort=id&order=asc"
+          "https://keneta.laratest-app.com${API_V1}categories?sort=id&order=asc"
         );
         const data = await response.json();
         const filtered = data.data.filter(
