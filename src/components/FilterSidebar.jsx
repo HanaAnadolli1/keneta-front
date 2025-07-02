@@ -5,27 +5,36 @@ import { useQuery } from "@tanstack/react-query";
 import { API_V1 } from "../api/config";
 
 /* ------------------------------------------------
-   Hook: load & cache filterable attributes
+   Helper: fetch every page of attributes
+------------------------------------------------- */
+async function fetchAllAttributes() {
+  let page = 1;
+  let all = [];
+  let lastPage = 1;
+
+  do {
+    const res = await fetch(`${API_V1}/attributes?sort=id&page=${page}`);
+    if (!res.ok) throw new Error("network");
+    const json = await res.json();
+    all.push(...(json.data || []));
+    lastPage = json.meta?.last_page || 1;
+    page += 1;
+  } while (page <= lastPage);
+
+  return all;
+}
+
+/* ------------------------------------------------
+   Hook: load & cache **all** filterable attributes
 ------------------------------------------------- */
 function useFilterAttributes() {
   return useQuery({
     queryKey: ["filterAttributes"],
-    staleTime: 5 * 60 * 1000, // fresh for 5 min
+    staleTime: 5 * 60 * 1000, // 5 minutes
     queryFn: async () => {
-      const res = await fetch(`${API_V1}/attributes?sort=id`);
-      if (!res.ok) throw new Error("network");
-      const json = await res.json();
-
-      // — DEBUG: log the full payload to the console
-      console.log("🛠️ raw attributes payload:", json);
-
-      const rawAttrs = json.data || [];
-
-      // — OPTION A: bypass filtering entirely to verify UI rendering
-      // return rawAttrs;
-
-      // — OPTION B: apply your original filter
-      return rawAttrs.filter(
+      const allAttrs = await fetchAllAttributes();
+      // keep only those you actually want to render:
+      return allAttrs.filter(
         (a) =>
           a.is_filterable && Array.isArray(a.options) && a.options.length > 0
       );
@@ -34,7 +43,7 @@ function useFilterAttributes() {
 }
 
 /* ------------------------------------------------
-   Component
+   Component: the sidebar itself
 ------------------------------------------------- */
 export default function FilterSidebar() {
   const { data: attributes = [], isLoading, error } = useFilterAttributes();
@@ -42,14 +51,16 @@ export default function FilterSidebar() {
   const [open, setOpen] = React.useState({});
   const [mobileVisible, setMobileVisible] = React.useState(false);
 
-  /* open every section once we know the attributes */
+  // initialize all sections open once
   React.useEffect(() => {
-    const obj = {};
-    attributes.forEach((a) => (obj[a.code] = true));
-    setOpen(obj);
-  }, [attributes]);
+    if (attributes.length && !Object.keys(open).length) {
+      const init = {};
+      attributes.forEach((a) => (init[a.code] = true));
+      setOpen(init);
+    }
+  }, [attributes, open]);
 
-  /* ------------- helpers ------------- */
+  /* helpers */
   const toggleSection = (code) =>
     setOpen((prev) => ({ ...prev, [code]: !prev[code] }));
 
@@ -71,14 +82,14 @@ export default function FilterSidebar() {
     setSearchParams(qs);
   };
 
-  /* ------------- Markup builders ------------- */
+  /* render list of filters */
   const renderFilters = () => (
     <>
       <div className="flex justify-between items-center font-bold text-lg border-b border-[#1a3c5c] pb-2">
         <span className="text-[#132232]">Filters:</span>
         <button
           onClick={clearAll}
-          className="text-sm text-[#1e456c] hover:text-[#1d446b] hover:underline"
+          className="text-sm text-[#1e456c] hover:underline"
         >
           Clear All
         </button>
@@ -86,7 +97,6 @@ export default function FilterSidebar() {
 
       {attributes.map((attr) => (
         <div key={attr.id} className="border-b border-[#1a3c5c] pb-3">
-          {/* header */}
           <div
             onClick={() => toggleSection(attr.code)}
             className="flex justify-between items-center cursor-pointer font-semibold mb-1"
@@ -99,7 +109,6 @@ export default function FilterSidebar() {
             )}
           </div>
 
-          {/* options */}
           {open[attr.code] && (
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {attr.options.map((opt) => (
@@ -123,7 +132,7 @@ export default function FilterSidebar() {
     </>
   );
 
-  /* ------------- UI ------------- */
+  /* loading & error states */
   if (isLoading) {
     return (
       <aside className="w-72 p-4 md:block hidden">
@@ -146,7 +155,7 @@ export default function FilterSidebar() {
         {renderFilters()}
       </aside>
 
-      {/* Mobile collapsible header */}
+      {/* Mobile collapsible */}
       <div className="md:hidden border border-[#1a3c5c] bg-[#193653]">
         <button
           onClick={() => setMobileVisible((v) => !v)}
