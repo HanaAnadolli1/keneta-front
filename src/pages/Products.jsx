@@ -1,5 +1,5 @@
 // src/pages/Products.jsx
-import React from "react";
+import React, { useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import {
@@ -12,11 +12,22 @@ import "../index.css";
 export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
+  const searchTerm = params.get("search")?.trim().toLowerCase() || "";
 
   const { data, isPending, isFetching, isError } = useProducts(params);
   const products = data?.items ?? [];
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 12));
+  const total = data?.total ?? 0;
 
+  // Only filter the current page of products
+  const filtered = useMemo(
+    () =>
+      searchTerm
+        ? products.filter((p) => p.name.toLowerCase().includes(searchTerm))
+        : products,
+    [products, searchTerm]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(total / 12));
   const prefetch = usePrefetchProduct();
   const {
     addItem,
@@ -30,6 +41,7 @@ export default function Products() {
     setParams(qs);
   };
 
+  // pagination UI logic (same as before)…
   const buildPageItems = () => {
     const arr = [];
     if (totalPages <= 9) {
@@ -56,14 +68,16 @@ export default function Products() {
       <FilterSidebar />
 
       <section className="flex-1">
-        {products.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="text-center text-gray-500">
-            No products match that filter.
+            {searchTerm
+              ? `Nuk u gjetën produkte për "${searchTerm}".`
+              : "No products match that filter."}
           </p>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {products.map((p, idx) => (
+              {filtered.map((p, idx) => (
                 <article
                   key={`${p.id}-${idx}`}
                   className="bg-white rounded-lg shadow flex flex-col"
@@ -109,7 +123,8 @@ export default function Products() {
               ))}
             </div>
 
-            {totalPages > 1 && (
+            {/* Hide pagination when doing a search */}
+            {!searchTerm && totalPages > 1 && (
               <nav
                 className="mt-10 flex justify-center items-center gap-1 select-none"
                 aria-label="pagination"
