@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
+import { API_V1 } from "../api/config";
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -18,7 +19,7 @@ export default function ProductDetails() {
     let ignore = false;
     (async () => {
       try {
-        const res = await fetch(`/api/v1/products/${id}`);
+        const res = await fetch(`${API_V1}/products/${id}`);
         if (!res.ok) throw new Error(`Status ${res.status}`);
         const json = await res.json();
         if (!json?.data) throw new Error("Product not found");
