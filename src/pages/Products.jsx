@@ -1,5 +1,5 @@
 // src/pages/Products.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import {
@@ -29,10 +29,22 @@ export default function Products() {
 
   const totalPages = Math.max(1, Math.ceil(total / 12));
   const prefetch = usePrefetchProduct();
-  const {
-    addItem,
-    addItem: { isLoading: isAdding },
-  } = useCartMutations();
+  const { addItem } = useCartMutations();
+  const [busyId, setBusyId] = useState(null);
+  const [addedId, setAddedId] = useState(null);
+
+  const handleAdd = async (id) => {
+    setBusyId(id);
+    try {
+      await addItem.mutateAsync({ productId: id, quantity: 1 });
+      setAddedId(id);
+      setTimeout(() => setAddedId((curr) => (curr === id ? null : curr)), 2000);
+    } catch (e) {
+      alert("Failed to add to cart: " + e.message);
+    } finally {
+      setBusyId((curr) => (curr === id ? null : curr));
+    }
+  };
 
   const goToPage = (p) => {
     if (p < 1 || p > totalPages) return;
@@ -106,18 +118,21 @@ export default function Products() {
                   </Link>
                   <div className="p-4 border-t flex justify-between items-center">
                     <button
-                      onClick={() =>
-                        addItem.mutate({ productId: p.id, quantity: 1 })
-                      }
-                      disabled={isAdding}
+                      onClick={() => handleAdd(p.id)}
+                      disabled={busyId === p.id}
                       className={`px-3 py-1 rounded border ${
-                        isAdding
+                        busyId
                           ? "opacity-50 cursor-not-allowed border-gray-300 text-gray-500"
                           : "border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white transition"
                       }`}
                     >
-                      {isAdding ? "Adding…" : "Add to Cart"}
+                      {busyId === p.id ? "Adding…" : "Add to Cart"}
                     </button>
+                    {busyId === p.id && (
+                      <span className="ml-2 text-green-600 text-sm">
+                        Added!
+                      </span>
+                    )}
                   </div>
                 </article>
               ))}
