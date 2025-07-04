@@ -109,7 +109,13 @@ export default function Header() {
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-4 md:py-6 gap-4">
             {/* Logo */}
             <div className="text-2xl md:text-4xl font-bold text-[#193653]">
-              <img src={logo} alt="Keneta Logo" className="w-52" />
+              <Link to="/">
+                <img
+                  src={logo}
+                  alt="Keneta Logo"
+                  className="w-52 cursor-pointer"
+                />
+              </Link>
             </div>
 
             {/* Search + Autocomplete */}
