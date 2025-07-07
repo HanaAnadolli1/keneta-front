@@ -1,12 +1,13 @@
+// src/components/FilterSidebar.jsx
 import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { API_V1 } from "../api/config";
 
-/* ------------------------------------------------
-   Helper: fetch every page of attributes
-------------------------------------------------- */
+/* ------------------------------
+   Fetch all filterable attributes
+------------------------------- */
 async function fetchAllAttributes() {
   let page = 1;
   let all = [];
@@ -24,34 +25,35 @@ async function fetchAllAttributes() {
   return all;
 }
 
-/* ------------------------------------------------
-   Hook: load & cache **all** filterable attributes
-------------------------------------------------- */
+/* ------------------------------
+   Custom hook for filter data
+------------------------------- */
 function useFilterAttributes() {
   return useQuery({
     queryKey: ["filterAttributes"],
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const allAttrs = await fetchAllAttributes();
-      // keep only those you actually want to render:
       return allAttrs.filter(
         (a) =>
-          a.is_filterable && Array.isArray(a.options) && a.options.length > 0
+          a.is_filterable &&
+          Array.isArray(a.options) &&
+          a.options.length > 0
       );
     },
   });
 }
 
-/* ------------------------------------------------
-   Component: the sidebar itself
-------------------------------------------------- */
+/* ------------------------------
+   Component: FilterSidebar
+------------------------------- */
 export default function FilterSidebar() {
   const { data: attributes = [], isLoading, error } = useFilterAttributes();
   const [searchParams, setSearchParams] = useSearchParams();
   const [open, setOpen] = React.useState({});
   const [mobileVisible, setMobileVisible] = React.useState(false);
 
-  // initialize all sections open once
+  // open all filters initially
   React.useEffect(() => {
     if (attributes.length && !Object.keys(open).length) {
       const init = {};
@@ -60,7 +62,6 @@ export default function FilterSidebar() {
     }
   }, [attributes, open]);
 
-  /* helpers */
   const toggleSection = (code) =>
     setOpen((prev) => ({ ...prev, [code]: !prev[code] }));
 
@@ -82,9 +83,8 @@ export default function FilterSidebar() {
     setSearchParams(qs);
   };
 
-  /* render list of filters */
   const renderFilters = () => (
-    <>
+    <div className="space-y-4">
       <div className="flex justify-between items-center font-bold text-lg border-b border-[#1a3c5c] pb-2">
         <span className="text-[#132232]">Filters:</span>
         <button
@@ -129,21 +129,22 @@ export default function FilterSidebar() {
           )}
         </div>
       ))}
-    </>
+    </div>
   );
 
-  /* loading & error states */
+  // Loading/error states (shown only on desktop)
   if (isLoading) {
     return (
-      <aside className="w-72 p-4 md:block hidden">
+      <aside className="w-72 p-4 hidden md:block">
         <p className="text-[#152a41]">Loading filters…</p>
       </aside>
     );
   }
+
   if (error) {
     return (
-      <aside className="w-72 p-4 md:block hidden">
-        <p className="text-[#1e456c] text-sm">Failed to load filters.</p>
+      <aside className="w-72 p-4 hidden md:block">
+        <p className="text-red-500 text-sm">Failed to load filters.</p>
       </aside>
     );
   }
@@ -151,12 +152,10 @@ export default function FilterSidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="w-72 space-y-4 pr-4 md:block hidden">
-        {renderFilters()}
-      </aside>
+      <aside className="w-72 pr-4 hidden md:block">{renderFilters()}</aside>
 
-      {/* Mobile collapsible */}
-      <div className="md:hidden border border-[#1a3c5c] bg-[#193653]">
+      {/* Mobile collapsible panel */}
+      <div className="md:hidden border border-[#1a3c5c] bg-[#193653] rounded">
         <button
           onClick={() => setMobileVisible((v) => !v)}
           className="w-full flex items-center justify-between py-3 px-4 text-white font-semibold"
@@ -168,8 +167,9 @@ export default function FilterSidebar() {
             <ChevronDown className="text-white" />
           )}
         </button>
+
         {mobileVisible && (
-          <div className="p-4 space-y-4 border-t border-[#1a3c5c] bg-white shadow-inner">
+          <div className="p-4 bg-white border-t border-[#1a3c5c]">
             {renderFilters()}
           </div>
         )}
