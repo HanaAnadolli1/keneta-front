@@ -8,10 +8,11 @@ const instance = axios.create({
   headers: { Accept: "application/json" },
 });
 
-// If there's already a token in localStorage, send it on every request
-const token = localStorage.getItem("token");
-if (token) {
-  instance.defaults.headers.common.Authorization = `Bearer ${token}`;
+if (typeof window !== "undefined") {
+  const token = localStorage.getItem("token");
+  if (token) {
+    instance.defaults.headers.common.Authorization = `Bearer ${token}`;
+  }
 }
 
 export default instance;

@@ -128,7 +128,7 @@ export default function Products() {
                     >
                       {busyId === p.id ? "Adding…" : "Add to Cart"}
                     </button>
-                    {busyId === p.id && (
+                    {addedId === p.id && (
                       <span className="ml-2 text-green-600 text-sm">
                         Added!
                       </span>

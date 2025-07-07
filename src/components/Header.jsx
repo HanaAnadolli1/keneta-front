@@ -43,16 +43,18 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch suggestions from API once user has typed ≥3 chars
   const { data: suggestions = [], isFetching: loadingSuggestions } = useQuery({
     queryKey: ["suggestions", searchQuery],
     queryFn: async () => {
       const res = await fetch(
-        `${API_V1}/products?search=${encodeURIComponent(searchQuery)}&limit=10`
+        `${API_V1}/products?search=${encodeURIComponent(searchQuery)}&limit=10`,
+        {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        }
       );
       if (!res.ok) throw new Error("Fetch suggestions failed");
       const json = await res.json();
-      // assuming json.data is an array of products
       return json.data || [];
     },
     enabled: searchQuery.trim().length >= 3,

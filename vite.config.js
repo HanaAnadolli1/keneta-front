@@ -7,18 +7,12 @@ import flowbiteReact from "flowbite-react/plugin/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss(), flowbiteReact()],
 
-  /**
-   * Dev-proxy: every request that begins with /api
-   * is transparently forwarded to Bagisto.
-   * The browser now treats it as “same-origin”, so
-   * the bagisto_session cookie is sent automatically.
-   */
   server: {
     proxy: {
       "/api": {
         target: "https://keneta.laratest-app.com",
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
     },
   },
