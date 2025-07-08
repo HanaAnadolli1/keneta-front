@@ -1,4 +1,3 @@
-// src/api/hooks.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
@@ -8,7 +7,6 @@ const PER_PAGE = 12;
 const SESSION_COOKIE = "bagisto_session";
 const SESSION_LENGTH = 40;
 
-/** ── (Optional) Guest-session helper ───────────────────────────────── */
 function generateSessionValue(len = SESSION_LENGTH) {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -31,7 +29,6 @@ function ensureSession() {
   return sess;
 }
 
-/** ── Products list ───────────────────────────────────────────────────── */
 export function useProducts(searchParams) {
   return useQuery({
     queryKey: ["products", searchParams.toString()],
@@ -56,7 +53,6 @@ export function useProducts(searchParams) {
   });
 }
 
-/** ── Single product ──────────────────────────────────────────────────── */
 export function useProduct(id) {
   return useQuery({
     enabled: !!id,
@@ -78,14 +74,11 @@ export function useProduct(id) {
   });
 }
 
-/** ── Cart contents ───────────────────────────────────────────────────── */
 export function useCart() {
   return useQuery({
     queryKey: ["cart"],
     queryFn: async ({ signal }) => {
-      // ensure guest session ID cookie
       ensureSession();
-
       const res = await fetch(`${API_CART}/checkout/cart`, {
         credentials: "include",
         signal,
@@ -100,7 +93,6 @@ export function useCart() {
   });
 }
 
-/** ── Prefetch single product ─────────────────────────────────────────── */
 export function usePrefetchProduct() {
   const qc = useQueryClient();
   return (id) =>
@@ -116,17 +108,14 @@ export function usePrefetchProduct() {
     });
 }
 
-/** ── Cart mutations (CSRF + session aware) ───────────────────────────── */
 export function useCartMutations() {
   const qc = useQueryClient();
 
+  // ✅ Add product to cart
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1 }) => {
-      // 1️⃣ guest-session cookie
       ensureSession();
-      // 2️⃣ CSRF cookie + laravel_session
       await ensureCsrfCookie();
-      // 3️⃣ read token
       const token = getCsrfToken();
 
       const res = await fetch(`${API_CART}/checkout/cart`, {
@@ -140,38 +129,27 @@ export function useCartMutations() {
         body: JSON.stringify({ product_id: productId, quantity }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.message || `Add failed: ${res.status}`);
+      try {
+        await res.clone().json();
+      } catch {
+        await res.text();
       }
-      return res.json();
+
+      return;
     },
-    onSuccess: () => qc.invalidateQueries(["cart"]),
+    onSettled: () => {
+      qc.invalidateQueries(["cart"]);
+    },
   });
 
+  // ✅ Update quantity (+ / −)
   const updateItemQuantity = useMutation({
     mutationFn: async ({ lineItemId, quantity }) => {
       ensureSession();
       await ensureCsrfCookie();
       const token = getCsrfToken();
 
-      if (quantity === 0) {
-        const r = await fetch(
-          `${API_CART}/checkout/cart/remove/${lineItemId}`,
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: {
-              Accept: "application/json",
-              "X-XSRF-TOKEN": token,
-            },
-          }
-        );
-        if (!r.ok) throw new Error(`Remove failed: ${r.status}`);
-        return r.json();
-      }
-
-      const res = await fetch(`${API_CART}/checkout/cart/update`, {
+      const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "PUT",
         credentials: "include",
         headers: {
@@ -180,14 +158,56 @@ export function useCartMutations() {
           "X-XSRF-TOKEN": token,
         },
         body: JSON.stringify({
-          items: [{ cartItemId: lineItemId, quantity }],
+          qty: {
+            [lineItemId]: quantity,
+          },
         }),
       });
-      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || `Update failed: ${res.status}`);
+      }
+
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
-  return { addItem, updateItemQuantity };
+  // ✅ Remove item from cart
+  const removeItem = useMutation({
+    mutationFn: async (lineItemId) => {
+      ensureSession();
+      await ensureCsrfCookie();
+      const token = getCsrfToken();
+
+      const res = await fetch(`${API_CART}/checkout/cart`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-XSRF-TOKEN": token,
+        },
+        body: JSON.stringify({
+          _method: "DELETE",
+          cart_item_id: lineItemId,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || `Remove failed: ${res.status}`);
+      }
+
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries(["cart"]),
+  });
+
+  return {
+    addItem,
+    updateItemQuantity,
+    removeItem,
+  };
 }
