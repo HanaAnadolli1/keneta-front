@@ -9,19 +9,23 @@ export const AuthContext = createContext({
 });
 
 export function AuthProvider({ children }) {
-  // Initialize from localStorage
+  // Initialize user from localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     const raw = localStorage.getItem("user");
     return raw ? JSON.parse(raw) : null;
   });
 
-  // Log in: save user + persist
+  // Log in: set user and persist token for axios
   const login = (user) => {
     setCurrentUser(user);
     localStorage.setItem("user", JSON.stringify(user));
+    const token = localStorage.getItem("token");
+    if (token) {
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+    }
   };
 
-  // Log out: clear storage + header
+  // Log out: clear user and remove token/header
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem("user");
@@ -29,7 +33,7 @@ export function AuthProvider({ children }) {
     delete axios.defaults.headers.common.Authorization;
   };
 
-  // On mount: if token but no user, fetch /me
+  // On mount: rehydrate axios header and fetch current user if missing
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token && !currentUser) {
@@ -39,7 +43,7 @@ export function AuthProvider({ children }) {
           setCurrentUser(user);
           localStorage.setItem("user", JSON.stringify(user));
         })
-        .catch(logout);
+        .catch(() => logout());
     }
   }, []);
 

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import { API_V1, API_CART } from "./config";
+import axios from "./axios";
 
 const PER_PAGE = 12;
 const SESSION_COOKIE = "bagisto_session";
@@ -79,6 +80,13 @@ export function useCart() {
     queryKey: ["cart"],
     queryFn: async ({ signal }) => {
       ensureSession();
+      const token = localStorage.getItem("token");
+      // Customer cart
+      if (token) {
+        const res = await axios.get("/customer/cart", { signal });
+        return res.data.data;
+      }
+      // Guest cart
       const res = await fetch(`${API_CART}/checkout/cart`, {
         credentials: "include",
         signal,
@@ -110,104 +118,98 @@ export function usePrefetchProduct() {
 
 export function useCartMutations() {
   const qc = useQueryClient();
+  const token = localStorage.getItem("token");
 
-  // ✅ Add product to cart
+  // Add item
   const addItem = useMutation({
-    mutationFn: async ({ productId, quantity = 1 }) => {
+    mutationFn: async ({ productId, quantity = 1, ...rest }) => {
       ensureSession();
       await ensureCsrfCookie();
-      const token = getCsrfToken();
-
+      if (token) {
+        return axios.post(`/customer/cart/add/${productId}`, {
+          is_buy_now: 0,
+          product_id: productId,
+          quantity,
+          ...rest,
+        });
+      }
+      const csrf = getCsrfToken();
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "X-XSRF-TOKEN": token,
+          "X-XSRF-TOKEN": csrf,
         },
         body: JSON.stringify({ product_id: productId, quantity }),
       });
-
-      try {
-        await res.clone().json();
-      } catch {
-        await res.text();
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || `Add failed: ${res.status}`);
       }
-
-      return;
+      return res.json();
     },
-    onSettled: () => {
-      qc.invalidateQueries(["cart"]);
-    },
+    onSettled: () => qc.invalidateQueries(["cart"]),
   });
 
-  // ✅ Update quantity (+ / −)
+  // Update quantity
   const updateItemQuantity = useMutation({
     mutationFn: async ({ lineItemId, quantity }) => {
       ensureSession();
       await ensureCsrfCookie();
-      const token = getCsrfToken();
-
+      if (token) {
+        return axios.put("/customer/cart/update", {
+          qty: { [lineItemId]: quantity },
+        });
+      }
+      const csrf = getCsrfToken();
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "PUT",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "X-XSRF-TOKEN": token,
+          "X-XSRF-TOKEN": csrf,
         },
-        body: JSON.stringify({
-          qty: {
-            [lineItemId]: quantity,
-          },
-        }),
+        body: JSON.stringify({ qty: { [lineItemId]: quantity } }),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.message || `Update failed: ${res.status}`);
       }
-
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
-  // ✅ Remove item from cart
+  // Remove item
   const removeItem = useMutation({
     mutationFn: async (lineItemId) => {
       ensureSession();
       await ensureCsrfCookie();
-      const token = getCsrfToken();
-
+      if (token) {
+        return axios.delete(`/customer/cart/remove/${lineItemId}`);
+      }
+      const csrf = getCsrfToken();
       const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "X-XSRF-TOKEN": token,
+          "X-XSRF-TOKEN": csrf,
         },
-        body: JSON.stringify({
-          _method: "DELETE",
-          cart_item_id: lineItemId,
-        }),
+        body: JSON.stringify({ _method: "DELETE", cart_item_id: lineItemId }),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.message || `Remove failed: ${res.status}`);
       }
-
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 
-  return {
-    addItem,
-    updateItemQuantity,
-    removeItem,
-  };
+  return { addItem, updateItemQuantity, removeItem };
 }
