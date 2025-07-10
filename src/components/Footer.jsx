@@ -1,4 +1,6 @@
 import React from "react";
+import { Link } from "react-router-dom";
+import logo from "../assets/logo.png";
 
 /**
  * Basic site footer with white background and your custom palette.
@@ -9,7 +11,15 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 py-10 grid gap-8 md:grid-cols-3">
         {/* Company description */}
         <div>
-          <h3 className="text-lg font-semibold text-[#132232] mb-4">Keneta</h3>
+          <div className="text-2xl md:text-4xl font-bold text-[#193653]">
+            <Link to="/">
+              <img
+                src={logo}
+                alt="Keneta Logo"
+                className="w-52 cursor-pointer"
+              />
+            </Link>
+          </div>
           <p className="text-sm text-[#152a41]">
             Mjetet dhe pajisjet më të mira për hapësirën tuaj të gjelbër.
           </p>
