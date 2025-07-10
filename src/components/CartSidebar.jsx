@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCart, useCartMutations } from "../api/hooks";
+import { Link } from "react-router-dom";
 
 export default function CartSidebar({ open, onClose }) {
   const qc = useQueryClient();
@@ -121,9 +122,11 @@ export default function CartSidebar({ open, onClose }) {
               {cart.formatted_grand_total ?? cart.formatted_sub_total}
             </span>
           </div>
-          <button className="w-full bg-[#1a3c5c] py-3 text-white rounded mb-2">
-            Continue to Checkout
-          </button>
+          <Link to="/checkout">
+            <button className="w-full bg-[#1a3c5c] py-3 text-white rounded mb-2">
+              Continue to Checkout
+            </button>
+          </Link>
           <button className="w-full underline text-sm text-white">
             View Cart
           </button>

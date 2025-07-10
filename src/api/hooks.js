@@ -18,7 +18,7 @@ function generateSessionValue(len = SESSION_LENGTH) {
   return s;
 }
 
-function ensureSession() {
+export function ensureSession() {
   let sess = Cookies.get(SESSION_COOKIE);
   if (!sess) {
     sess = generateSessionValue();
