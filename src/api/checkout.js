@@ -12,7 +12,6 @@ export function useCheckoutAddress() {
       ensureSession();
       await ensureCsrfCookie();
       const token = getCsrfToken();
-
       const res = await fetch(`${BASE}/addresses`, {
         method: "POST",
         credentials: "include",
@@ -25,7 +24,7 @@ export function useCheckoutAddress() {
       });
       if (!res.ok) throw new Error(`Address step failed (${res.status})`);
       const { data } = await res.json();
-      return data.shippingMethods;
+      return data.shippingMethods; // { flatrate: { rates: [...] }, free: {...} }
     },
   });
 }
@@ -36,7 +35,6 @@ export function useCheckoutShippingMethod() {
       ensureSession();
       await ensureCsrfCookie();
       const token = getCsrfToken();
-
       const res = await fetch(`${BASE}/shipping-methods`, {
         method: "POST",
         credentials: "include",
@@ -49,7 +47,7 @@ export function useCheckoutShippingMethod() {
       });
       if (!res.ok) throw new Error(`Shipping step failed (${res.status})`);
       const json = await res.json();
-      return json.payment_methods;
+      return json.payment_methods; // [ { method, method_title, … }, … ]
     },
   });
 }
@@ -61,7 +59,6 @@ export function useCheckoutPaymentMethod() {
       await ensureCsrfCookie();
       const token = getCsrfToken();
       const method = typeof payment === "string" ? payment : payment.method;
-
       const res = await fetch(`${BASE}/payment-methods`, {
         method: "POST",
         credentials: "include",
@@ -73,7 +70,7 @@ export function useCheckoutPaymentMethod() {
         body: JSON.stringify({ payment: { method } }),
       });
       if (!res.ok) throw new Error(`Payment step failed (${res.status})`);
-      return res.json();
+      return res.json(); // you usually don't need the body here
     },
   });
 }
@@ -84,7 +81,6 @@ export function usePlaceOrder() {
       ensureSession();
       await ensureCsrfCookie();
       const token = getCsrfToken();
-
       const res = await fetch(`${BASE}/orders`, {
         method: "POST",
         credentials: "include",

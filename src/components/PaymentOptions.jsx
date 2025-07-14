@@ -7,24 +7,25 @@ export default function PaymentOptions({
   onSelect,
   onProceed,
   loading,
+  error,
 }) {
   return (
-    <div className="mt-8 bg-white shadow rounded-lg p-8">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-6">
-        Payment Method
-      </h2>
+    <div className="mt-8 bg-white shadow rounded-lg p-8 space-y-6">
+      <h2 className="text-2xl font-semibold text-gray-800">Payment Method</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {methods.map((pm) => {
           const isChecked = selected === pm.method;
           return (
             <label
               key={pm.method}
-              className={`relative flex flex-col items-center p-4 border rounded-lg cursor-pointer transition
+              className={`
+                relative flex flex-col items-center p-4 border rounded-lg cursor-pointer transition
                 ${
                   isChecked
                     ? "border-blue-500 ring-2 ring-blue-200"
                     : "border-gray-300 hover:border-blue-400"
-                }`}
+                }
+              `}
             >
               <input
                 type="radio"
@@ -49,12 +50,24 @@ export default function PaymentOptions({
           );
         })}
       </div>
+
+      {error && <div className="text-red-500">{error.message}</div>}
+
       <button
         onClick={onProceed}
         disabled={!selected || loading}
-        className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded disabled:opacity-50"
+        className="
+          mt-6
+          bg-[#0b0c2c] text-white
+          py-3 px-6
+          rounded-full
+          disabled:opacity-50 disabled:cursor-not-allowed
+          hover:opacity-90
+          transition
+          w-full md:w-auto
+        "
       >
-        {loading ? "Saving…" : "Proceed"}
+        {loading ? "Placing Order…" : "Place Order"}
       </button>
     </div>
   );

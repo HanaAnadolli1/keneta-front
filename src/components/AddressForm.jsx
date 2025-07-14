@@ -1,10 +1,21 @@
-// src/components/AddressForm.jsx
 import React from "react";
 
-export default function AddressForm({ billing, onChange, onSubmit, loading }) {
+export default function AddressForm({
+  billing,
+  onChange,
+  onSubmit,
+  loading,
+  error,
+}) {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const next = { ...billing };
+
+    // Ensure we always start with an array for address
+    const next = {
+      ...billing,
+      address: Array.isArray(billing.address) ? billing.address : [""],
+    };
+
     if (name === "use_for_shipping") {
       next.use_for_shipping = checked;
     } else if (name === "address") {
@@ -12,8 +23,12 @@ export default function AddressForm({ billing, onChange, onSubmit, loading }) {
     } else {
       next[name] = value;
     }
+
     onChange(next);
   };
+
+  // Safely pull out the first line (or empty string)
+  const streetLine = Array.isArray(billing.address) ? billing.address[0] : "";
 
   return (
     <form
@@ -26,7 +41,7 @@ export default function AddressForm({ billing, onChange, onSubmit, loading }) {
       <h2 className="text-2xl font-semibold text-gray-800">Billing Address</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Company */}
-        <div>
+        <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700">
             Company Name
           </label>
@@ -89,7 +104,7 @@ export default function AddressForm({ billing, onChange, onSubmit, loading }) {
           <input
             name="address"
             required
-            value={billing.address[0]}
+            value={streetLine}
             onChange={handleChange}
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
           />
@@ -188,10 +203,20 @@ export default function AddressForm({ billing, onChange, onSubmit, loading }) {
         </label>
       </div>
 
+      {error && <div className="text-red-500">{error.message}</div>}
+
       <button
         type="submit"
         disabled={loading}
-        className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded disabled:opacity-50"
+        className="
+          w-full md:w-auto
+          bg-[#0b0c2c] text-white
+          py-3 px-6
+          rounded-full
+          disabled:opacity-50 disabled:cursor-not-allowed
+          hover:opacity-90
+          transition
+        "
       >
         {loading ? "Saving…" : "Proceed"}
       </button>

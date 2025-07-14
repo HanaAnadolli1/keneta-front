@@ -213,3 +213,28 @@ export function useCartMutations() {
 
   return { addItem, updateItemQuantity, removeItem };
 }
+
+export function useApplyCoupon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (code) => {
+      ensureSession();
+      await ensureCsrfCookie();
+      const token = getCsrfToken();
+
+      const res = await fetch(`${API_CART}/checkout/cart/coupon`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-XSRF-TOKEN": token,
+        },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) throw new Error(`Apply coupon failed (${res.status})`);
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries(["cart"]),
+  });
+}
