@@ -1,4 +1,3 @@
-// src/pages/Checkout.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -15,7 +14,6 @@ import CartSummary from "../components/CartSummary";
 export default function Checkout() {
   const navigate = useNavigate();
 
-  // form state…
   const [billing, setBilling] = useState({
     company_name: "",
     first_name: "",
@@ -34,56 +32,35 @@ export default function Checkout() {
   const [paymentMethods, setPaymentMethods] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState("");
 
-  // API hooks…
   const addressM = useCheckoutAddress();
   const shippingM = useCheckoutShippingMethod();
   const paymentM = useCheckoutPaymentMethod();
   const orderM = usePlaceOrder();
 
   const handleAddress = async () => {
-    try {
-      const ships = await addressM.mutateAsync(billing);
-      setShippingOptions(ships);
-    } catch (e) {
-      alert(e.message);
-    }
+    const ships = await addressM.mutateAsync(billing);
+    setShippingOptions(ships);
   };
 
   const handleShippingProceed = async () => {
-    if (!selectedShipping) return;
-    try {
-      const pays = await shippingM.mutateAsync(selectedShipping);
-      setPaymentMethods(pays);
-    } catch (e) {
-      alert(e.message);
-    }
+    const pays = await shippingM.mutateAsync(selectedShipping);
+    setPaymentMethods(pays);
   };
 
   const handlePaymentSelect = async (method) => {
-    try {
-      await paymentM.mutateAsync(method);
-      setSelectedPayment(method);
-    } catch (e) {
-      alert(e.message);
-    }
+    await paymentM.mutateAsync(method);
+    setSelectedPayment(method);
   };
 
   const handlePlaceOrder = async () => {
-    try {
-      const res = await orderM.mutateAsync();
-      alert(
-        `✅ Order placed!${res?.data?.order_id ? ` #${res.data.order_id}` : ""}`
-      );
-      navigate("/", { replace: true });
-    } catch (e) {
-      alert(e.message);
-    }
+    await orderM.mutateAsync();
+    navigate("/", { replace: true });
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-6">
+    <div className="w-full max-w-7xl mx-auto px-4">
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
-        {/* Left: Checkout form (70%) */}
+        {/* Left (70%) */}
         <div className="lg:col-span-7 space-y-8">
           <AddressForm
             billing={billing}
@@ -109,16 +86,19 @@ export default function Checkout() {
               methods={paymentMethods}
               selected={selectedPayment}
               onSelect={handlePaymentSelect}
-              onProceed={handlePlaceOrder}
-              loading={orderM.isLoading}
-              error={orderM.error}
+              loading={paymentM.isLoading}
+              error={paymentM.error}
             />
           )}
         </div>
 
-        {/* Right: Cart Summary (30%) */}
+        {/* Right (30%) */}
         <div className="lg:col-span-3">
-          <CartSummary />
+          <CartSummary
+            selectedPayment={selectedPayment}
+            onPlaceOrder={handlePlaceOrder}
+            placing={orderM.isLoading}
+          />
         </div>
       </div>
     </div>

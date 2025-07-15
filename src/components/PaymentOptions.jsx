@@ -1,11 +1,9 @@
-// src/components/PaymentOptions.jsx
 import React from "react";
 
 export default function PaymentOptions({
   methods,
   selected,
   onSelect,
-  onProceed,
   loading,
   error,
 }) {
@@ -34,7 +32,7 @@ export default function PaymentOptions({
                 checked={isChecked}
                 onChange={() => onSelect(pm.method)}
                 className="sr-only"
-              />
+              />{" "}
               <img
                 src={pm.image}
                 alt={pm.method_title}
@@ -52,23 +50,7 @@ export default function PaymentOptions({
       </div>
 
       {error && <div className="text-red-500">{error.message}</div>}
-
-      <button
-        onClick={onProceed}
-        disabled={!selected || loading}
-        className="
-          mt-6
-          bg-[#0b0c2c] text-white
-          py-3 px-6
-          rounded-full
-          disabled:opacity-50 disabled:cursor-not-allowed
-          hover:opacity-90
-          transition
-          w-full md:w-auto
-        "
-      >
-        {loading ? "Placing Order…" : "Place Order"}
-      </button>
+      {/* No button here; Place Order is in CartSummary */}
     </div>
   );
 }
