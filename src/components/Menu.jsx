@@ -124,9 +124,14 @@ const Menu = () => {
                     <li
                       key={cat.id}
                       onMouseEnter={() => handleHover(1, cat.id)}
-                      className="px-5 py-2 text-sm font-medium text-[#132232] hover:bg-gray-100 cursor-pointer whitespace-nowrap"
+                      className="hover:bg-gray-100 whitespace-nowrap"
                     >
-                      {cat.name}
+                      <Link
+                        to={`/products?category=${cat.id}`}
+                        className="block px-5 py-2 text-sm font-medium text-[#132232] hover:text-[#1a3c5c] transition-colors"
+                      >
+                        {cat.name}
+                      </Link>
                     </li>
                   ))}
                 </ul>

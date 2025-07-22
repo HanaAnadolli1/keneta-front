@@ -13,8 +13,15 @@ export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
   const searchTerm = params.get("search")?.trim().toLowerCase() || "";
+  const categoryId = params.get("category"); // ✅ Grab category from URL
 
-  const { data, isPending, isFetching, isError } = useProducts(params);
+  // ✅ Prepare params to pass to useProducts
+  const queryParams = new URLSearchParams(params);
+  if (categoryId) {
+    queryParams.set("category_id", categoryId); // your backend should accept this
+  }
+
+  const { data, isPending, isFetching, isError } = useProducts(queryParams);
   const products = data?.items ?? [];
   const total = data?.total ?? 0;
 
@@ -75,7 +82,6 @@ export default function Products() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* 🔥 Remove the mobile toggle here – FilterSidebar handles it */}
       <div className="flex flex-col md:flex-row gap-8">
         <FilterSidebar />
 
