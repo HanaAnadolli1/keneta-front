@@ -13,12 +13,20 @@ export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
   const searchTerm = params.get("search")?.trim().toLowerCase() || "";
-  const categoryId = params.get("category"); // ✅ Grab category from URL
+  const categoryId = params.get("category");
 
-  // ✅ Prepare params to pass to useProducts
-  const queryParams = new URLSearchParams(params);
-  if (categoryId) {
-    queryParams.set("category_id", categoryId); // your backend should accept this
+  // ✅ Build correct flat query param format
+  const queryParams = new URLSearchParams();
+
+  for (const [key, value] of params.entries()) {
+    if (!value || !value.trim()) continue;
+
+    if (key === "category") {
+      queryParams.set("category_id", value);
+    } else {
+      // Pass filters exactly as they appear (e.g., brand=164,165)
+      queryParams.set(key, value);
+    }
   }
 
   const { data, isPending, isFetching, isError } = useProducts(queryParams);
