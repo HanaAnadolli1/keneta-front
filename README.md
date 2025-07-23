@@ -1,12 +1,64 @@
-# React + Vite
+# Keneta E-commerce Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project is a storefront for the **Keneta** e‑commerce platform. It is built with [React](https://react.dev/) and [Vite](https://vitejs.dev/) and communicates with a Bagisto/Laravel backend.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Product catalogue with pagination and search
+- Shopping cart with guest and customer modes
+- Customer authentication and registration
+- Checkout flow (address, shipping, payment)
+- Responsive layout styled with Tailwind CSS
 
-## Expanding the ESLint configuration
+## Prerequisites
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Node.js 18 or later
+- npm (comes with Node.js)
+
+## Installation
+
+```bash
+npm install
+```
+
+### Development server
+
+Start a local dev server with hot reloading:
+
+```bash
+npm run dev
+```
+
+The dev server proxies API requests to `https://keneta.laratest-app.com/api` as configured in `vite.config.js`.
+
+### Linting
+
+Run ESLint on the project:
+
+```bash
+npm run lint
+```
+
+### Build for production
+
+```bash
+npm run build
+```
+
+This outputs static files to the `dist` directory. You can preview the build locally with:
+
+```bash
+npm run preview
+```
+
+## Project structure
+
+- `src/` – React components, pages and API utilities
+- `public/` – static assets served as-is
+- `vite.config.js` – Vite configuration with API proxy rules
+- `vercel.json` – rewrite rules used when deploying to Vercel
+
+
+## License
+
+This project is proprietary code developed for the Keneta client.
