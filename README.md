@@ -58,14 +58,6 @@ npm run preview
 - `vite.config.js` – Vite configuration with API proxy rules
 - `vercel.json` – rewrite rules used when deploying to Vercel
 
-## Environment variables
-
-A `.env` file can be used to override Vite variables. An example variable included in the repo is:
-
-```
-VITE_API_ROOT=https://keneta.laratest-app.com
-```
-
 ## License
 
 This project is proprietary code developed for the Keneta client.
