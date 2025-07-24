@@ -13,19 +13,19 @@ export default function ShippingOptions({
       <h2 className="text-2xl font-semibold text-gray-800">Shipping Method</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {Object.entries(methods).flatMap(([_, group]) =>
-          group.rates.map((rate) => {
+          (group?.rates || []).map((rate) => {
             const isChecked = selected === rate.method;
             return (
               <label
                 key={rate.method}
                 className={`
-                  relative flex flex-col p-4 border rounded-lg cursor-pointer transition
-                  ${
-                    isChecked
-                      ? "border-blue-500 ring-2 ring-blue-200"
-                      : "border-gray-300 hover:border-blue-400"
-                  }
-                `}
+            relative flex flex-col p-4 border rounded-lg cursor-pointer transition
+            ${
+              isChecked
+                ? "border-blue-500 ring-2 ring-blue-200"
+                : "border-gray-300 hover:border-blue-400"
+            }
+          `}
               >
                 <input
                   type="radio"

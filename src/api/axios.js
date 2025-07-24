@@ -2,17 +2,21 @@
 import axios from "axios";
 import { API_V1 } from "./config";
 
-// Create an axios instance preconfigured for your API
 const instance = axios.create({
   baseURL: API_V1,
-  headers: { Accept: "application/json" },
+  headers: {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  },
+  withCredentials: true, // for cookie-based auth if needed
 });
 
-if (typeof window !== "undefined") {
+instance.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
-    instance.defaults.headers.common.Authorization = `Bearer ${token}`;
+    config.headers["Authorization"] = `Bearer ${token}`;
   }
-}
+  return config;
+});
 
 export default instance;

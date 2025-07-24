@@ -1,11 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+// 🟢 Both flows
 import {
   useCheckoutAddress,
   useCheckoutShippingMethod,
   useCheckoutPaymentMethod,
   usePlaceOrder,
 } from "../api/checkout";
+import {
+  useCustomerCheckoutAddress,
+  useCustomerCheckoutShippingMethod,
+  useCustomerCheckoutPaymentMethod,
+  useCustomerPlaceOrder,
+} from "../api/customerCheckout";
+
 import AddressForm from "../components/AddressForm";
 import ShippingOptions from "../components/ShippingOptions";
 import PaymentOptions from "../components/PaymentOptions";
@@ -13,6 +22,20 @@ import CartSummary from "../components/CartSummary";
 
 export default function Checkout() {
   const navigate = useNavigate();
+
+  const isLoggedIn = !!localStorage.getItem("token");
+
+  // 💡 Dynamically select correct hooks
+  const addressM = isLoggedIn
+    ? useCustomerCheckoutAddress()
+    : useCheckoutAddress();
+  const shippingM = isLoggedIn
+    ? useCustomerCheckoutShippingMethod()
+    : useCheckoutShippingMethod();
+  const paymentM = isLoggedIn
+    ? useCustomerCheckoutPaymentMethod()
+    : useCheckoutPaymentMethod();
+  const orderM = isLoggedIn ? useCustomerPlaceOrder() : usePlaceOrder();
 
   const [billing, setBilling] = useState({
     company_name: "",
@@ -27,15 +50,11 @@ export default function Checkout() {
     state: "",
     use_for_shipping: true,
   });
+
   const [shippingOptions, setShippingOptions] = useState(null);
   const [selectedShipping, setSelectedShipping] = useState("");
   const [paymentMethods, setPaymentMethods] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState("");
-
-  const addressM = useCheckoutAddress();
-  const shippingM = useCheckoutShippingMethod();
-  const paymentM = useCheckoutPaymentMethod();
-  const orderM = usePlaceOrder();
 
   const handleAddress = async () => {
     const ships = await addressM.mutateAsync(billing);
@@ -60,7 +79,6 @@ export default function Checkout() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4">
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
-        {/* Left (70%) */}
         <div className="lg:col-span-7 space-y-8">
           <AddressForm
             billing={billing}
@@ -69,7 +87,6 @@ export default function Checkout() {
             loading={addressM.isLoading}
             error={addressM.error}
           />
-
           {shippingOptions && (
             <ShippingOptions
               methods={shippingOptions}
@@ -80,7 +97,6 @@ export default function Checkout() {
               error={shippingM.error}
             />
           )}
-
           {paymentMethods && (
             <PaymentOptions
               methods={paymentMethods}
@@ -91,8 +107,6 @@ export default function Checkout() {
             />
           )}
         </div>
-
-        {/* Right (30%) */}
         <div className="lg:col-span-3">
           <CartSummary
             selectedPayment={selectedPayment}
