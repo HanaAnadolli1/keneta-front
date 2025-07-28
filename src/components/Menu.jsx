@@ -142,19 +142,22 @@ const Menu = () => {
             )}
           </div>
 
-          {/* Static Links */}
-          {["Produktet", "Brendet", "Deals", "Të rejat", "Outlet"].map(
-            (label, idx) => (
-              <Link
-                key={idx}
-                to="#"
-                className="relative text-[#132232] font-semibold text-base hover:text-[#1a3c5c] transition-colors group"
-              >
-                {label}
-                <span className="absolute bottom-0 left-0 h-0.5 w-full bg-[#1a3c5c] scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
-              </Link>
-            )
-          )}
+          {[
+            { label: "Produktet", path: "/products" },
+            { label: "Brendet", path: "/brands" },
+            { label: "Deals", path: "/deals" },
+            { label: "Të rejat", path: "/new-arrivals" },
+            { label: "Outlet", path: "/outlet" },
+          ].map(({ label, path }, idx) => (
+            <Link
+              key={idx}
+              to={path}
+              className="relative text-[#132232] font-semibold text-base hover:text-[#1a3c5c] transition-colors group"
+            >
+              {label}
+              <span className="absolute bottom-0 left-0 h-0.5 w-full bg-[#1a3c5c] scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
+            </Link>
+          ))}
         </div>
 
         {/* Mobile Toggle */}
