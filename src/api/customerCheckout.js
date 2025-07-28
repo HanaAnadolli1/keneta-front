@@ -5,10 +5,17 @@ import axios from "./axios";
 export function useCustomerCheckoutAddress() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (billing) =>
-      axios
-        .post("/customer/checkout/save-address", { billing })
-        .then((res) => res.data),
+    mutationFn: async (billing) => {
+      const res = await axios.post("/customer/checkout/save-address", {
+        billing,
+      });
+
+      // Debug log — helpful during development
+      console.log("✅ Address Response:", res.data);
+
+      // ✅ Bagisto usually returns shipping methods under data.shippingMethods
+      return res.data?.shippingMethods || res.data?.data?.shippingMethods || {};
+    },
     onSuccess: () => qc.invalidateQueries(["checkoutSummary"]),
   });
 }
@@ -16,10 +23,17 @@ export function useCustomerCheckoutAddress() {
 export function useCustomerCheckoutShippingMethod() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (shipping_method) =>
-      axios
-        .post("/customer/checkout/save-shipping", { shipping_method })
-        .then((res) => res.data),
+    mutationFn: async (shipping_method) => {
+      const res = await axios.post("/customer/checkout/save-shipping", {
+        shipping_method,
+      });
+
+      // Debug log
+      console.log("✅ Shipping Method Response:", res.data);
+
+      // ✅ Return only payment methods array expected by PaymentOptions.jsx
+      return res.data?.payment_methods || res.data?.data?.payment_methods || [];
+    },
     onSuccess: () => qc.invalidateQueries(["checkoutSummary"]),
   });
 }
