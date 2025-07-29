@@ -1,9 +1,8 @@
-/* Fix sizing and align images */
+/* Full image control */
 .custom-gallery .image-gallery-slide {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 500px;
 }
 
 .custom-gallery .image-gallery-image {
@@ -12,7 +11,7 @@
   object-fit: contain;
 }
 
-/* Optional: Style dots */
+/* Style the dots */
 .image-gallery-bullets {
   bottom: 10px;
 }
@@ -22,6 +21,7 @@
   height: 10px;
   margin: 0 4px;
   background-color: #ccc;
+  border-radius: 50%;
 }
 
 .image-gallery-bullet.active {

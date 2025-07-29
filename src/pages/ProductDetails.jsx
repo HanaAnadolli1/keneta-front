@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
 import { API_V1 } from "../api/config";
@@ -10,20 +10,21 @@ export default function ProductDetails() {
   const { url_key } = useParams();
   const { addItem } = useCartMutations();
 
+  const galleryRef = useRef();
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
   const [error, setError] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [galleryStartIndex, setGalleryStartIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -33,11 +34,9 @@ export default function ProductDetails() {
         const res = await fetch(`${API_V1}/products?url_key=${url_key}`);
         if (!res.ok) throw new Error(`Status ${res.status}`);
         const json = await res.json();
-
         if (!Array.isArray(json?.data) || json.data.length === 0) {
           throw new Error("Product not found");
         }
-
         if (!ignore) {
           setProduct(json.data[0]);
         }
@@ -64,26 +63,26 @@ export default function ProductDetails() {
     }
   };
 
-  const galleryImages = [];
+  const galleryImages =
+    product?.images?.length > 0
+      ? product.images.map((img) => ({
+          original: img.original_image_url,
+          thumbnail: img.small_image_url || img.medium_image_url,
+        }))
+      : product?.base_image?.original_image_url
+      ? [
+          {
+            original: product.base_image.original_image_url,
+            thumbnail:
+              product.base_image.small_image_url ||
+              product.base_image.medium_image_url,
+          },
+        ]
+      : [];
 
-  if (product?.images?.length > 0) {
-    product.images.forEach((img) => {
-      galleryImages.push({
-        original: img.original_image_url,
-        thumbnail: img.small_image_url || img.medium_image_url,
-      });
-    });
-  } else if (product?.base_image?.original_image_url) {
-    galleryImages.push({
-      original: product.base_image.original_image_url,
-      thumbnail:
-        product.base_image.small_image_url ||
-        product.base_image.medium_image_url,
-    });
-  }
-
-  const openFullscreen = () => {
-    setIsFullscreen(true);
+  const onThumbnailClick = (index) => {
+    setSelectedIndex(index);
+    galleryRef.current?.slideToIndex(index);
   };
 
   if (error) return <div className="p-8 text-red-600">{error}</div>;
@@ -92,28 +91,47 @@ export default function ProductDetails() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
       <div className="flex flex-col lg:flex-row gap-10">
-        {/* Left side: Image Slider */}
-        <div className="w-full lg:w-1/2">
-          <ImageGallery
-            items={galleryImages}
-            showFullscreenButton={false}
-            showPlayButton={false}
-            showThumbnails={!isMobile}
-            showNav={!isMobile}
-            showBullets={isMobile}
-            additionalClass="custom-gallery"
-            onClick={openFullscreen}
-          />
+        {/* Gallery + Thumbnails */}
+        <div className="w-full lg:w-1/2 flex gap-4">
+          {!isMobile && galleryImages.length > 1 && (
+            <div className="flex flex-col gap-4">
+              {galleryImages.map((img, idx) => (
+                <img
+                  key={idx}
+                  src={img.thumbnail}
+                  alt={`Thumbnail ${idx + 1}`}
+                  onClick={() => onThumbnailClick(idx)}
+                  className={`w-20 h-20 object-contain border rounded-lg cursor-pointer ${
+                    selectedIndex === idx ? "ring-2 ring-indigo-600" : ""
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex-1">
+            <ImageGallery
+              ref={galleryRef}
+              items={galleryImages}
+              startIndex={selectedIndex}
+              showThumbnails={false}
+              showPlayButton={false}
+              showFullscreenButton={false}
+              showNav={false} // ⛔ no arrows
+              showBullets={isMobile} // ✅ only on mobile
+              additionalClass="custom-gallery"
+              onClick={() => setIsFullscreen(true)}
+            />
+          </div>
         </div>
 
-        {/* Right side: Product Details */}
+        {/* Right Side Details */}
         <div className="w-full lg:w-1/2 flex flex-col space-y-4">
           <h1 className="text-3xl font-semibold">{product.name}</h1>
           <div
             className="text-gray-500"
             dangerouslySetInnerHTML={{ __html: product.short_description }}
           />
-
           <div className="text-2xl font-bold text-black">
             {product.formatted_price}
           </div>
@@ -160,7 +178,7 @@ export default function ProductDetails() {
         </div>
       </div>
 
-      {/* Fullscreen Image Gallery */}
+      {/* Fullscreen */}
       {isFullscreen && (
         <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
           <button
