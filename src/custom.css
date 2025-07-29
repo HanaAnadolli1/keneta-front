@@ -1,0 +1,29 @@
+/* Fix sizing and align images */
+.custom-gallery .image-gallery-slide {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 500px;
+}
+
+.custom-gallery .image-gallery-image {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Optional: Style dots */
+.image-gallery-bullets {
+  bottom: 10px;
+}
+
+.image-gallery-bullet {
+  width: 10px;
+  height: 10px;
+  margin: 0 4px;
+  background-color: #ccc;
+}
+
+.image-gallery-bullet.active {
+  background-color: #4f46e5;
+}

@@ -152,7 +152,7 @@ export default function Products() {
                     className="bg-white rounded-lg shadow flex flex-col"
                   >
                     <Link
-                      to={`/products/${p.id}`}
+                      to={`/products/${p.url_key}`}
                       onMouseEnter={() => prefetch(p.id)}
                       className="block flex-1"
                     >
