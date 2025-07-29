@@ -74,7 +74,7 @@ const Menu = () => {
                   className="px-5 py-2 hover:bg-gray-100 text-[#132232] whitespace-nowrap transition-colors duration-150 cursor-pointer"
                 >
                   <Link
-                    to={`/products?category=${cat.id}`}
+                    to={`/products?category=${cat.slug}`}
                     className="block hover:text-[#1a3c5c]"
                   >
                     {cat.name}

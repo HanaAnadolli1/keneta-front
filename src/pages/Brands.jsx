@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Brands = () => {
   const [brands, setBrands] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -11,10 +13,8 @@ const Brands = () => {
         );
         const data = await response.json();
 
-        // Find attribute with code "brand"
         const brandAttribute = data.data.find((attr) => attr.code === "brand");
 
-        // Set the options of the brand attribute (array of brands)
         if (brandAttribute && brandAttribute.options) {
           setBrands(brandAttribute.options);
         }
@@ -26,6 +26,9 @@ const Brands = () => {
     fetchBrands();
   }, []);
 
+  const slugify = (label) =>
+    encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-indigo-900 mb-6">Brendet</h1>
@@ -33,7 +36,8 @@ const Brands = () => {
         {brands.map((brand) => (
           <div
             key={brand.id}
-            className="bg-gray-100 h-24 flex items-center justify-center text-center rounded shadow-sm text-lg font-semibold text-gray-700"
+            onClick={() => navigate(`/products?brand=${slugify(brand.label)}`)}
+            className="cursor-pointer bg-gray-100 h-24 flex items-center justify-center text-center rounded shadow-sm text-lg font-semibold text-gray-700 hover:bg-indigo-100 transition"
           >
             {brand.label}
           </div>

@@ -1,5 +1,5 @@
 // src/pages/Products.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import {
@@ -14,8 +14,36 @@ export default function Products() {
   const page = parseInt(params.get("page") || "1", 10);
   const searchTerm = params.get("search")?.trim().toLowerCase() || "";
   const categoryId = params.get("category");
+  const brandSlug = params.get("brand");
 
-  // ✅ Build correct flat query param format
+  const [brandOptions, setBrandOptions] = useState([]);
+  const [activeBrandLabel, setActiveBrandLabel] = useState(null);
+
+  // Load brands and find label for current slug
+  useEffect(() => {
+    const fetchBrands = async () => {
+      const response = await fetch(
+        "https://keneta.laratest-app.com/api/v1/attributes?sort=id"
+      );
+      const data = await response.json();
+      const brandAttr = data.data.find((attr) => attr.code === "brand");
+      if (brandAttr?.options) {
+        setBrandOptions(brandAttr.options);
+
+        const match = brandAttr.options.find(
+          (b) =>
+            encodeURIComponent(b.label.toLowerCase().replace(/\s+/g, "-")) ===
+            brandSlug
+        );
+        if (match) {
+          setActiveBrandLabel(match.label);
+        }
+      }
+    };
+    fetchBrands();
+  }, [brandSlug]);
+
+  // Build query params
   const queryParams = new URLSearchParams();
 
   for (const [key, value] of params.entries()) {
@@ -23,8 +51,14 @@ export default function Products() {
 
     if (key === "category") {
       queryParams.set("category_id", value);
+    } else if (key === "brand") {
+      const match = brandOptions.find(
+        (b) =>
+          encodeURIComponent(b.label.toLowerCase().replace(/\s+/g, "-")) ===
+          value
+      );
+      if (match) queryParams.set("brand", match.id);
     } else {
-      // Pass filters exactly as they appear (e.g., brand=164,165)
       queryParams.set(key, value);
     }
   }
@@ -94,6 +128,15 @@ export default function Products() {
         <FilterSidebar />
 
         <section className="flex-1">
+          {activeBrandLabel && (
+            <p className="mb-4 text-lg text-gray-700">
+              Showing products for brand:{" "}
+              <span className="font-semibold text-indigo-600">
+                {activeBrandLabel}
+              </span>
+            </p>
+          )}
+
           {filtered.length === 0 ? (
             <p className="text-center text-gray-500">
               {searchTerm
