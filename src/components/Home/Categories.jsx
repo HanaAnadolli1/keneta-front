@@ -8,6 +8,18 @@ import noImage from "../../assets/no_image.jpg";
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState(null);
+  const [enableNavigation, setEnableNavigation] = useState(true);
+
+  useEffect(() => {
+    // Disable navigation arrows on mobile
+    const handleResize = () => {
+      setEnableNavigation(window.innerWidth >= 768);
+    };
+
+    handleResize(); // check initially
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -63,11 +75,10 @@ const Categories = () => {
       ) : (
         <Swiper
           modules={[Navigation]}
-          navigation
-          spaceBetween={12} // 👈 tighter spacing between slides
-          slidesPerView={4}
+          navigation={enableNavigation}
+          spaceBetween={12}
+          slidesPerView={3} // default
           breakpoints={{
-            0: { slidesPerView: 2 },
             640: { slidesPerView: 3 },
             768: { slidesPerView: 4 },
             1024: { slidesPerView: 5 },
