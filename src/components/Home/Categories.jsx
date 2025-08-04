@@ -1,3 +1,4 @@
+// src/components/Categories.jsx
 import { useEffect, useState } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation } from "swiper/modules";
@@ -49,7 +50,7 @@ const Categories = () => {
         {categories.map((cat) => (
           <SwiperSlide key={cat.id}>
             <a
-              href={`/categories/${cat.slug}`}
+              href={`/products?category=${encodeURIComponent(cat.slug)}`}
               className="bg-gray-100 hover:bg-gray-200 transition rounded-md p-4 flex flex-col items-center shadow-sm h-full"
             >
               <img

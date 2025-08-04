@@ -13,13 +13,15 @@ export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
   const searchTerm = params.get("search")?.trim().toLowerCase() || "";
-  const categoryId = params.get("category");
+  const categorySlug = params.get("category");
   const brandSlug = params.get("brand");
 
   const [brandOptions, setBrandOptions] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [activeBrandLabel, setActiveBrandLabel] = useState(null);
+  const [activeCategoryLabel, setActiveCategoryLabel] = useState(null);
 
-  // Load brands and find label for current slug
+  // Load brand options
   useEffect(() => {
     const fetchBrands = async () => {
       const response = await fetch(
@@ -43,6 +45,26 @@ export default function Products() {
     fetchBrands();
   }, [brandSlug]);
 
+  // Load category options
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const res = await fetch(
+        "https://keneta.laratest-app.com/api/v1/categories?sort=id"
+      );
+      const json = await res.json();
+      const all = json?.data || [];
+      setCategoryOptions(all);
+
+      const match = all.find(
+        (cat) => encodeURIComponent(cat.slug) === categorySlug
+      );
+      if (match) {
+        setActiveCategoryLabel(match.name);
+      }
+    };
+    fetchCategories();
+  }, [categorySlug]);
+
   // Build query params
   const queryParams = new URLSearchParams();
 
@@ -50,7 +72,10 @@ export default function Products() {
     if (!value || !value.trim()) continue;
 
     if (key === "category") {
-      queryParams.set("category_id", value);
+      const match = categoryOptions.find(
+        (cat) => encodeURIComponent(cat.slug) === value
+      );
+      if (match) queryParams.set("category_id", match.id);
     } else if (key === "brand") {
       const match = brandOptions.find(
         (b) =>
@@ -128,12 +153,26 @@ export default function Products() {
         <FilterSidebar />
 
         <section className="flex-1">
-          {activeBrandLabel && (
+          {(activeBrandLabel || activeCategoryLabel) && (
             <p className="mb-4 text-lg text-gray-700">
-              Showing products for brand:{" "}
-              <span className="font-semibold text-indigo-600">
-                {activeBrandLabel}
-              </span>
+              Showing products for{" "}
+              {activeCategoryLabel && (
+                <>
+                  category:{" "}
+                  <span className="font-semibold text-indigo-600">
+                    {activeCategoryLabel}
+                  </span>
+                </>
+              )}
+              {activeBrandLabel && (
+                <>
+                  {activeCategoryLabel && " and "}
+                  brand:{" "}
+                  <span className="font-semibold text-indigo-600">
+                    {activeBrandLabel}
+                  </span>
+                </>
+              )}
             </p>
           )}
 
