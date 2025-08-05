@@ -66,22 +66,18 @@ const Categories = () => {
 
   return (
     <div className="px-4 py-8 max-w-7xl mx-auto">
-      <h2 className="text-2xl md:text-3xl font-bold mb-6">
-        Choose your category
-      </h2>
-
       {categories.length === 0 ? (
         <div className="text-gray-500">No categories available.</div>
       ) : (
         <Swiper
           modules={[Navigation]}
           navigation={enableNavigation}
-          spaceBetween={12}
-          slidesPerView={3} // default
+          spaceBetween={4}
+          slidesPerView={2.5}
           breakpoints={{
-            640: { slidesPerView: 3 },
-            768: { slidesPerView: 4 },
-            1024: { slidesPerView: 5 },
+            640: { slidesPerView: 3.5 },
+            768: { slidesPerView: 4.5 },
+            1024: { slidesPerView: 5.5 },
           }}
         >
           {categories.map((cat) => (
@@ -97,7 +93,7 @@ const Categories = () => {
                     className="w-10 h-10 object-contain"
                   />
                 </div>
-                <span className="text-sm font-semibold text-gray-800 transition-all duration-200 group-hover:scale-105 group-hover:text-base">
+                <span className="text-base font-semibold text-gray-800 transition-transform duration-200 transform scale-95 group-hover:scale-100">
                   {cat.name}
                 </span>
               </a>
