@@ -239,7 +239,7 @@ export default function Products() {
                         </>
                       ) : (
                         <span className="text-sm text-red-500">
-                          Out of stock. Try again later.
+                          Out of stock.
                         </span>
                       )}
                     </div>
