@@ -1,12 +1,11 @@
 // src/components/Header.jsx
-import React, { useState, useContext, useRef, useEffect, useMemo } from "react";
+import React, { useState, useContext, useRef, useEffect } from "react";
 import { FiShoppingCart, FiSearch, FiChevronDown } from "react-icons/fi";
 import { useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { AuthContext } from "../context/AuthContext";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import logo from "../assets/logo.png";
-import { AuthContext } from "../context/AuthContext";
 import { API_V1 } from "../api/config";
 
 export default function Header() {
@@ -14,6 +13,8 @@ export default function Header() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const { currentUser, logout } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -21,53 +22,60 @@ export default function Header() {
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
 
-  // Close account dropdown when clicking outside
+  // Close account dropdown on outside click
   useEffect(() => {
-    function handleClickOutside(e) {
+    const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setIsDropdownOpen(false);
       }
-    }
+    };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close suggestions dropdown when clicking outside
+  // Close suggestions on outside click
   useEffect(() => {
-    function handleClickOutside(e) {
+    const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setShowSuggestions(false);
       }
-    }
+    };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const { data: suggestions = [], isFetching: loadingSuggestions } = useQuery({
-    queryKey: ["suggestions", searchQuery],
-    queryFn: async () => {
-      const res = await fetch(
-        `${API_V1}/products?search=${encodeURIComponent(searchQuery)}&limit=10`,
-        {
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        }
-      );
-      if (!res.ok) throw new Error("Fetch suggestions failed");
-      const json = await res.json();
-      return json.data || [];
-    },
-    enabled: searchQuery.trim().length >= 3,
-    staleTime: 5 * 60 * 1000,
-  });
+  // Fetch suggestions dynamically from backend
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      const term = searchQuery.trim();
+      if (term.length < 2) {
+        setSuggestions([]);
+        return;
+      }
 
-  // Further filter & cap to 5 items front-end
-  const filteredSuggestions = useMemo(() => {
-    const term = searchQuery.trim().toLowerCase();
-    return suggestions
-      .filter((item) => item.name.toLowerCase().includes(term))
-      .slice(0, 5);
-  }, [suggestions, searchQuery]);
+      try {
+        setLoadingSuggestions(true);
+        const res = await fetch(
+          `${API_V1}/products?query=${encodeURIComponent(term)}&limit=5`,
+          {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          }
+        );
+        const json = await res.json();
+        const arr = Array.isArray(json?.data)
+          ? json.data
+          : json?.data?.items || [];
+        setSuggestions(arr);
+      } catch (err) {
+        console.error("Suggestion fetch failed", err);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    };
+
+    fetchSuggestions();
+  }, [searchQuery]);
 
   function handleLogout() {
     logout();
@@ -77,18 +85,18 @@ export default function Header() {
   function handleSearch(e) {
     e.preventDefault();
     const term = searchQuery.trim();
-    const params = new URLSearchParams();
     if (term) {
-      params.set("search", term);
-      params.set("page", "1");
+      navigate(`/products?query=${encodeURIComponent(term)}&page=1`);
+      setShowSuggestions(false);
     }
-    navigate(`/products?${params.toString()}`);
-    setShowSuggestions(false);
   }
 
   function handleSelectSuggestion(item) {
-    // Navigate directly to product details
-    navigate(`/products/${item.id}`);
+    if (item.url_key) {
+      navigate(`/products/${item.url_key}`);
+    } else {
+      navigate(`/products?query=${encodeURIComponent(item.name)}&page=1`);
+    }
     setShowSuggestions(false);
   }
 
@@ -120,7 +128,7 @@ export default function Header() {
               </Link>
             </div>
 
-            {/* Search + Autocomplete */}
+            {/* Search */}
             <div
               ref={searchRef}
               className="relative flex flex-1 w-full md:max-w-3xl mx-auto md:mx-10"
@@ -134,10 +142,10 @@ export default function Header() {
                   onChange={(e) => {
                     const v = e.target.value;
                     setSearchQuery(v);
-                    setShowSuggestions(v.trim().length >= 3);
+                    setShowSuggestions(v.trim().length >= 2);
                   }}
                   onFocus={() => {
-                    if (searchQuery.trim().length >= 3) {
+                    if (searchQuery.trim().length >= 2) {
                       setShowSuggestions(true);
                     }
                   }}
@@ -154,18 +162,20 @@ export default function Header() {
                 <ul className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-b-2xl shadow-lg z-50 max-h-60 overflow-auto">
                   {loadingSuggestions ? (
                     <li className="px-4 py-2 text-gray-500">Loading...</li>
-                  ) : filteredSuggestions.length > 0 ? (
-                    filteredSuggestions.map((item) => (
+                  ) : suggestions.length > 0 ? (
+                    suggestions.map((item) => (
                       <li
                         key={item.id}
                         onClick={() => handleSelectSuggestion(item)}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm md:text-base"
                       >
-                        {item.name}
+                        {item.name} {item.sku ? `(${item.sku})` : ""}
                       </li>
                     ))
                   ) : (
-                    <li className="px-4 py-2 text-gray-500">No suggestions</li>
+                    <li className="px-4 py-2 text-gray-500">
+                      No suggestions found
+                    </li>
                   )}
                 </ul>
               )}

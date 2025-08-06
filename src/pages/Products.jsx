@@ -12,7 +12,9 @@ import "../index.css";
 export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
-  const searchTerm = params.get("search")?.trim().toLowerCase() || "";
+
+  // Read from `query` param instead of `search`
+  const searchTerm = params.get("query")?.trim().toLowerCase() || "";
   const categorySlug = params.get("category");
   const brandSlug = params.get("brand");
 
@@ -65,7 +67,7 @@ export default function Products() {
     fetchCategories();
   }, [categorySlug]);
 
-  // Build query params
+  // Build query params for API
   const queryParams = new URLSearchParams();
 
   for (const [key, value] of params.entries()) {
@@ -83,6 +85,9 @@ export default function Products() {
           value
       );
       if (match) queryParams.set("brand", match.id);
+    } else if (key === "query") {
+      // Pass query param as backend expects
+      queryParams.set("query", value.trim());
     } else {
       queryParams.set(key, value);
     }
@@ -213,20 +218,28 @@ export default function Products() {
                       </div>
                     </Link>
                     <div className="p-4 border-t flex justify-between items-center">
-                      <button
-                        onClick={() => handleAdd(p.id)}
-                        disabled={busyId === p.id}
-                        className={`px-3 py-1 rounded border ${
-                          busyId === p.id
-                            ? "opacity-50 cursor-not-allowed border-gray-300 text-gray-500"
-                            : "border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white transition"
-                        }`}
-                      >
-                        {busyId === p.id ? "Adding…" : "Add to Cart"}
-                      </button>
-                      {addedId === p.id && (
-                        <span className="ml-2 text-green-600 text-sm">
-                          Added!
+                      {p.quantity > 0 ? (
+                        <>
+                          <button
+                            onClick={() => handleAdd(p.id)}
+                            disabled={busyId === p.id}
+                            className={`px-3 py-1 rounded border ${
+                              busyId === p.id
+                                ? "opacity-50 cursor-not-allowed border-gray-300 text-gray-500"
+                                : "border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white transition"
+                            }`}
+                          >
+                            {busyId === p.id ? "Adding…" : "Add to Cart"}
+                          </button>
+                          {addedId === p.id && (
+                            <span className="ml-2 text-green-600 text-sm">
+                              Added!
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-sm text-red-500">
+                          Out of stock. Try again later.
                         </span>
                       )}
                     </div>
