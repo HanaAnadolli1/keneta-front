@@ -63,12 +63,13 @@ export default function Checkout() {
 
   const handleShippingProceed = async () => {
     const pays = await shippingM.mutateAsync(selectedShipping);
+    console.log("✅ Payment methods set in state:", pays); // Add this!
     setPaymentMethods(pays);
   };
 
-  const handlePaymentSelect = async (method) => {
-    await paymentM.mutateAsync(method);
-    setSelectedPayment(method);
+  const handlePaymentSelect = (method) => {
+    setSelectedPayment(method); // immediately update UI
+    paymentM.mutate(method); // fire async request
   };
 
   const handlePlaceOrder = async () => {

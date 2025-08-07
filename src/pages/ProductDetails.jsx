@@ -1,6 +1,8 @@
+// src/pages/ProductDetails.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
+import { useToggleWishlist } from "../api/wishlist"; // ✅ ADD
 import { API_V1 } from "../api/config";
 import ImageGallery from "react-image-gallery";
 import "react-image-gallery/styles/css/image-gallery.css";
@@ -9,6 +11,7 @@ import "../custom.css";
 export default function ProductDetails() {
   const { url_key } = useParams();
   const { addItem } = useCartMutations();
+  const toggleWishlist = useToggleWishlist(); // ✅ ADD
 
   const galleryRef = useRef();
   const [product, setProduct] = useState(null);
@@ -91,7 +94,6 @@ export default function ProductDetails() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
       <div className="flex flex-col lg:flex-row gap-10">
-        {/* Gallery + Thumbnails */}
         <div className="w-full lg:w-1/2 flex gap-4">
           {!isMobile && galleryImages.length > 1 && (
             <div className="flex flex-col gap-4">
@@ -108,7 +110,6 @@ export default function ProductDetails() {
               ))}
             </div>
           )}
-
           <div className="flex-1">
             <ImageGallery
               ref={galleryRef}
@@ -117,15 +118,14 @@ export default function ProductDetails() {
               showThumbnails={false}
               showPlayButton={false}
               showFullscreenButton={false}
-              showNav={false} // ⛔ no arrows
-              showBullets={isMobile} // ✅ only on mobile
+              showNav={false}
+              showBullets={isMobile}
               additionalClass="custom-gallery"
               onClick={() => setIsFullscreen(true)}
             />
           </div>
         </div>
 
-        {/* Right Side Details */}
         <div className="w-full lg:w-1/2 flex flex-col space-y-4">
           <h1 className="text-3xl font-semibold">{product.name}</h1>
           <div
@@ -135,9 +135,6 @@ export default function ProductDetails() {
           <div className="text-2xl font-bold text-black">
             {product.formatted_price}
           </div>
-
-          <div className="text-sm text-gray-500">Total Amount</div>
-          <div className="text-lg font-semibold">{product.formatted_price}</div>
 
           <div className="flex items-center gap-4 mt-2">
             <div className="flex items-center border rounded-md">
@@ -155,13 +152,18 @@ export default function ProductDetails() {
                 +
               </button>
             </div>
-
             <button
               onClick={handleAdd}
               disabled={busy}
               className="border border-indigo-600 text-indigo-600 px-6 py-2 rounded hover:bg-indigo-50 disabled:opacity-50"
             >
               {busy ? "Adding…" : "Add To Cart"}
+            </button>
+            <button
+              onClick={() => toggleWishlist.mutate(product.id)} // ✅ ADD
+              className="border border-pink-500 text-pink-500 px-6 py-2 rounded hover:bg-pink-50"
+            >
+              ♥ Wishlist
             </button>
           </div>
 
@@ -170,36 +172,8 @@ export default function ProductDetails() {
               Product added to cart!
             </div>
           )}
-
-          <div className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer mt-4 hover:text-black">
-            <span className="transform rotate-90">↔</span>
-            <span>Compare</span>
-          </div>
         </div>
       </div>
-
-      {/* Fullscreen */}
-      {isFullscreen && (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
-          <button
-            onClick={() => setIsFullscreen(false)}
-            className="absolute top-4 right-6 text-black text-3xl z-50"
-          >
-            ✕
-          </button>
-          <div className="w-full h-full max-w-6xl flex items-center justify-center px-4">
-            <ImageGallery
-              items={galleryImages}
-              showFullscreenButton={false}
-              showPlayButton={false}
-              showThumbnails={false}
-              showNav={true}
-              showBullets={false}
-              additionalClass="custom-gallery"
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

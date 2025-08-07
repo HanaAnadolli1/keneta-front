@@ -10,31 +10,27 @@ export function useCustomerCheckoutAddress() {
         billing,
       });
 
-      // Debug log — helpful during development
-      console.log("✅ Address Response:", res.data);
+      const shippingData = res.data?.data;
+      const methods =
+        shippingData?.rates || shippingData?.shippingMethods || {};
 
-      // ✅ Bagisto usually returns shipping methods under data.shippingMethods
-      return res.data?.shippingMethods || res.data?.data?.shippingMethods || {};
+      return methods;
     },
     onSuccess: () => qc.invalidateQueries(["checkoutSummary"]),
   });
 }
 
 export function useCustomerCheckoutShippingMethod() {
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (shipping_method) => {
+    mutationFn: async (shippingMethod) => {
       const res = await axios.post("/customer/checkout/save-shipping", {
-        shipping_method,
+        shipping_method: shippingMethod,
       });
 
-      // Debug log
-      console.log("✅ Shipping Method Response:", res.data);
+      const methods = res.data?.data?.methods || [];
 
-      // ✅ Return only payment methods array expected by PaymentOptions.jsx
-      return res.data?.payment_methods || res.data?.data?.payment_methods || [];
+      return methods;
     },
-    onSuccess: () => qc.invalidateQueries(["checkoutSummary"]),
   });
 }
 
