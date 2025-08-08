@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useContext } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import {
@@ -6,8 +6,8 @@ import {
   usePrefetchProduct,
   useCartMutations,
 } from "../api/hooks";
-import { AuthContext } from "../context/AuthContext";
 import ProductCard from "../components/ProductCard";
+import { useWishlist } from "../context/WishlistContext"; // ✅
 
 export default function Products() {
   const [params, setParams] = useSearchParams();
@@ -21,14 +21,14 @@ export default function Products() {
   const [activeBrandLabel, setActiveBrandLabel] = useState(null);
   const [activeCategoryLabel, setActiveCategoryLabel] = useState(null);
 
-  const { currentUser } = useContext(AuthContext);
-  const [wishlistItems, setWishlistItems] = useState([]);
+  const { wishlistItems, toggleWishlist } = useWishlist(); // ✅
 
   const [busyId, setBusyId] = useState(null);
   const [addedId, setAddedId] = useState(null);
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
 
+  // Fetch brands
   useEffect(() => {
     const fetchBrands = async () => {
       const res = await fetch(
@@ -49,6 +49,7 @@ export default function Products() {
     fetchBrands();
   }, [brandSlug]);
 
+  // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
       const res = await fetch(
@@ -65,6 +66,7 @@ export default function Products() {
     fetchCategories();
   }, [categorySlug]);
 
+  // Build query params
   const queryParams = new URLSearchParams();
   for (const [key, value] of params.entries()) {
     if (!value || !value.trim()) continue;
@@ -125,67 +127,6 @@ export default function Products() {
   };
 
   const pageItems = buildPageItems();
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const fetchWishlist = async () => {
-      try {
-        const res = await fetch(
-          "https://keneta.laratest-app.com/api/v1/customer/wishlist",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
-        const json = await res.json();
-        const productIds = (json.data || []).map((item) => item.product_id);
-        setWishlistItems(productIds);
-      } catch (err) {
-        console.error("Failed to fetch wishlist", err);
-      }
-    };
-
-    fetchWishlist();
-  }, [currentUser]);
-
-  const toggleWishlist = async (productId) => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Please log in to use wishlist.");
-      return;
-    }
-
-    try {
-      await fetch(
-        `https://keneta.laratest-app.com/api/v1/customer/wishlist/${productId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            additional: {
-              product_id: productId,
-              quantity: 1,
-            },
-          }),
-        }
-      );
-
-      setWishlistItems((prev) =>
-        prev.includes(productId)
-          ? prev.filter((id) => id !== productId)
-          : [...prev, productId]
-      );
-    } catch (err) {
-      console.error("Failed to toggle wishlist", err);
-    }
-  };
 
   const handleAdd = async (id) => {
     setBusyId(id);

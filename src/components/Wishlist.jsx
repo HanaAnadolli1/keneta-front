@@ -8,22 +8,47 @@ export default function Wishlist() {
   const token = localStorage.getItem("token");
 
   const fetchWishlist = async () => {
-    if (!token) return;
     setLoading(true);
 
     try {
-      const res = await fetch(
-        "https://keneta.laratest-app.com/api/v1/customer/wishlist",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
+      if (token) {
+        // ✅ Logged-in user: fetch from server
+        const res = await fetch(
+          "https://keneta.laratest-app.com/api/v1/customer/wishlist",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+        const json = await res.json();
+        setWishlist(json.data || []);
+      } else {
+        // ✅ Guest: fetch product data from localStorage
+        const local = JSON.parse(
+          localStorage.getItem("guest_wishlist") || "[]"
+        );
+        if (!local.length) {
+          setWishlist([]);
+          return;
         }
-      );
 
-      const json = await res.json();
-      setWishlist(json.data || []);
+        const res = await fetch(
+          `https://keneta.laratest-app.com/api/v1/products?ids=${local.join(
+            ","
+          )}`
+        );
+        const json = await res.json();
+
+        const guestWishlist = (json.data || []).map((product) => ({
+          id: product.id,
+          product_id: product.id,
+          product,
+        }));
+
+        setWishlist(guestWishlist);
+      }
     } catch (err) {
       console.error("Wishlist fetch error", err);
     } finally {
@@ -70,44 +95,58 @@ export default function Wishlist() {
   };
 
   const removeItem = async (productId) => {
-    try {
-      await fetch(
-        `https://keneta.laratest-app.com/api/v1/customer/wishlist/${productId}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            additional: {
-              product_id: productId,
-              quantity: 1,
+    if (token) {
+      try {
+        await fetch(
+          `https://keneta.laratest-app.com/api/v1/customer/wishlist/${productId}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
             },
-          }),
-        }
-      );
+            body: JSON.stringify({
+              additional: {
+                product_id: productId,
+                quantity: 1,
+              },
+            }),
+          }
+        );
+        fetchWishlist();
+      } catch (err) {
+        console.error("Remove failed", err);
+      }
+    } else {
+      // ✅ Remove from guest wishlist
+      const local = JSON.parse(localStorage.getItem("guest_wishlist") || "[]");
+      const updated = local.filter((id) => id !== productId);
+      localStorage.setItem("guest_wishlist", JSON.stringify(updated));
       fetchWishlist();
-    } catch (err) {
-      console.error("Remove failed", err);
     }
   };
 
   const clearAll = async () => {
-    try {
-      await fetch(
-        `https://keneta.laratest-app.com/api/v1/customer/wishlist/all`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
-      fetchWishlist();
-    } catch (err) {
-      console.error("Clear all failed", err);
+    if (token) {
+      try {
+        await fetch(
+          `https://keneta.laratest-app.com/api/v1/customer/wishlist/all`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+        fetchWishlist();
+      } catch (err) {
+        console.error("Clear all failed", err);
+      }
+    } else {
+      // ✅ Clear guest wishlist
+      localStorage.removeItem("guest_wishlist");
+      setWishlist([]);
     }
   };
 
@@ -161,19 +200,17 @@ export default function Wishlist() {
                 </Link>
 
                 <div className="flex items-center gap-4">
-                  {/* Move to Cart or Out of Stock */}
-                  {product.quantity > 0 ? (
+                  {token && product.quantity > 0 ? (
                     <button
                       onClick={() => moveToCart(product.id)}
                       className="bg-[#001242] text-white px-4 py-2 rounded text-sm"
                     >
                       Move To Cart
                     </button>
-                  ) : (
+                  ) : !token ? null : (
                     <span className="text-sm text-red-500">Out of Stock</span>
                   )}
 
-                  {/* Price & Remove */}
                   <div className="text-right text-sm">
                     {product.formatted_price}
                     {product.formatted_compare_at_price && (
