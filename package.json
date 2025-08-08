@@ -29,6 +29,7 @@
     "react-modal": "^3.16.3",
     "react-router-dom": "^7.6.2",
     "react-slick": "^0.30.3",
+    "react-window": "^1.8.11",
     "slick-carousel": "^1.8.1",
     "swiper": "^11.2.8"
   },
