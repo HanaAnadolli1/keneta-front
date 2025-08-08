@@ -2,7 +2,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
-import { useToggleWishlist } from "../api/wishlist"; // ✅ ADD
 import { API_V1 } from "../api/config";
 import ImageGallery from "react-image-gallery";
 import "react-image-gallery/styles/css/image-gallery.css";
@@ -11,7 +10,6 @@ import "../custom.css";
 export default function ProductDetails() {
   const { url_key } = useParams();
   const { addItem } = useCartMutations();
-  const toggleWishlist = useToggleWishlist(); // ✅ ADD
 
   const galleryRef = useRef();
   const [product, setProduct] = useState(null);
@@ -158,12 +156,6 @@ export default function ProductDetails() {
               className="border border-indigo-600 text-indigo-600 px-6 py-2 rounded hover:bg-indigo-50 disabled:opacity-50"
             >
               {busy ? "Adding…" : "Add To Cart"}
-            </button>
-            <button
-              onClick={() => toggleWishlist.mutate(product.id)} // ✅ ADD
-              className="border border-pink-500 text-pink-500 px-6 py-2 rounded hover:bg-pink-50"
-            >
-              ♥ Wishlist
             </button>
           </div>
 

@@ -7,6 +7,7 @@ import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import logo from "../assets/logo.png";
 import { API_V1 } from "../api/config";
+import { FiHeart } from "react-icons/fi";
 
 export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -183,6 +184,13 @@ export default function Header() {
 
             {/* Account & Cart */}
             <div className="flex items-center gap-4 md:gap-6">
+              <Link
+                to="/wishlist"
+                className="text-[#1d3d62] text-2xl cursor-pointer"
+              >
+                <FiHeart />
+              </Link>
+
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen((o) => !o)}

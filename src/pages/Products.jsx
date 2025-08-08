@@ -1,5 +1,5 @@
 // src/pages/Products.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useContext } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import {
@@ -7,13 +7,14 @@ import {
   usePrefetchProduct,
   useCartMutations,
 } from "../api/hooks";
+import { AuthContext } from "../context/AuthContext";
+import { FiHeart } from "react-icons/fi";
+import { FaHeart } from "react-icons/fa";
 import "../index.css";
 
 export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
-
-  // Read from `query` param instead of `search`
   const searchTerm = params.get("query")?.trim().toLowerCase() || "";
   const categorySlug = params.get("category");
   const brandSlug = params.get("brand");
@@ -23,7 +24,14 @@ export default function Products() {
   const [activeBrandLabel, setActiveBrandLabel] = useState(null);
   const [activeCategoryLabel, setActiveCategoryLabel] = useState(null);
 
-  // Load brand options
+  const { currentUser } = useContext(AuthContext);
+  const [wishlistItems, setWishlistItems] = useState([]);
+
+  const [busyId, setBusyId] = useState(null);
+  const [addedId, setAddedId] = useState(null);
+  const { addItem } = useCartMutations();
+  const prefetch = usePrefetchProduct();
+
   useEffect(() => {
     const fetchBrands = async () => {
       const response = await fetch(
@@ -33,21 +41,17 @@ export default function Products() {
       const brandAttr = data.data.find((attr) => attr.code === "brand");
       if (brandAttr?.options) {
         setBrandOptions(brandAttr.options);
-
         const match = brandAttr.options.find(
           (b) =>
             encodeURIComponent(b.label.toLowerCase().replace(/\s+/g, "-")) ===
             brandSlug
         );
-        if (match) {
-          setActiveBrandLabel(match.label);
-        }
+        if (match) setActiveBrandLabel(match.label);
       }
     };
     fetchBrands();
   }, [brandSlug]);
 
-  // Load category options
   useEffect(() => {
     const fetchCategories = async () => {
       const res = await fetch(
@@ -56,23 +60,17 @@ export default function Products() {
       const json = await res.json();
       const all = json?.data || [];
       setCategoryOptions(all);
-
       const match = all.find(
         (cat) => encodeURIComponent(cat.slug) === categorySlug
       );
-      if (match) {
-        setActiveCategoryLabel(match.name);
-      }
+      if (match) setActiveCategoryLabel(match.name);
     };
     fetchCategories();
   }, [categorySlug]);
 
-  // Build query params for API
   const queryParams = new URLSearchParams();
-
   for (const [key, value] of params.entries()) {
     if (!value || !value.trim()) continue;
-
     if (key === "category") {
       const match = categoryOptions.find(
         (cat) => encodeURIComponent(cat.slug) === value
@@ -86,7 +84,6 @@ export default function Products() {
       );
       if (match) queryParams.set("brand", match.id);
     } else if (key === "query") {
-      // Pass query param as backend expects
       queryParams.set("query", value.trim());
     } else {
       queryParams.set(key, value);
@@ -106,23 +103,6 @@ export default function Products() {
   );
 
   const totalPages = Math.max(1, Math.ceil(total / 12));
-  const prefetch = usePrefetchProduct();
-  const { addItem } = useCartMutations();
-  const [busyId, setBusyId] = useState(null);
-  const [addedId, setAddedId] = useState(null);
-
-  const handleAdd = async (id) => {
-    setBusyId(id);
-    try {
-      await addItem.mutateAsync({ productId: id, quantity: 1 });
-      setAddedId(id);
-      setTimeout(() => setAddedId((curr) => (curr === id ? null : curr)), 2000);
-    } catch (e) {
-      alert("Failed to add to cart: " + e.message);
-    } finally {
-      setBusyId((curr) => (curr === id ? null : curr));
-    }
-  };
 
   const goToPage = (p) => {
     if (p < 1 || p > totalPages) return;
@@ -146,7 +126,81 @@ export default function Products() {
     arr.push(totalPages);
     return arr;
   };
+
   const pageItems = buildPageItems();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const fetchWishlist = async () => {
+      try {
+        const res = await fetch(
+          "https://keneta.laratest-app.com/api/v1/customer/wishlist",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+        const json = await res.json();
+        const productIds = (json.data || []).map((item) => item.product_id);
+        setWishlistItems(productIds);
+      } catch (err) {
+        console.error("Failed to fetch wishlist", err);
+      }
+    };
+
+    fetchWishlist();
+  }, [currentUser]);
+
+  const toggleWishlist = async (productId) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please log in to use wishlist.");
+      return;
+    }
+
+    try {
+      await fetch(
+        `https://keneta.laratest-app.com/api/v1/customer/wishlist/${productId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            additional: {
+              product_id: productId,
+              quantity: 1,
+            },
+          }),
+        }
+      );
+
+      setWishlistItems((prev) =>
+        prev.includes(productId)
+          ? prev.filter((id) => id !== productId)
+          : [...prev, productId]
+      );
+    } catch (err) {
+      console.error("Failed to toggle wishlist", err);
+    }
+  };
+
+  const handleAdd = async (id) => {
+    setBusyId(id);
+    try {
+      await addItem.mutateAsync({ productId: id, quantity: 1 });
+      setAddedId(id);
+      setTimeout(() => setAddedId((curr) => (curr === id ? null : curr)), 2000);
+    } catch (e) {
+      alert("Failed to add to cart: " + e.message);
+    } finally {
+      setBusyId((curr) => (curr === id ? null : curr));
+    }
+  };
 
   if (isPending) return <p className="text-center p-4">Loading…</p>;
   if (isError)
@@ -156,7 +210,6 @@ export default function Products() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row gap-8">
         <FilterSidebar />
-
         <section className="flex-1">
           {(activeBrandLabel || activeCategoryLabel) && (
             <p className="mb-4 text-lg text-gray-700">
@@ -171,8 +224,7 @@ export default function Products() {
               )}
               {activeBrandLabel && (
                 <>
-                  {activeCategoryLabel && " and "}
-                  brand:{" "}
+                  {activeCategoryLabel && " and "}brand:{" "}
                   <span className="font-semibold text-indigo-600">
                     {activeBrandLabel}
                   </span>
@@ -193,8 +245,18 @@ export default function Products() {
                 {filtered.map((p, idx) => (
                   <article
                     key={`${p.id}-${idx}`}
-                    className="bg-white rounded-lg shadow flex flex-col"
+                    className="bg-white rounded-lg shadow flex flex-col relative"
                   >
+                    <div className="absolute top-2 right-2 z-10">
+                      <button onClick={() => toggleWishlist(p.id)}>
+                        {wishlistItems.includes(p.id) ? (
+                          <FaHeart className="text-2xl text-red-500" />
+                        ) : (
+                          <FiHeart className="text-2xl text-gray-400 hover:text-red-500" />
+                        )}
+                      </button>
+                    </div>
+
                     <Link
                       to={`/products/${p.url_key}`}
                       onMouseEnter={() => prefetch(p.id)}
@@ -217,6 +279,7 @@ export default function Products() {
                         </p>
                       </div>
                     </Link>
+
                     <div className="p-4 border-t flex justify-between items-center">
                       {p.quantity > 0 ? (
                         <>
