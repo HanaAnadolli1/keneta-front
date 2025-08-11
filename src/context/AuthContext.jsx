@@ -11,13 +11,16 @@ export const AuthContext = createContext({
 });
 
 export function AuthProvider({ children }) {
-  // Initialize user from localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     const raw = localStorage.getItem("user");
     return raw ? JSON.parse(raw) : null;
   });
 
-  // Log in: set user and persist token for axios
+  const signalAuthChanged = () => {
+    // let listeners (WishlistContext, etc.) know auth changed
+    window.dispatchEvent(new Event("auth-changed"));
+  };
+
   const login = (user) => {
     setCurrentUser(user);
     localStorage.setItem("user", JSON.stringify(user));
@@ -26,18 +29,18 @@ export function AuthProvider({ children }) {
     if (token) {
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
     }
+    signalAuthChanged();
   };
 
-  // Log out: clear user and remove token/header
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     localStorage.removeItem("lastActivity");
     delete axios.defaults.headers.common.Authorization;
+    signalAuthChanged();
   };
 
-  // On mount: rehydrate axios header and fetch current user if missing
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token && !currentUser) {
@@ -46,18 +49,18 @@ export function AuthProvider({ children }) {
         .then((user) => {
           setCurrentUser(user);
           localStorage.setItem("user", JSON.stringify(user));
+          signalAuthChanged();
         })
         .catch(() => logout());
     }
   }, []);
 
-  // Auto logout after inactivity
+  // Auto logout
   useEffect(() => {
     if (!currentUser) return;
 
-    const updateActivity = () => {
+    const updateActivity = () =>
       localStorage.setItem("lastActivity", Date.now().toString());
-    };
 
     const checkTimeout = () => {
       const last = parseInt(localStorage.getItem("lastActivity"), 10);

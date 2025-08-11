@@ -1,20 +1,72 @@
-import React, { useEffect, useState } from "react";
+// src/components/Wishlist.jsx
+import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { API_V1 } from "../api/config";
+
+const GUEST_KEY = "guest_wishlist";
 
 export default function Wishlist() {
-  const [wishlist, setWishlist] = useState([]);
+  const [wishlist, setWishlist] = useState([]); // [{ id, product_id, product? }, ...]
   const [loading, setLoading] = useState(false);
 
-  const token = localStorage.getItem("token");
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const fetchWishlist = async () => {
+  // --- Helpers ---------------------------------------------------------------
+  const readGuestIds = () => {
+    try {
+      const raw = localStorage.getItem(GUEST_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.map(Number) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const writeGuestIds = (ids) => {
+    localStorage.setItem(
+      GUEST_KEY,
+      JSON.stringify(Array.from(new Set(ids.map(Number))))
+    );
+  };
+
+  const fetchProduct = async (id) => {
+    const res = await fetch(`${API_V1}/products/${id}`, {
+      headers: { Accept: "application/json" },
+    });
+    const json = await res.json().catch(() => ({}));
+    return json?.data || null;
+  };
+
+  // Normalize any API shape to an array of items
+  const normalizeWishlistResponse = (json) => {
+    if (!json) return [];
+    if (Array.isArray(json.data)) return json.data;
+    if (Array.isArray(json?.data?.items)) return json.data.items;
+    if (json.data && typeof json.data === "object") return [json.data];
+    return [];
+  };
+
+  // Hydrate items with missing product objects
+  const hydrateMissingProducts = async (items) => {
+    const withProducts = await Promise.all(
+      items.map(async (it) => {
+        if (it.product) return it;
+        const prod = await fetchProduct(it.product_id).catch(() => null);
+        return { ...it, product: prod || null };
+      })
+    );
+    return withProducts;
+  };
+
+  // --- Load wishlist ---------------------------------------------------------
+  const fetchWishlist = useCallback(async () => {
     setLoading(true);
-
     try {
       if (token) {
-        // ✅ Logged-in user: fetch from server
+        // Logged-in: fetch from server
         const res = await fetch(
-          "https://keneta.laratest-app.com/api/v1/customer/wishlist",
+          `https://keneta.laratest-app.com/api/v1/customer/wishlist?limit=100`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -22,47 +74,63 @@ export default function Wishlist() {
             },
           }
         );
-        const json = await res.json();
-        setWishlist(json.data || []);
+        const json = await res.json().catch(() => ({}));
+        let items = normalizeWishlistResponse(json);
+
+        // Ensure each has product
+        items = await hydrateMissingProducts(items);
+
+        setWishlist(items);
       } else {
-        // ✅ Guest: fetch product data from localStorage
-        const local = JSON.parse(
-          localStorage.getItem("guest_wishlist") || "[]"
-        );
-        if (!local.length) {
+        // Guest: read IDs, fetch their product details
+        const ids = readGuestIds();
+        if (ids.length === 0) {
           setWishlist([]);
           return;
         }
-
-        const res = await fetch(
-          `https://keneta.laratest-app.com/api/v1/products?ids=${local.join(
-            ","
-          )}`
+        const products = await Promise.all(
+          ids.map((id) => fetchProduct(id).catch(() => null))
         );
-        const json = await res.json();
 
-        const guestWishlist = (json.data || []).map((product) => ({
-          id: product.id,
-          product_id: product.id,
-          product,
-        }));
+        const items = products
+          .map((prod, idx) => ({
+            id: ids[idx], // local synthetic id
+            product_id: ids[idx],
+            product: prod,
+          }))
+          .filter(Boolean);
 
-        setWishlist(guestWishlist);
+        setWishlist(items);
       }
     } catch (err) {
       console.error("Wishlist fetch error", err);
+      setWishlist([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchWishlist();
-  }, []);
+  }, [fetchWishlist]);
 
+  // --- Actions ---------------------------------------------------------------
   const moveToCart = async (productId) => {
-    const item = wishlist.find((w) => w.product_id === productId);
-    if (!item?.product || item.product.quantity < 1) {
+    if (!token) {
+      alert("Please login to move items to the cart.");
+      return;
+    }
+    const item = wishlist.find(
+      (w) => Number(w.product_id) === Number(productId)
+    );
+    const product = item?.product;
+
+    // If product is configurable (has super attributes), direct to PDP
+    if (product?.super_attributes?.length) {
+      alert("Please select a variant on the product page.");
+      return;
+    }
+    if (!product || product.quantity < 1) {
       alert("Product is out of stock.");
       return;
     }
@@ -85,8 +153,10 @@ export default function Wishlist() {
         }
       );
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to move");
+
+      // Refresh after moving
       fetchWishlist();
     } catch (err) {
       console.error("Move to cart failed", err);
@@ -95,8 +165,9 @@ export default function Wishlist() {
   };
 
   const removeItem = async (productId) => {
-    if (token) {
-      try {
+    try {
+      if (token) {
+        // Server toggle (POST) removes when already present
         await fetch(
           `https://keneta.laratest-app.com/api/v1/customer/wishlist/${productId}`,
           {
@@ -113,22 +184,22 @@ export default function Wishlist() {
             }),
           }
         );
-        fetchWishlist();
-      } catch (err) {
-        console.error("Remove failed", err);
+      } else {
+        // Guest: remove from local list
+        const ids = readGuestIds().filter(
+          (id) => Number(id) !== Number(productId)
+        );
+        writeGuestIds(ids);
       }
-    } else {
-      // ✅ Remove from guest wishlist
-      const local = JSON.parse(localStorage.getItem("guest_wishlist") || "[]");
-      const updated = local.filter((id) => id !== productId);
-      localStorage.setItem("guest_wishlist", JSON.stringify(updated));
-      fetchWishlist();
+      fetchWishlist(); // Refresh UI
+    } catch (err) {
+      console.error("Remove failed", err);
     }
   };
 
   const clearAll = async () => {
-    if (token) {
-      try {
+    try {
+      if (token) {
         await fetch(
           `https://keneta.laratest-app.com/api/v1/customer/wishlist/all`,
           {
@@ -139,17 +210,16 @@ export default function Wishlist() {
             },
           }
         );
-        fetchWishlist();
-      } catch (err) {
-        console.error("Clear all failed", err);
+      } else {
+        writeGuestIds([]);
       }
-    } else {
-      // ✅ Clear guest wishlist
-      localStorage.removeItem("guest_wishlist");
-      setWishlist([]);
+      fetchWishlist();
+    } catch (err) {
+      console.error("Clear all failed", err);
     }
   };
 
+  // --- Render ---------------------------------------------------------------
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
       <div className="flex justify-between items-center mb-6">
@@ -172,55 +242,67 @@ export default function Wishlist() {
         <div className="space-y-6">
           {wishlist.map((item) => {
             const product = item.product;
-            if (!product) return null;
+            const urlKey = product?.url_key;
 
             return (
               <div
-                key={item.id}
+                key={`${item.id}-${item.product_id}`}
                 className="flex items-center justify-between gap-4 border-b pb-4"
               >
                 <Link
-                  to={`/products/${product.url_key}`}
-                  className="flex gap-4"
+                  to={urlKey ? `/products/${urlKey}` : "#"}
+                  className={`flex gap-4 ${
+                    urlKey ? "" : "pointer-events-none opacity-70"
+                  }`}
                 >
                   <img
                     src={
-                      product.base_image?.medium_image_url ||
+                      product?.base_image?.medium_image_url ||
                       "https://via.placeholder.com/100"
                     }
-                    alt={product.name}
+                    alt={product?.name || "Product"}
                     className="w-20 h-20 object-contain bg-gray-50"
                   />
                   <div>
-                    <p className="font-medium">{product.name}</p>
+                    <p className="font-medium">
+                      {product?.name || `#${item.product_id}`}
+                    </p>
                     <p className="text-gray-600 text-sm">
-                      {product.formatted_price || "€0.00"}
+                      {product?.formatted_price || "—"}
                     </p>
                   </div>
                 </Link>
 
                 <div className="flex items-center gap-4">
-                  {token && product.quantity > 0 ? (
-                    <button
-                      onClick={() => moveToCart(product.id)}
-                      className="bg-[#001242] text-white px-4 py-2 rounded text-sm"
-                    >
-                      Move To Cart
-                    </button>
-                  ) : !token ? null : (
-                    <span className="text-sm text-red-500">Out of Stock</span>
+                  {/* Move to Cart or Out of Stock (only for logged in) */}
+                  {token ? (
+                    product?.quantity > 0 ? (
+                      <button
+                        onClick={() => moveToCart(item.product_id)}
+                        className="bg-[#001242] text-white px-4 py-2 rounded text-sm"
+                      >
+                        Move To Cart
+                      </button>
+                    ) : (
+                      <span className="text-sm text-red-500">Out of Stock</span>
+                    )
+                  ) : (
+                    <span className="text-sm text-gray-500">
+                      Login to move to cart
+                    </span>
                   )}
 
+                  {/* Price & Remove */}
                   <div className="text-right text-sm">
-                    {product.formatted_price}
-                    {product.formatted_compare_at_price && (
+                    {product?.formatted_price || "—"}
+                    {product?.formatted_compare_at_price && (
                       <div className="line-through text-gray-400 text-xs">
                         {product.formatted_compare_at_price}
                       </div>
                     )}
                     <button
                       className="block text-red-500 text-xs mt-1"
-                      onClick={() => removeItem(product.id)}
+                      onClick={() => removeItem(item.product_id)}
                     >
                       Remove
                     </button>

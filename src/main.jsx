@@ -28,10 +28,10 @@ persistQueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <WishlistProvider>
+    <WishlistProvider>
+      <AuthProvider>
         <App />
-      </WishlistProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </WishlistProvider>
   </QueryClientProvider>
 );

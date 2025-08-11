@@ -3,10 +3,12 @@ import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login as apiLogin } from "../api/auth";
 import { AuthContext } from "../context/AuthContext";
+import { useWishlist } from "../context/WishlistContext";
 
 export default function Login() {
   const navigate = useNavigate();
   const { login: setUser } = useContext(AuthContext);
+  const { refreshWishlist } = useWishlist(); // refresh badge instantly after login
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,11 +20,19 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      const user = await apiLogin({ email, password });
+      // apiLogin persists token to localStorage and sets axios Authorization header
+      const result = await apiLogin({ email, password });
+      const user = result?.data ?? result?.user ?? result;
+
+      // Update AuthContext (leave AuthContext code as-is)
       setUser(user);
+
+      // Trigger immediate wishlist refresh (Provider will have auto-merged guest list)
+      await refreshWishlist().catch(() => {});
+
       navigate("/");
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError(err?.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -40,6 +50,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
           />
         </div>
 
@@ -51,6 +62,7 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            autoComplete="current-password"
           />
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import {
@@ -7,110 +7,174 @@ import {
   useCartMutations,
 } from "../api/hooks";
 import ProductCard from "../components/ProductCard";
-import { useWishlist } from "../context/WishlistContext"; // ✅
+import { useWishlist } from "../context/WishlistContext";
+
+const slugifyBrandLabel = (label) =>
+  encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
 
 export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = parseInt(params.get("page") || "1", 10);
-  const searchTerm = params.get("query")?.trim().toLowerCase() || "";
+  const searchTerm = params.get("query")?.trim() || "";
   const categorySlug = params.get("category");
   const brandSlug = params.get("brand");
 
   const [brandOptions, setBrandOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
-  const [activeBrandLabel, setActiveBrandLabel] = useState(null);
-  const [activeCategoryLabel, setActiveCategoryLabel] = useState(null);
 
-  const { wishlistItems, toggleWishlist } = useWishlist(); // ✅
+  const activeBrandLabel = useMemo(() => {
+    if (!brandSlug || !brandOptions.length) return null;
+    return (
+      brandOptions.find((b) => slugifyBrandLabel(b.label) === brandSlug)
+        ?.label ?? null
+    );
+  }, [brandSlug, brandOptions]);
+
+  const activeCategoryLabel = useMemo(() => {
+    if (!categorySlug || !categoryOptions.length) return null;
+    return (
+      categoryOptions.find((c) => encodeURIComponent(c.slug) === categorySlug)
+        ?.name ?? null
+    );
+  }, [categorySlug, categoryOptions]);
+
+  const { isWishlisted, toggleWishlist } = useWishlist();
 
   const [busyId, setBusyId] = useState(null);
   const [addedId, setAddedId] = useState(null);
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
 
-  // Fetch brands
+  // ---- Brands (with tiny cache) ----
   useEffect(() => {
+    let cancelled = false;
+
     const fetchBrands = async () => {
-      const res = await fetch(
-        "https://keneta.laratest-app.com/api/v1/attributes?sort=id"
-      );
-      const json = await res.json();
-      const brandAttr = json.data.find((attr) => attr.code === "brand");
-      if (brandAttr?.options) {
-        setBrandOptions(brandAttr.options);
-        const match = brandAttr.options.find(
-          (b) =>
-            encodeURIComponent(b.label.toLowerCase().replace(/\s+/g, "-")) ===
-            brandSlug
-        );
-        if (match) setActiveBrandLabel(match.label);
+      try {
+        const cached = sessionStorage.getItem("brandOptions");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (!cancelled) setBrandOptions(parsed);
+        } else {
+          const res = await fetch(
+            "https://keneta.laratest-app.com/api/v1/attributes?sort=id"
+          );
+          const json = await res.json();
+          const brandAttr = json.data.find((attr) => attr.code === "brand");
+          const options = brandAttr?.options ?? [];
+          sessionStorage.setItem("brandOptions", JSON.stringify(options));
+          if (!cancelled) setBrandOptions(options);
+        }
+      } catch {
+        // ignore; page still works without labels
       }
     };
+
     fetchBrands();
-  }, [brandSlug]);
-
-  // Fetch categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const res = await fetch(
-        "https://keneta.laratest-app.com/api/v1/categories?sort=id"
-      );
-      const json = await res.json();
-      const all = json?.data || [];
-      setCategoryOptions(all);
-      const match = all.find(
-        (cat) => encodeURIComponent(cat.slug) === categorySlug
-      );
-      if (match) setActiveCategoryLabel(match.name);
+    return () => {
+      cancelled = true;
     };
+  }, []);
+
+  // ---- Categories (with tiny cache) ----
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchCategories = async () => {
+      try {
+        const cached = sessionStorage.getItem("categoryOptions");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (!cancelled) setCategoryOptions(parsed);
+        } else {
+          const res = await fetch(
+            "https://keneta.laratest-app.com/api/v1/categories?sort=id"
+          );
+          const json = await res.json();
+          const all = json?.data || [];
+          sessionStorage.setItem("categoryOptions", JSON.stringify(all));
+          if (!cancelled) setCategoryOptions(all);
+        }
+      } catch {
+        // ignore; page still works without labels
+      }
+    };
+
     fetchCategories();
-  }, [categorySlug]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Build query params
-  const queryParams = new URLSearchParams();
-  for (const [key, value] of params.entries()) {
-    if (!value || !value.trim()) continue;
-    if (key === "category") {
-      const match = categoryOptions.find(
-        (cat) => encodeURIComponent(cat.slug) === value
-      );
-      if (match) queryParams.set("category_id", match.id);
-    } else if (key === "brand") {
-      const match = brandOptions.find(
-        (b) =>
-          encodeURIComponent(b.label.toLowerCase().replace(/\s+/g, "-")) ===
-          value
-      );
-      if (match) queryParams.set("brand", match.id);
-    } else if (key === "query") {
-      queryParams.set("query", value.trim());
-    } else {
-      queryParams.set(key, value);
+  // Map slug -> id (when options are ready)
+  const mappedBrandId = useMemo(() => {
+    if (!brandSlug || !brandOptions.length) return null;
+    return (
+      brandOptions.find((b) => slugifyBrandLabel(b.label) === brandSlug)?.id ??
+      null
+    );
+  }, [brandSlug, brandOptions]);
+
+  const mappedCategoryId = useMemo(() => {
+    if (!categorySlug || !categoryOptions.length) return null;
+    return (
+      categoryOptions.find((c) => encodeURIComponent(c.slug) === categorySlug)
+        ?.id ?? null
+    );
+  }, [categorySlug, categoryOptions]);
+
+  // Build a **stable** query string for the products API.
+  // Gate it until we can map slugs to ids so we don't fetch twice.
+  const needsBrandMap =
+    !!brandSlug && !mappedBrandId && brandOptions.length === 0;
+  const needsCatMap =
+    !!categorySlug && !mappedCategoryId && categoryOptions.length === 0;
+  const canQuery = !(needsBrandMap || needsCatMap);
+
+  const queryString = useMemo(() => {
+    const qs = new URLSearchParams();
+
+    // Copy through any primitive params first
+    for (const [key, value] of params.entries()) {
+      if (!value || !value.trim()) continue;
+      if (key === "query" || key === "sort" || key === "page") {
+        qs.set(key, value.trim());
+      }
     }
-  }
 
-  const { data, isPending, isFetching, isError } = useProducts(queryParams);
+    // Server-side filtering — only set when we have the IDs
+    if (mappedCategoryId) qs.set("category_id", String(mappedCategoryId));
+    if (mappedBrandId) qs.set("brand", String(mappedBrandId));
+
+    // Explicit pagination size (adjust key to match your API: per_page / limit)
+    if (!qs.has("limit")) qs.set("limit", "12");
+
+    return qs.toString(); // stable string
+  }, [params, mappedBrandId, mappedCategoryId]);
+
+  // If your useProducts hook supports react-query options, pass them here
+  const { data, isPending, isFetching, isError } = useProducts(queryString, {
+    enabled: canQuery,
+    keepPreviousData: true,
+    staleTime: 60_000, // 1 minute caching
+  });
+
   const products = data?.items ?? [];
   const total = data?.total ?? 0;
-
-  const filtered = useMemo(
-    () =>
-      searchTerm
-        ? products.filter((p) => p.name.toLowerCase().includes(searchTerm))
-        : products,
-    [products, searchTerm]
-  );
-
   const totalPages = Math.max(1, Math.ceil(total / 12));
 
-  const goToPage = (p) => {
-    if (p < 1 || p > totalPages) return;
-    const qs = new URLSearchParams(params);
-    qs.set("page", p);
-    setParams(qs);
-  };
+  const goToPage = useCallback(
+    (p) => {
+      if (p < 1 || p > totalPages) return;
+      const qs = new URLSearchParams(params);
+      qs.set("page", String(p));
+      setParams(qs);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [params, setParams, totalPages]
+  );
 
-  const buildPageItems = () => {
+  const buildPageItems = useCallback(() => {
     const arr = [];
     if (totalPages <= 9) {
       for (let i = 1; i <= totalPages; i++) arr.push(i);
@@ -124,31 +188,62 @@ export default function Products() {
     if (end < totalPages - 1) arr.push("ellipsis-end");
     arr.push(totalPages);
     return arr;
-  };
+  }, [page, totalPages]);
 
   const pageItems = buildPageItems();
 
-  const handleAdd = async (id) => {
-    setBusyId(id);
-    try {
-      await addItem.mutateAsync({ productId: id, quantity: 1 });
-      setAddedId(id);
-      setTimeout(() => setAddedId((curr) => (curr === id ? null : curr)), 2000);
-    } catch (e) {
-      alert("Failed to add to cart: " + e.message);
-    } finally {
-      setBusyId((curr) => (curr === id ? null : curr));
-    }
-  };
+  const handleAdd = useCallback(
+    async (id) => {
+      setBusyId(id);
+      try {
+        await addItem.mutateAsync({ productId: id, quantity: 1 });
+        setAddedId(id);
+        setTimeout(
+          () => setAddedId((curr) => (curr === id ? null : curr)),
+          2000
+        );
+      } catch (e) {
+        alert("Failed to add to cart: " + e.message);
+      } finally {
+        setBusyId((curr) => (curr === id ? null : curr));
+      }
+    },
+    [addItem]
+  );
 
-  if (isPending) return <p className="text-center p-4">Loading…</p>;
-  if (isError)
+  // Perceived speed: small skeleton instead of blank “Loading…”
+  if (!canQuery || isPending) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row gap-8">
+          <FilterSidebar />
+          <section className="flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-lg shadow">
+                  <div className="w-full h-48 bg-gray-100 animate-pulse" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse" />
+                    <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
     return <p className="text-center text-red-500">Error loading products.</p>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row gap-8">
         <FilterSidebar />
+
         <section className="flex-1">
           {(activeBrandLabel || activeCategoryLabel) && (
             <p className="mb-4 text-lg text-gray-700">
@@ -172,7 +267,7 @@ export default function Products() {
             </p>
           )}
 
-          {filtered.length === 0 ? (
+          {products.length === 0 ? (
             <p className="text-center text-gray-500">
               {searchTerm
                 ? `Nuk u gjetën produkte për "${searchTerm}".`
@@ -181,21 +276,21 @@ export default function Products() {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {filtered.map((product, idx) => (
+                {products.map((product) => (
                   <ProductCard
-                    key={`${product.id}-${idx}`}
+                    key={product.id}
                     product={product}
-                    isWishlisted={wishlistItems.includes(product.id)}
+                    isWishlisted={isWishlisted(product.id)}
                     toggleWishlist={toggleWishlist}
                     handleAddToCart={handleAdd}
-                    busyId={busyId}
-                    addedId={addedId}
+                    busy={busyId === Number(product.id)}
+                    added={addedId === Number(product.id)}
                     prefetch={prefetch}
                   />
                 ))}
               </div>
 
-              {!searchTerm && totalPages > 1 && (
+              {totalPages > 1 && (
                 <nav
                   className="mt-10 flex justify-center items-center gap-1 select-none flex-wrap"
                   aria-label="pagination"
@@ -255,7 +350,14 @@ export default function Products() {
           )}
 
           {isFetching && !isPending && (
-            <div className="fixed bottom-4 right-4 animate-spin">⏳</div>
+            <div
+              className="fixed bottom-4 right-4"
+              aria-live="polite"
+              aria-busy="true"
+              title="Loading…"
+            >
+              ⏳
+            </div>
           )}
         </section>
       </div>

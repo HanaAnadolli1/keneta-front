@@ -1,4 +1,3 @@
-// src/components/Header.jsx
 import React, { useState, useContext, useRef, useEffect } from "react";
 import {
   FiShoppingCart,
@@ -8,11 +7,11 @@ import {
 } from "react-icons/fi";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
+import { useWishlist } from "../context/WishlistContext";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import logo from "../assets/logo.png";
 import { API_V1 } from "../api/config";
-import { useWishlist } from "../context/WishlistContext";
 
 export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -21,39 +20,13 @@ export default function Header() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const { wishlistCount } = useWishlist();
+
+  const { wishlistCount } = useWishlist(); // ✅ count now reacts for guests & customers
 
   const { currentUser, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
-
-  // ✅ Fetch wishlist count
-  useEffect(() => {
-    const fetchWishlistCount = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      try {
-        const res = await fetch(
-          "https://keneta.laratest-app.com/api/v1/customer/wishlist",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
-        const json = await res.json();
-        const count = Array.isArray(json.data) ? json.data.length : 0;
-        setWishlistCount(count);
-      } catch (err) {
-        console.error("Wishlist count fetch failed", err);
-      }
-    };
-
-    fetchWishlistCount();
-  }, []);
 
   // Close account dropdown on outside click
   useEffect(() => {
@@ -77,6 +50,7 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Search suggestions
   useEffect(() => {
     const fetchSuggestions = async () => {
       const term = searchQuery.trim();
@@ -89,10 +63,7 @@ export default function Header() {
         setLoadingSuggestions(true);
         const res = await fetch(
           `${API_V1}/products?query=${encodeURIComponent(term)}&limit=5`,
-          {
-            credentials: "include",
-            headers: { Accept: "application/json" },
-          }
+          { credentials: "include", headers: { Accept: "application/json" } }
         );
         const json = await res.json();
         const arr = Array.isArray(json?.data)
@@ -110,7 +81,7 @@ export default function Header() {
   }, [searchQuery]);
 
   function handleLogout() {
-    logout();
+    logout(); // this fires "auth-changed" which updates WishlistContext
     navigate("/login");
   }
 
@@ -124,11 +95,8 @@ export default function Header() {
   }
 
   function handleSelectSuggestion(item) {
-    if (item.url_key) {
-      navigate(`/products/${item.url_key}`);
-    } else {
-      navigate(`/products?query=${encodeURIComponent(item.name)}&page=1`);
-    }
+    if (item.url_key) navigate(`/products/${item.url_key}`);
+    else navigate(`/products?query=${encodeURIComponent(item.name)}&page=1`);
     setShowSuggestions(false);
   }
 
@@ -177,9 +145,8 @@ export default function Header() {
                     setShowSuggestions(v.trim().length >= 2);
                   }}
                   onFocus={() => {
-                    if (searchQuery.trim().length >= 2) {
+                    if (searchQuery.trim().length >= 2)
                       setShowSuggestions(true);
-                    }
                   }}
                 />
                 <button
@@ -215,7 +182,7 @@ export default function Header() {
 
             {/* Account & Cart */}
             <div className="flex items-center gap-4 md:gap-6">
-              {/* ✅ Wishlist with badge */}
+              {/* Wishlist with badge from context */}
               <Link to="/wishlist" className="relative text-[#1d3d62] text-2xl">
                 <FiHeart />
                 {wishlistCount > 0 && (

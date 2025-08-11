@@ -30,14 +30,25 @@ export function ensureSession() {
   return sess;
 }
 
-export function useProducts(searchParams) {
+export function useProducts(search, options = {}) {
+  // Accept string OR URLSearchParams (backward compatible)
+  let queryString = "";
+  if (!search) {
+    queryString = `limit=${PER_PAGE}`;
+  } else if (typeof search === "string") {
+    const s = search.startsWith("?") ? search.slice(1) : search;
+    queryString = s.includes("limit=") ? s : `${s}&limit=${PER_PAGE}`;
+  } else {
+    // assume URLSearchParams
+    const qs = new URLSearchParams(search.toString());
+    if (!qs.has("limit")) qs.set("limit", PER_PAGE);
+    queryString = qs.toString();
+  }
+
   return useQuery({
-    queryKey: ["products", searchParams.toString()],
-    keepPreviousData: true,
+    queryKey: ["products", queryString], // ✅ stable key
     queryFn: async ({ signal }) => {
-      const qs = new URLSearchParams(searchParams);
-      qs.set("limit", PER_PAGE);
-      const res = await fetch(`${API_V1}/products?${qs}`, {
+      const res = await fetch(`${API_V1}/products?${queryString}`, {
         signal,
         headers: { Accept: "application/json" },
       });
@@ -51,6 +62,10 @@ export function useProducts(searchParams) {
         total: json.meta?.total ?? 0,
       };
     },
+    // sensible defaults; can be overridden per-call
+    keepPreviousData: true,
+    staleTime: 60_000, // 1 min cache to make back/forward & paging instant
+    ...options,
   });
 }
 
