@@ -8,6 +8,7 @@ import {
 } from "../api/hooks";
 import ProductCard from "../components/ProductCard";
 import { useWishlist } from "../context/WishlistContext";
+import { useToast } from "../context/ToastContext";
 
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
@@ -39,9 +40,9 @@ export default function Products() {
   }, [categorySlug, categoryOptions]);
 
   const { isWishlisted, toggleWishlist } = useWishlist();
+  const toast = useToast();
 
   const [busyId, setBusyId] = useState(null);
-  const [addedId, setAddedId] = useState(null);
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
 
@@ -124,7 +125,6 @@ export default function Products() {
   }, [categorySlug, categoryOptions]);
 
   // Build a **stable** query string for the products API.
-  // Gate it until we can map slugs to ids so we don't fetch twice.
   const needsBrandMap =
     !!brandSlug && !mappedBrandId && brandOptions.length === 0;
   const needsCatMap =
@@ -146,17 +146,17 @@ export default function Products() {
     if (mappedCategoryId) qs.set("category_id", String(mappedCategoryId));
     if (mappedBrandId) qs.set("brand", String(mappedBrandId));
 
-    // Explicit pagination size (adjust key to match your API: per_page / limit)
+    // Explicit pagination size (adjust key to match your API)
     if (!qs.has("limit")) qs.set("limit", "12");
 
-    return qs.toString(); // stable string
+    return qs.toString();
   }, [params, mappedBrandId, mappedCategoryId]);
 
-  // If your useProducts hook supports react-query options, pass them here
+  // Products query
   const { data, isPending, isFetching, isError } = useProducts(queryString, {
     enabled: canQuery,
     keepPreviousData: true,
-    staleTime: 60_000, // 1 minute caching
+    staleTime: 60_000,
   });
 
   const products = data?.items ?? [];
@@ -192,26 +192,33 @@ export default function Products() {
 
   const pageItems = buildPageItems();
 
+  // FAST add-to-cart (no await). Busy state only for the clicked card.
   const handleAdd = useCallback(
-    async (id) => {
+    (id) => {
       setBusyId(id);
-      try {
-        await addItem.mutateAsync({ productId: id, quantity: 1 });
-        setAddedId(id);
-        setTimeout(
-          () => setAddedId((curr) => (curr === id ? null : curr)),
-          2000
-        );
-      } catch (e) {
-        alert("Failed to add to cart: " + e.message);
-      } finally {
-        setBusyId((curr) => (curr === id ? null : curr));
-      }
+      const tid = toast.info("Adding to cart…", { duration: 0 });
+
+      addItem.mutate(
+        { productId: id, quantity: 1 },
+        {
+          onSuccess: () => {
+            toast.remove(tid);
+            toast.success("Item added to cart.");
+          },
+          onError: (e) => {
+            toast.remove(tid);
+            toast.error(e?.message || "Failed to add to cart.");
+          },
+          onSettled: () => {
+            setBusyId((curr) => (curr === id ? null : curr));
+          },
+        }
+      );
     },
-    [addItem]
+    [addItem, toast]
   );
 
-  // Perceived speed: small skeleton instead of blank “Loading…”
+  // Perceived speed: skeletons
   if (!canQuery || isPending) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -284,7 +291,6 @@ export default function Products() {
                     toggleWishlist={toggleWishlist}
                     handleAddToCart={handleAdd}
                     busy={busyId === Number(product.id)}
-                    added={addedId === Number(product.id)}
                     prefetch={prefetch}
                   />
                 ))}

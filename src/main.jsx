@@ -1,4 +1,3 @@
-// src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -8,6 +7,8 @@ import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { AuthProvider } from "./context/AuthContext";
 import { WishlistProvider } from "./context/WishlistContext";
+import { CompareProvider } from "./context/CompareContext";
+import { ToastProvider } from "./context/ToastContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,10 +29,14 @@ persistQueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <QueryClientProvider client={queryClient}>
-    <WishlistProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </WishlistProvider>
+    <ToastProvider>
+      <WishlistProvider>
+        <CompareProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </CompareProvider>
+      </WishlistProvider>
+    </ToastProvider>
   </QueryClientProvider>
 );

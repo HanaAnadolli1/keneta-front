@@ -1,5 +1,5 @@
 // src/pages/ProductDetails.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
 import { API_V1 } from "../api/config";
@@ -7,19 +7,35 @@ import ImageGallery from "react-image-gallery";
 import "react-image-gallery/styles/css/image-gallery.css";
 import "../custom.css";
 
+import { FiHeart } from "react-icons/fi";
+import { FaHeart } from "react-icons/fa";
+import { MdCompareArrows } from "react-icons/md";
+import { useWishlist } from "../context/WishlistContext";
+import { useCompare } from "../context/CompareContext";
+import { useToast } from "../context/ToastContext";
+
+// helper: chunk rows into groups of `size`
+const chunkPairs = (rows, size = 2) => {
+  const out = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+};
+
 export default function ProductDetails() {
   const { url_key } = useParams();
   const { addItem } = useCartMutations();
 
+  const { isWishlisted, toggleWishlist } = useWishlist();
+  const { addWithFlash, remove, isCompared, max, count } = useCompare();
+  const toast = useToast();
+
   const galleryRef = useRef();
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
-  const [busy, setBusy] = useState(false);
-  const [added, setAdded] = useState(false);
   const [error, setError] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [activeTab, setActiveTab] = useState("description"); // description | additional | reviews
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -38,9 +54,7 @@ export default function ProductDetails() {
         if (!Array.isArray(json?.data) || json.data.length === 0) {
           throw new Error("Product not found");
         }
-        if (!ignore) {
-          setProduct(json.data[0]);
-        }
+        if (!ignore) setProduct(json.data[0]);
       } catch (e) {
         if (!ignore) setError(e.message);
       }
@@ -50,20 +64,41 @@ export default function ProductDetails() {
     };
   }, [url_key]);
 
-  const handleAdd = async () => {
-    if (!product || qty < 1) return;
-    setBusy(true);
-    try {
-      await addItem.mutateAsync({ productId: product.id, quantity: qty });
-      setAdded(true);
-      setTimeout(() => setAdded(false), 2000);
-    } catch (e) {
-      alert("Failed to add to cart: " + e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  // Additional info rows (safe when product is null)
+  const extraRows = useMemo(() => {
+    const p = product || {};
+    const v = p?.variants && !Array.isArray(p.variants) ? p.variants : null;
 
+    const length = p.length ?? v?.length;
+    const width = p.width ?? v?.width;
+    const height = p.height ?? v?.height;
+
+    const rows = [
+      { label: "SKU", value: p.sku },
+      { label: "Type", value: p.type },
+      { label: "Brand", value: p.brand ?? p?.attributes?.brand_label },
+      { label: "Weight", value: p.weight ?? v?.weight },
+      {
+        label: "Dimensions",
+        value:
+          length || width || height
+            ? `${length ?? "—"} × ${width ?? "—"} × ${height ?? "—"}`
+            : null,
+      },
+      {
+        label: "In Stock",
+        value: p.in_stock != null ? (p.in_stock ? "Yes" : "No") : null,
+      },
+    ].filter((r) => r.value != null && r.value !== "");
+    return rows;
+  }, [product]);
+
+  const pairs = chunkPairs(extraRows, 2);
+
+  if (error) return <div className="p-8 text-red-600">{error}</div>;
+  if (!product) return <div className="p-8">Loading…</div>;
+
+  // ---- computed (no hooks)
   const galleryImages =
     product?.images?.length > 0
       ? product.images.map((img) => ({
@@ -81,87 +116,357 @@ export default function ProductDetails() {
         ]
       : [];
 
+  const idNum = Number(product.id);
+  const wished = isWishlisted(idNum);
+  const compared = isCompared(idNum);
+  const canAddMoreCompare = compared || count < max;
+
+  const unitPriceLabel = product.formatted_price ?? "€0.00";
+  const unitPrice = Number(product?.price ?? 0);
+  const currencySymbol =
+    product?.currency_options?.symbol ||
+    (product?.formatted_price?.match(/[^\d.,\s-]+/)?.[0] ?? "€");
+  const totalLabel = `${currencySymbol}${(unitPrice * qty).toFixed(2)}`;
+
   const onThumbnailClick = (index) => {
     setSelectedIndex(index);
     galleryRef.current?.slideToIndex(index);
   };
 
-  if (error) return <div className="p-8 text-red-600">{error}</div>;
-  if (!product) return <div className="p-8">Loading…</div>;
+  const Stars = ({ value = 0 }) => {
+    const full = Math.floor(value);
+    const half = value - full >= 0.5;
+    return (
+      <div className="inline-flex items-center gap-0.5">
+        {Array.from({ length: 5 }).map((_, i) => {
+          if (i < full) return <span key={i}>★</span>;
+          if (i === full && half) return <span key={i}>☆</span>;
+          return (
+            <span key={i} className="opacity-40">
+              ☆
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const reviews = product?.reviews;
+  const totalReviews = Number(reviews?.total ?? 0);
+  const avgRating = Number(reviews?.average_rating ?? 0);
+
+  // ---- FASTER add to cart: no await; show toast immediately; swap toast on settle
+  const handleAdd = () => {
+    if (!product || qty < 1) return;
+
+    const tid = toast.info("Adding to cart…", { duration: 0 });
+
+    addItem.mutate(
+      { productId: product.id, quantity: qty },
+      {
+        onSuccess: () => {
+          toast.remove(tid);
+          toast.success("Item added to cart.");
+        },
+        onError: (e) => {
+          toast.remove(tid);
+          toast.error(e?.message || "Failed to add to cart.");
+        },
+      }
+    );
+  };
+
+  const handleCompare = () => {
+    if (compared) {
+      remove(idNum);
+      toast.info("Removed from compare.");
+      return;
+    }
+    if (!canAddMoreCompare) {
+      toast.warn(`Compare limit reached (max ${max}).`);
+      return;
+    }
+    addWithFlash(product);
+    toast.success("Item added to compare list.");
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
-      <div className="flex flex-col lg:flex-row gap-10">
-        <div className="w-full lg:w-1/2 flex gap-4">
-          {!isMobile && galleryImages.length > 1 && (
-            <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+        {/* LEFT: thumbs + main image */}
+        <div className="flex gap-4">
+          {galleryImages.length > 1 && (
+            <div className="hidden md:flex flex-col gap-4">
               {galleryImages.map((img, idx) => (
                 <img
                   key={idx}
                   src={img.thumbnail}
                   alt={`Thumbnail ${idx + 1}`}
                   onClick={() => onThumbnailClick(idx)}
-                  className={`w-20 h-20 object-contain border rounded-lg cursor-pointer ${
-                    selectedIndex === idx ? "ring-2 ring-indigo-600" : ""
+                  className={`w-20 h-20 object-contain border rounded-xl cursor-pointer bg-white ${
+                    selectedIndex === idx
+                      ? "ring-2 ring-indigo-600"
+                      : "ring-1 ring-black/5"
                   }`}
                 />
               ))}
             </div>
           )}
+
           <div className="flex-1">
-            <ImageGallery
-              ref={galleryRef}
-              items={galleryImages}
-              startIndex={selectedIndex}
-              showThumbnails={false}
-              showPlayButton={false}
-              showFullscreenButton={false}
-              showNav={false}
-              showBullets={isMobile}
-              additionalClass="custom-gallery"
-              onClick={() => setIsFullscreen(true)}
-            />
+            <div className="bg-gray-50 rounded-2xl ring-1 ring-black/5 overflow-hidden">
+              <ImageGallery
+                ref={galleryRef}
+                items={galleryImages}
+                startIndex={selectedIndex}
+                showThumbnails={false}
+                showPlayButton={false}
+                showFullscreenButton={false}
+                showNav={false}
+                showBullets={isMobile}
+                additionalClass="custom-gallery"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="w-full lg:w-1/2 flex flex-col space-y-4">
-          <h1 className="text-3xl font-semibold">{product.name}</h1>
+        {/* RIGHT: title, price, actions */}
+        <div className="flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl font-semibold leading-tight text-gray-900">
+              {product.name}
+            </h1>
+            <button
+              type="button"
+              title={wished ? "Remove from wishlist" : "Add to wishlist"}
+              onClick={() => {
+                toggleWishlist?.(idNum);
+                toast.success(
+                  wished ? "Removed from wishlist." : "Added to wishlist."
+                );
+              }}
+              className="h-10 w-10 grid place-items-center ring-1 ring-black/0"
+            >
+              {wished ? (
+                <FaHeart className="text-lg text-red-500" />
+              ) : (
+                <FiHeart className="text-lg text-gray-600" />
+              )}
+            </button>
+          </div>
+
+          <div className="text-2xl font-bold text-black">{unitPriceLabel}</div>
+
           <div
             className="text-gray-500"
             dangerouslySetInnerHTML={{ __html: product.short_description }}
           />
-          <div className="text-2xl font-bold text-black">
-            {product.formatted_price}
+
+          <div className="flex items-center justify-between text-sm text-gray-700">
+            <span className="font-semibold">Total Amount</span>
+            <span className="font-semibold">{totalLabel}</span>
           </div>
 
-          <div className="flex items-center gap-4 mt-2">
-            <div className="flex items-center border rounded-md">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center rounded-xl ring-1 ring-gray-300 overflow-hidden">
               <button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
-                className="px-3 py-1 text-lg"
+                className="px-3 py-2 text-lg hover:bg-gray-50"
+                aria-label="Decrease quantity"
               >
                 −
               </button>
-              <div className="px-4 py-1 w-10 text-center">{qty}</div>
+              <div className="px-5 py-2 w-12 text-center font-medium">
+                {qty}
+              </div>
               <button
                 onClick={() => setQty((q) => q + 1)}
-                className="px-3 py-1 text-lg"
+                className="px-3 py-2 text-lg hover:bg-gray-50"
+                aria-label="Increase quantity"
               >
                 +
               </button>
             </div>
+
             <button
               onClick={handleAdd}
-              disabled={busy}
-              className="border border-indigo-600 text-indigo-600 px-6 py-2 rounded hover:bg-indigo-50 disabled:opacity-50"
+              disabled={addItem.isPending}
+              className={`h-11 px-6 rounded-xl text-sm font-semibold transition ring-1
+                ${
+                  addItem.isPending
+                    ? "bg-gray-100 text-gray-500 ring-gray-200 cursor-not-allowed"
+                    : "bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700"
+                }`}
             >
-              {busy ? "Adding…" : "Add To Cart"}
+              {addItem.isPending ? "Adding…" : "Add To Cart"}
             </button>
           </div>
 
-          {added && (
-            <div className="text-green-600 text-sm mt-2">
-              Product added to cart!
+          <button
+            type="button"
+            onClick={handleCompare}
+            disabled={!canAddMoreCompare && !compared}
+            className="group inline-flex items-center gap-2 text-sm text-gray-800 hover:text-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={
+              compared
+                ? "Remove from compare"
+                : count >= max
+                ? `Limit ${max}`
+                : "Add to compare"
+            }
+          >
+            <span
+              className={`h-8 w-8 rounded-full grid place-items-center ring-1 shadow-sm
+              ${
+                compared
+                  ? "bg-emerald-50 ring-emerald-200 text-emerald-700"
+                  : "bg-white ring-black/10 text-gray-700 group-hover:text-emerald-700"
+              }`}
+            >
+              <MdCompareArrows className="text-base" />
+            </span>
+            <span className="font-medium">
+              {compared ? "Compared" : "Compare"}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="mt-12">
+        <div
+          role="tablist"
+          aria-label="Product information"
+          className="flex items-center gap-8 border-b"
+        >
+          <button
+            role="tab"
+            aria-selected={activeTab === "description"}
+            aria-controls="tab-panel-description"
+            onClick={() => setActiveTab("description")}
+            className={`py-3 -mb-px text-sm font-medium transition ${
+              activeTab === "description"
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Description
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "additional"}
+            aria-controls="tab-panel-additional"
+            onClick={() => setActiveTab("additional")}
+            className={`py-3 -mb-px text-sm font-medium transition ${
+              activeTab === "additional"
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Additional Information
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "reviews"}
+            aria-controls="tab-panel-reviews"
+            onClick={() => setActiveTab("reviews")}
+            className={`py-3 -mb-px text-sm font-medium transition ${
+              activeTab === "reviews"
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Reviews
+          </button>
+        </div>
+
+        <div className="py-6 text-gray-700 leading-relaxed">
+          {activeTab === "description" && (
+            <div id="tab-panel-description" role="tabpanel">
+              <div
+                dangerouslySetInnerHTML={{
+                  __html:
+                    product.description ||
+                    product.short_description ||
+                    "No description.",
+                }}
+              />
+            </div>
+          )}
+
+          {activeTab === "additional" && (
+            <div id="tab-panel-additional" role="tabpanel">
+              {extraRows.length === 0 ? (
+                <p className="text-gray-500">No additional information.</p>
+              ) : (
+                <div className="w-full">
+                  {pairs.map((row, idx) => (
+                    <div
+                      key={idx}
+                      className={`grid grid-cols-[max-content,1fr] lg:grid-cols-[max-content,1fr,max-content,1fr]
+                        gap-x-6 gap-y-2 px-4 py-3 ${
+                          idx % 2 === 0 ? "bg-gray-50" : "bg-white"
+                        }`}
+                    >
+                      {row.map((pair) => (
+                        <React.Fragment key={pair.label}>
+                          <div className="text-sm text-gray-500">
+                            {pair.label}
+                          </div>
+                          <div className="text-sm text-gray-800">
+                            {pair.value ?? "—"}
+                          </div>
+                        </React.Fragment>
+                      ))}
+                      {row.length === 1 && (
+                        <>
+                          <div className="hidden lg:block" />
+                          <div className="hidden lg:block" />
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "reviews" && (
+            <div id="tab-panel-reviews" role="tabpanel">
+              {totalReviews === 0 ? (
+                <p className="text-gray-500">No reviews yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Stars value={avgRating} />
+                    <span className="text-sm text-gray-700">
+                      {avgRating.toFixed(1)} / 5 · {totalReviews} review
+                      {totalReviews > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {reviews?.percentage && (
+                    <div className="space-y-1">
+                      {[5, 4, 3, 2, 1].map((star) => {
+                        const pct = Number(reviews.percentage?.[star] ?? 0);
+                        return (
+                          <div key={star} className="flex items-center gap-3">
+                            <span className="w-10 text-sm">{star}★</span>
+                            <div className="h-2 flex-1 bg-gray-100 rounded">
+                              <div
+                                className="h-2 bg-indigo-600 rounded"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="w-12 text-right text-sm text-gray-600">
+                              {pct}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

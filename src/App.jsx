@@ -11,6 +11,7 @@ import Register from "./pages/Register";
 import "./index.css";
 import Checkout from "./pages/Checkout";
 import Wishlist from "./components/Wishlist";
+import ComparePage from "./pages/ComparePage";
 
 function NotFound() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/brands" element={<Brands />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/compare" element={<ComparePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="*" element={<NotFound />} />

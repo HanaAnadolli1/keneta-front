@@ -2,6 +2,10 @@ import React, { memo } from "react";
 import { Link } from "react-router-dom";
 import { FiHeart } from "react-icons/fi";
 import { FaHeart } from "react-icons/fa";
+import { MdCompareArrows } from "react-icons/md";
+import { useCompare } from "../context/CompareContext";
+import useSaleFlag from "../hooks/useSaleFlag";
+import { useToast } from "../context/ToastContext";
 
 function ProductCard({
   product,
@@ -9,76 +13,164 @@ function ProductCard({
   toggleWishlist,
   handleAddToCart,
   busy = false,
-  added = false,
   prefetch,
 }) {
   const idNum = Number(product?.id);
-  const inStock = (product?.quantity ?? 0) > 0;
+  const inStock = product?.in_stock ?? (product?.quantity ?? 0) > 0;
+
+  const toast = useToast();
+  const { addWithFlash, remove, isCompared, max, count } = useCompare();
+  const compared = isCompared(idNum);
+  const canAddMore = compared || count < max;
+
+  // sale flag uses PDP dates (frontend-only)
+  const { saleActive, pct, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
+    product,
+    { apiBase: "https://keneta.laratest-app.com/api/v1" }
+  );
 
   return (
-    <article className="bg-white rounded-lg shadow flex flex-col relative">
-      {/* Wishlist Icon */}
-      <button
-        type="button"
-        className="absolute top-2 right-2 z-10"
-        title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleWishlist?.(idNum);
-        }}
-      >
-        {isWishlisted ? (
-          <FaHeart className="text-2xl text-red-500" />
-        ) : (
-          <FiHeart className="text-2xl text-gray-400 hover:text-red-500" />
-        )}
-      </button>
+    <article className="group bg-white rounded-2xl shadow-sm ring-1 ring-black/5 hover:shadow-lg transition overflow-hidden relative flex flex-col h-full">
+      {/* Overlay actions */}
+      <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleWishlist?.(idNum);
+            toast.success(
+              isWishlisted ? "Removed from wishlist." : "Added to wishlist."
+            );
+          }}
+          className="h-9 w-9 rounded-full grid place-items-center bg-white/95 backdrop-blur ring-1 ring-black/5 shadow-sm transition hover:ring-red-200"
+        >
+          {isWishlisted ? (
+            <FaHeart className="text-xl text-red-500" />
+          ) : (
+            <FiHeart className="text-xl text-gray-500 group-hover:text-red-500" />
+          )}
+        </button>
 
-      {/* Product Link + Image */}
-      <Link
-        to={`/products/${product.url_key}`}
-        onMouseEnter={() => prefetch && prefetch(idNum)}
-        className="block flex-1"
-      >
-        <img
-          src={
-            product.base_image?.medium_image_url ||
-            "https://via.placeholder.com/300x200"
+        <button
+          type="button"
+          aria-label={compared ? "Remove from compare" : "Add to compare"}
+          title={
+            compared
+              ? "Remove from compare"
+              : count >= max
+              ? `Limit ${max}`
+              : "Add to compare"
           }
-          alt={product.name}
-          className="w-full h-48 object-contain bg-gray-100"
-          loading="lazy"
-        />
-        <div className="p-4">
-          <h2 className="text-base font-semibold mb-1 line-clamp-2">
-            {product.name}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (compared) {
+              remove(idNum);
+              toast.info("Removed from compare.");
+            } else if (!canAddMore) {
+              toast.warn(`Compare limit reached (max ${max}).`);
+            } else {
+              addWithFlash(product);
+              toast.success("Item added to compare list.");
+            }
+          }}
+          disabled={!canAddMore && !compared}
+          className={`h-9 w-9 rounded-full grid place-items-center bg-white/95 backdrop-blur ring-1 shadow-sm transition
+            ${
+              compared
+                ? "text-emerald-600 ring-emerald-200"
+                : "text-gray-500 hover:text-emerald-600 hover:ring-emerald-200"
+            }
+            ${!canAddMore && !compared ? "opacity-50 cursor-not-allowed" : ""}`}
+        >
+          <MdCompareArrows className="text-xl" />
+        </button>
+      </div>
+
+      {/* Clickable content block (fills remaining height) */}
+      <Link
+        to={`/products/${product?.url_key}`}
+        onMouseEnter={() => prefetch && prefetch(idNum)}
+        className="flex-1 flex flex-col"
+      >
+        {/* Fixed-height image area */}
+        <div className="relative bg-gray-50">
+          {saleActive && pct ? (
+            <span className="absolute left-3 top-3 z-10 inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow">
+              −{pct}%
+            </span>
+          ) : null}
+
+          <img
+            src={
+              product?.base_image?.large_image_url ||
+              product?.base_image?.medium_image_url ||
+              "https://via.placeholder.com/480x360"
+            }
+            alt={product?.name}
+            className="w-full h-48 sm:h-56 object-contain transition-transform duration-300 group-hover:scale-[1.03]"
+            loading="lazy"
+          />
+        </div>
+
+        {/* Text area with fixed row heights */}
+        <div className="p-4 flex flex-col flex-1">
+          <h2 className="text-sm sm:text-base font-semibold leading-snug text-gray-900 truncate">
+            {product?.name}
           </h2>
-          <p className="font-bold text-indigo-600">{product.formatted_price}</p>
+
+          {/* Price row: fixed minimum height */}
+          <div className="mt-2 flex items-baseline gap-2 min-h-[1.5rem]">
+            <span className="text-indigo-600 font-bold">{priceLabel}</span>
+            {hasStrike && strikeLabel && (
+              <span className="text-sm text-gray-400 line-through">
+                {strikeLabel}
+              </span>
+            )}
+          </div>
+
+          {/* Status row: fixed min height so cards line up */}
+          <div className="mt-1 text-xs font-medium min-h-[1.25rem]">
+            {inStock ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">
+                In stock
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-700 px-2 py-0.5">
+                Out of stock
+              </span>
+            )}
+          </div>
+
+          <div className="mt-auto" />
         </div>
       </Link>
 
-      {/* Add to Cart */}
-      <div className="p-4 border-t flex justify-between items-center">
+      {/* Bottom action row always aligned */}
+      <div className="px-4 pb-4">
         {inStock ? (
-          <>
-            <button
-              onClick={() => handleAddToCart?.(idNum)}
-              disabled={busy}
-              className={`px-3 py-1 rounded border ${
+          <button
+            onClick={() => handleAddToCart?.(idNum)}
+            disabled={busy}
+            className={`w-full rounded-xl px-4 py-2 text-sm font-semibold transition
+              ${
                 busy
-                  ? "opacity-50 cursor-not-allowed border-gray-300 text-gray-500"
-                  : "border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white transition"
+                  ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
               }`}
-            >
-              {busy ? "Adding…" : "Add to Cart"}
-            </button>
-            {added && (
-              <span className="ml-2 text-green-600 text-sm">Added!</span>
-            )}
-          </>
+          >
+            {busy ? "Adding…" : "Add to Cart"}
+          </button>
         ) : (
-          <span className="text-sm text-red-500">Out of stock.</span>
+          <button
+            disabled
+            className="w-full rounded-xl px-4 py-2 text-sm font-semibold bg-gray-100 text-gray-400 cursor-not-allowed"
+          >
+            Out of stock
+          </button>
         )}
       </div>
     </article>
