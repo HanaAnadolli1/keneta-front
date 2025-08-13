@@ -10,18 +10,22 @@ import ProductCard from "../components/ProductCard";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
 
+const API_BASE = "https://keneta.laratest-app.com/api/v1";
+const LIMIT = 12;
+
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
 
 export default function Products() {
   const [params, setParams] = useSearchParams();
-  const page = parseInt(params.get("page") || "1", 10);
+  const page = Math.max(1, parseInt(params.get("page") || "1", 10));
   const searchTerm = params.get("query")?.trim() || "";
   const categorySlug = params.get("category");
   const brandSlug = params.get("brand");
 
   const [brandOptions, setBrandOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [metaNotice, setMetaNotice] = useState(null);
 
   const activeBrandLabel = useMemo(() => {
     if (!brandSlug || !brandOptions.length) return null;
@@ -46,68 +50,61 @@ export default function Products() {
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
 
-  // ---- Brands (with tiny cache) ----
+  // ---- Brands (abortable + tiny cache via sessionStorage) ----
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchBrands = async () => {
+    const ac = new AbortController();
+    (async () => {
       try {
         const cached = sessionStorage.getItem("brandOptions");
         if (cached) {
-          const parsed = JSON.parse(cached);
-          if (!cancelled) setBrandOptions(parsed);
-        } else {
-          const res = await fetch(
-            "https://keneta.laratest-app.com/api/v1/attributes?sort=id"
-          );
-          const json = await res.json();
-          const brandAttr = json.data.find((attr) => attr.code === "brand");
-          const options = brandAttr?.options ?? [];
-          sessionStorage.setItem("brandOptions", JSON.stringify(options));
-          if (!cancelled) setBrandOptions(options);
+          setBrandOptions(JSON.parse(cached));
+          return;
         }
-      } catch {
-        // ignore; page still works without labels
+        const res = await fetch(`${API_BASE}/attributes?sort=id`, {
+          signal: ac.signal,
+        });
+        const json = await res.json();
+        const brandAttr = json.data?.find?.((attr) => attr.code === "brand");
+        const options = brandAttr?.options ?? [];
+        sessionStorage.setItem("brandOptions", JSON.stringify(options));
+        setBrandOptions(options);
+      } catch (e) {
+        if (e.name !== "AbortError") {
+          // non-fatal
+          console.warn("Failed to load brands", e);
+        }
       }
-    };
-
-    fetchBrands();
-    return () => {
-      cancelled = true;
-    };
+    })();
+    return () => ac.abort();
   }, []);
 
-  // ---- Categories (with tiny cache) ----
+  // ---- Categories (abortable + tiny cache via sessionStorage) ----
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchCategories = async () => {
+    const ac = new AbortController();
+    (async () => {
       try {
         const cached = sessionStorage.getItem("categoryOptions");
         if (cached) {
-          const parsed = JSON.parse(cached);
-          if (!cancelled) setCategoryOptions(parsed);
-        } else {
-          const res = await fetch(
-            "https://keneta.laratest-app.com/api/v1/categories?sort=id"
-          );
-          const json = await res.json();
-          const all = json?.data || [];
-          sessionStorage.setItem("categoryOptions", JSON.stringify(all));
-          if (!cancelled) setCategoryOptions(all);
+          setCategoryOptions(JSON.parse(cached));
+          return;
         }
-      } catch {
-        // ignore; page still works without labels
+        const res = await fetch(`${API_BASE}/categories?sort=id`, {
+          signal: ac.signal,
+        });
+        const json = await res.json();
+        const all = json?.data || [];
+        sessionStorage.setItem("categoryOptions", JSON.stringify(all));
+        setCategoryOptions(all);
+      } catch (e) {
+        if (e.name !== "AbortError") {
+          console.warn("Failed to load categories", e);
+        }
       }
-    };
-
-    fetchCategories();
-    return () => {
-      cancelled = true;
-    };
+    })();
+    return () => ac.abort();
   }, []);
 
-  // Map slug -> id (when options are ready)
+  // Map slug -> id (once options are ready)
   const mappedBrandId = useMemo(() => {
     if (!brandSlug || !brandOptions.length) return null;
     return (
@@ -124,6 +121,24 @@ export default function Products() {
     );
   }, [categorySlug, categoryOptions]);
 
+  // Show a helpful note if slug doesn't exist after options load
+  useEffect(() => {
+    if (brandSlug && brandOptions.length && !mappedBrandId) {
+      setMetaNotice("Brand filter not recognized.");
+    } else if (categorySlug && categoryOptions.length && !mappedCategoryId) {
+      setMetaNotice("Category filter not recognized.");
+    } else {
+      setMetaNotice(null);
+    }
+  }, [
+    brandSlug,
+    categorySlug,
+    brandOptions.length,
+    categoryOptions.length,
+    mappedBrandId,
+    mappedCategoryId,
+  ]);
+
   // Build a **stable** query string for the products API.
   const needsBrandMap =
     !!brandSlug && !mappedBrandId && brandOptions.length === 0;
@@ -134,7 +149,7 @@ export default function Products() {
   const queryString = useMemo(() => {
     const qs = new URLSearchParams();
 
-    // Copy through any primitive params first
+    // Copy through whitelisted params
     for (const [key, value] of params.entries()) {
       if (!value || !value.trim()) continue;
       if (key === "query" || key === "sort" || key === "page") {
@@ -146,8 +161,8 @@ export default function Products() {
     if (mappedCategoryId) qs.set("category_id", String(mappedCategoryId));
     if (mappedBrandId) qs.set("brand", String(mappedBrandId));
 
-    // Explicit pagination size (adjust key to match your API)
-    if (!qs.has("limit")) qs.set("limit", "12");
+    // Explicit pagination size
+    if (!qs.has("limit")) qs.set("limit", String(LIMIT));
 
     return qs.toString();
   }, [params, mappedBrandId, mappedCategoryId]);
@@ -161,7 +176,7 @@ export default function Products() {
 
   const products = data?.items ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / 12));
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
   const goToPage = useCallback(
     (p) => {
@@ -174,7 +189,7 @@ export default function Products() {
     [params, setParams, totalPages]
   );
 
-  const buildPageItems = useCallback(() => {
+  const pageItems = useMemo(() => {
     const arr = [];
     if (totalPages <= 9) {
       for (let i = 1; i <= totalPages; i++) arr.push(i);
@@ -190,9 +205,7 @@ export default function Products() {
     return arr;
   }, [page, totalPages]);
 
-  const pageItems = buildPageItems();
-
-  // FAST add-to-cart (no await). Busy state only for the clicked card.
+  // FAST add-to-cart
   const handleAdd = useCallback(
     (id) => {
       setBusyId(id);
@@ -218,10 +231,10 @@ export default function Products() {
     [addItem, toast]
   );
 
-  // Perceived speed: skeletons
+  // Skeletons while mapping is not possible yet
   if (!canQuery || isPending) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8" aria-busy="true">
         <div className="flex flex-col md:flex-row gap-8">
           <FilterSidebar />
           <section className="flex-1">
@@ -272,6 +285,15 @@ export default function Products() {
                 </>
               )}
             </p>
+          )}
+
+          {metaNotice && (
+            <div
+              role="status"
+              className="mb-4 rounded-md bg-amber-50 text-amber-900 px-3 py-2 text-sm"
+            >
+              {metaNotice}
+            </div>
           )}
 
           {products.length === 0 ? (
@@ -355,6 +377,7 @@ export default function Products() {
             </>
           )}
 
+          {/* a11y hint while background fetching */}
           {isFetching && !isPending && (
             <div
               className="fixed bottom-4 right-4"
