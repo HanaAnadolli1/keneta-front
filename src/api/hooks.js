@@ -7,6 +7,8 @@ import axios from "./axios";
 const PER_PAGE = 12;
 const SESSION_COOKIE = "bagisto_session";
 const SESSION_LENGTH = 40;
+// add near the top (below other consts)
+const API_PRODUCTS_BARE = "https://keneta.laratest-app.com/api/products/bare";
 
 function generateSessionValue(len = SESSION_LENGTH) {
   const chars =
@@ -32,39 +34,57 @@ export function ensureSession() {
 
 export function useProducts(search, options = {}) {
   // Accept string OR URLSearchParams (backward compatible)
-  let queryString = "";
+  let qs = new URLSearchParams();
+
   if (!search) {
-    queryString = `limit=${PER_PAGE}`;
+    // default
   } else if (typeof search === "string") {
     const s = search.startsWith("?") ? search.slice(1) : search;
-    queryString = s.includes("limit=") ? s : `${s}&limit=${PER_PAGE}`;
+    qs = new URLSearchParams(s);
   } else {
     // assume URLSearchParams
-    const qs = new URLSearchParams(search.toString());
-    if (!qs.has("limit")) qs.set("limit", PER_PAGE);
-    queryString = qs.toString();
+    qs = new URLSearchParams(search.toString());
   }
 
+  // Back-compat: old code used `limit`; new API expects `per_page`
+  if (qs.has("limit")) {
+    const v = qs.get("limit") || String(PER_PAGE);
+    qs.delete("limit");
+    if (!qs.has("per_page")) qs.set("per_page", v);
+  }
+  if (!qs.has("per_page")) qs.set("per_page", String(PER_PAGE));
+
+  const queryString = qs.toString();
+
   return useQuery({
-    queryKey: ["products", queryString], // ✅ stable key
+    queryKey: ["products", queryString],
     queryFn: async ({ signal }) => {
-      const res = await fetch(`${API_V1}/products?${queryString}`, {
-        signal,
-        headers: { Accept: "application/json" },
-      });
+      const res = await fetch(
+        `https://keneta.laratest-app.com/api/products/bare?${queryString}`,
+        {
+          signal,
+          headers: { Accept: "application/json" },
+        }
+      );
       if (!res.ok) {
         const err = await res.text().catch(() => "");
         throw new Error(`Fetch products failed: ${res.status} ${err}`);
       }
       const json = await res.json();
-      return {
-        items: json.data || [],
-        total: json.meta?.total ?? 0,
-      };
+
+      const items = Array.isArray(json)
+        ? json
+        : json?.data || json?.items || json?.products || [];
+
+      const total =
+        (json?.meta?.total ?? json?.total) ||
+        Number(res.headers?.get?.("X-Total-Count")) ||
+        items.length;
+
+      return { items, total };
     },
-    // sensible defaults; can be overridden per-call
     keepPreviousData: true,
-    staleTime: 60_000, // 1 min cache to make back/forward & paging instant
+    staleTime: 60_000,
     ...options,
   });
 }
