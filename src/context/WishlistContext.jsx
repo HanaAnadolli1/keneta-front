@@ -8,11 +8,10 @@ import React, {
 } from "react";
 import { API_V1 } from "../api/config";
 
-// --- Storage keys ------------------------------------------------------------
-const GUEST_KEY = "guest_wishlist"; // guest list lives in localStorage
-const MERGED_FLAG = "wishlist_merged_once"; // mark that we merged after login
+// Storage keys
+const GUEST_KEY = "guest_wishlist";
 
-// --- API base ----------------------------------------------------------------
+// API base
 const API = `${API_V1}/customer/wishlist`;
 
 const WishlistContext = createContext({
@@ -25,114 +24,150 @@ const WishlistContext = createContext({
 });
 
 export function WishlistProvider({ children }) {
-  const [wishlistItems, setWishlistItems] = useState([]); // product IDs
+  const [wishlistItems, setWishlistItems] = useState([]); // product IDs (numbers)
   const [loading, setLoading] = useState(true);
-
-  // Keep the current auth token in state so changes cause effects to re-run
   const [token, setToken] = useState(
     typeof window !== "undefined" ? localStorage.getItem("token") : null
   );
 
-  // --- Small utils -----------------------------------------------------------
+  // --- utils ---------------------------------------------------------------
   const getToken = () =>
     (typeof window !== "undefined" ? localStorage.getItem("token") : null) ||
     null;
 
-  const safeJson = (text, fallback) => {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return fallback;
-    }
-  };
+  const toUniqueNums = (arr) =>
+    Array.from(new Set((arr || []).map((x) => Number(x)).filter(Number.isFinite)));
 
-  // Read / write guest wishlist IDs from storage
   const readGuestIds = () => {
     if (typeof window === "undefined") return [];
-    const raw = localStorage.getItem(GUEST_KEY);
-    if (!raw) return [];
-    const arr = safeJson(raw, []);
-    return Array.isArray(arr) ? Array.from(new Set(arr.map(Number))) : [];
+    try {
+      const raw = localStorage.getItem(GUEST_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return toUniqueNums(parsed);
+    } catch {
+      return [];
+    }
   };
 
   const writeGuestIds = (ids) => {
     if (typeof window === "undefined") return;
-    localStorage.setItem(
-      GUEST_KEY,
-      JSON.stringify(Array.from(new Set(ids.map(Number))))
+    localStorage.setItem(GUEST_KEY, JSON.stringify(toUniqueNums(ids)));
+  };
+
+  // Normalize any server response to an array of numeric product IDs
+  const extractIds = (json) => {
+    const rows = Array.isArray(json)
+      ? json
+      : Array.isArray(json?.data)
+      ? json.data
+      : Array.isArray(json?.data?.items)
+      ? json.data.items
+      : Array.isArray(json?.wishlist)
+      ? json.wishlist
+      : [];
+
+    return toUniqueNums(
+      rows.map((x) => {
+        if (typeof x === "number") return x;
+        if (x?.product_id != null) return x.product_id;
+        if (x?.product?.id != null) return x.product.id;
+        if (x?.id != null && x?.product == null) return x.id; // fallback
+        return null;
+      })
     );
   };
 
-  // Server I/O ----------------------------------------------------------------
+  // --- server I/O ----------------------------------------------------------
   const loadFromServer = async () => {
     const t = getToken();
     if (!t) return [];
-    const res = await fetch(API, {
-      headers: { Authorization: `Bearer ${t}` },
+    const res = await fetch(`${API}?limit=200`, {
+      headers: { Authorization: `Bearer ${t}`, Accept: "application/json" },
     });
-    if (!res.ok) throw new Error("Failed to load wishlist");
-    // Accept either [{product_id}] or plain IDs
-    const data = await res.json();
-    const ids = Array.isArray(data)
-      ? data
-          .map((x) =>
-            typeof x === "number"
-              ? x
-              : typeof x?.product_id !== "undefined"
-              ? Number(x.product_id)
-              : null
-          )
-          .filter((x) => Number.isFinite(x))
-      : [];
-    return Array.from(new Set(ids));
+    const json = await res.json().catch(() => ({}));
+    return extractIds(json);
   };
 
   const addToServer = async (productId) => {
     const t = getToken();
     if (!t) return;
-    // Many backends accept POST /customer/wishlist/{id}; others need body
-    const endpoint = `${API}/${productId}`;
-    const res = await fetch(endpoint, {
+    const id = Number(productId);
+
+    // Try POST /customer/wishlist/:id (toggle)
+    let res = await fetch(`${API}/${id}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
         Authorization: `Bearer ${t}`,
       },
-      body: JSON.stringify({
-        additional: { product_id: Number(productId), quantity: 1 },
-      }),
+      body: JSON.stringify({ additional: { product_id: id, quantity: 1 } }),
     });
+
+    // Fallback: POST /customer/wishlist (some backends use this)
     if (!res.ok) {
-      // If server uses a different shape, at least throw so caller can inspect
-      throw new Error("Failed to add to wishlist");
+      res = await fetch(`${API}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${t}`,
+        },
+        body: JSON.stringify({ product_id: id, quantity: 1 }),
+      });
+    }
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      // If it "already exists", treat as success
+      if (res.status === 409 || /exist/i.test(txt)) return;
+      throw new Error(txt || "Failed to add to wishlist");
     }
   };
 
   const removeFromServer = async (productId) => {
     const t = getToken();
     if (!t) return;
-    const endpoint = `${API}/${productId}`;
-    const res = await fetch(endpoint, {
+    const id = Number(productId);
+
+    // Prefer DELETE
+    let res = await fetch(`${API}/${id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${t}` },
+      headers: { Authorization: `Bearer ${t}`, Accept: "application/json" },
     });
+
+    // Fallback to toggle POST
     if (!res.ok) {
-      throw new Error("Failed to remove from wishlist");
+      res = await fetch(`${API}/${id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${t}`,
+        },
+        body: JSON.stringify({ additional: { product_id: id, quantity: 1 } }),
+      });
+    }
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      // If it's already gone, treat as success
+      if (res.status === 404) return;
+      throw new Error(txt || "Failed to remove from wishlist");
     }
   };
 
-  // --- Keep token in sync with localStorage / other tabs / redirects ---------
+  // --- keep token in sync ---------------------------------------------------
   useEffect(() => {
     const sync = () =>
       setToken(
         typeof window !== "undefined" ? localStorage.getItem("token") : null
       );
+    window.addEventListener("auth-changed", sync);
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
 
-    window.addEventListener("auth-changed", sync); // call this in your auth flow
-    window.addEventListener("storage", sync); // cross-tab
-    window.addEventListener("focus", sync); // after redirects
-
-    // Lightweight polling fallback in case nothing else fires
+    // tiny polling safety net
     let prev = getToken();
     const id = setInterval(() => {
       const curr = getToken();
@@ -140,7 +175,7 @@ export function WishlistProvider({ children }) {
         prev = curr;
         setToken(curr);
       }
-    }, 1000);
+    }, 800);
 
     return () => {
       window.removeEventListener("auth-changed", sync);
@@ -150,7 +185,7 @@ export function WishlistProvider({ children }) {
     };
   }, []);
 
-  // --- Initial load + merge-once logic --------------------------------------
+  // --- load & merge on login; clear on logout -------------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -158,39 +193,33 @@ export function WishlistProvider({ children }) {
       setLoading(true);
       try {
         if (token) {
-          // Load current server wishlist
-          const serverIds = await loadFromServer();
+          // Always try to merge whatever is in guest storage (ignore stale flags)
+          const serverIds = await loadFromServer().catch(() => []);
+          const guestIds = readGuestIds();
 
-          // Merge guest -> server exactly once after login
-          const alreadyMerged = localStorage.getItem(MERGED_FLAG) === "1";
-          const guestIds = alreadyMerged ? [] : readGuestIds();
+          const toAdd = toUniqueNums(guestIds).filter(
+            (id) => !serverIds.includes(id)
+          );
 
-          const toAdd = guestIds.filter((id) => !serverIds.includes(id));
+          // Post missing items to server
           for (const id of toAdd) {
             try {
               await addToServer(id);
-            } catch (e) {
-              // Best-effort merge: continue others even if one fails
-              // (Consider logging e)
+            } catch {
+              /* continue best-effort */
             }
           }
 
           // Reload authoritative server list
-          const finalServerIds = await loadFromServer();
-          if (!cancelled) {
-            setWishlistItems(finalServerIds);
-          }
+          const finalServerIds = await loadFromServer().catch(() => []);
+          if (!cancelled) setWishlistItems(finalServerIds);
 
-          // Clear guest list & mark merged
+          // Clear guest storage after successful (or best-effort) merge
           localStorage.removeItem(GUEST_KEY);
-          localStorage.setItem(MERGED_FLAG, "1");
         } else {
-          // Logout/guest flow — per requirements, clear guest wishlist after logout
+          // Logged out: clear guest wishlist per requirements
           localStorage.removeItem(GUEST_KEY);
-          localStorage.removeItem(MERGED_FLAG); // allow merge next login
-          if (!cancelled) {
-            setWishlistItems([]); // start clean as a guest
-          }
+          if (!cancelled) setWishlistItems([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -202,18 +231,16 @@ export function WishlistProvider({ children }) {
     };
   }, [token]);
 
-  // Persist guest list *only* when not logged in
+  // Persist guest list only when not logged in
   useEffect(() => {
-    if (!token) {
-      writeGuestIds(wishlistItems);
-    }
+    if (!token) writeGuestIds(wishlistItems);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wishlistItems, token]);
 
-  // --- Public API ------------------------------------------------------------
+  // Public API
   const refreshWishlist = async () => {
     if (!token) return;
-    const ids = await loadFromServer();
+    const ids = await loadFromServer().catch(() => []);
     setWishlistItems(ids);
   };
 
@@ -226,7 +253,6 @@ export function WishlistProvider({ children }) {
     const id = Number(productId);
 
     if (token) {
-      // Authenticated: update on server and refresh
       if (isWishlisted(id)) {
         await removeFromServer(id);
       } else {
@@ -236,14 +262,10 @@ export function WishlistProvider({ children }) {
       return;
     }
 
-    // Guest: update local list (persisted via effect above)
+    // guest: local only
     setWishlistItems((prev) => {
       const set = new Set(prev);
-      if (set.has(id)) {
-        set.delete(id);
-      } else {
-        set.add(id);
-      }
+      set.has(id) ? set.delete(id) : set.add(id);
       return Array.from(set);
     });
   };

@@ -14,9 +14,10 @@ import Spinner from "../components/Spinner";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
 import { usePrefetchProduct, useCartMutations } from "../api/hooks";
+import { API_V1 } from "../api/config"; // ⬅️ same base as Search.jsx
 
-const API_ROOT = "https://keneta.laratest-app.com/api";
 const PER_PAGE = 12;
+const MIN_SEARCH_LEN = 3;
 
 // brand label → slug used in URL
 const slugifyBrandLabel = (label) =>
@@ -30,6 +31,18 @@ const normalize = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+// Helpers for brand CSV
+const isCsvOfIds = (v) => typeof v === "string" && /^[0-9]+(,[0-9]+)*$/.test(v.trim());
+const normalizeCsv = (csv) =>
+  Array.from(
+    new Set(
+      (csv || "")
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    )
+  ).join(",");
 
 // read items + simple/length-aware pagination flags
 function extractProductsPayload(resp) {
@@ -59,13 +72,25 @@ function extractProductsPayload(resp) {
 }
 
 export default function Products() {
-  const [params] = useSearchParams(); // read filters from URL; we do NOT sync page in URL for infinite scroll
+  const [params] = useSearchParams(); // read filters from URL
   const sort = params.get("sort") || "";
   const order = params.get("order") || "";
   const searchTerm = params.get("query")?.trim() || "";
   const categorySlugParam = params.get("category") || "";
-  const categoryIdParam = params.get("category_id") || ""; // 👈 prefer this
-  const brandSlug = params.get("brand") || "";
+  const categoryIdParam = params.get("category_id") || ""; // prefer this
+
+  // ⚠️ Sidebar writes ?brand=<CSV of ids>. Deep links might send a slug (?brand=makita) or ?brand_slug=makita.
+  const brandParam = params.get("brand") || "";
+  const brandSlugParam = !isCsvOfIds(brandParam)
+    ? brandParam || params.get("brand_slug") || ""
+    : ""; // only treat as slug if it's NOT a numeric CSV
+
+  // derived flags
+  const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
+  const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
+  const hasBrandFilter = Boolean(brandParam || brandSlugParam);
+  const isShortSearchOnly =
+    !!searchTerm && !isSearchActive && !hasCategoryFilter && !hasBrandFilter;
 
   // meta lookups
   const [brandOptions, setBrandOptions] = useState([]);
@@ -77,10 +102,10 @@ export default function Products() {
   const [page, setPage] = useState(1); // internal page for infinite scroll
   const [hasMore, setHasMore] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false); // 👈 for spinner visibility
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  // fetch lock to avoid duplicate loads when sentinel fires rapidly
+  // fetch lock to avoid duplicate loads
   const loadingLock = useRef(false);
 
   const { isWishlisted, toggleWishlist } = useWishlist();
@@ -98,7 +123,7 @@ export default function Products() {
           setBrandOptions(JSON.parse(cached));
           return;
         }
-        const res = await fetch(`${API_ROOT}/v1/attributes?sort=id`, {
+        const res = await fetch(`${API_V1}/attributes?sort=id`, {
           signal: ac.signal,
         });
         const json = await res.json();
@@ -123,7 +148,7 @@ export default function Products() {
           setCategoryOptions(JSON.parse(cached));
           return;
         }
-        const res = await fetch(`${API_ROOT}/v1/categories?sort=id`, {
+        const res = await fetch(`${API_V1}/categories?sort=id`, {
           signal: ac.signal,
         });
         const json = await res.json();
@@ -137,14 +162,16 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  // ---- resolve brand id from URL brand slug
-  const mappedBrandId = useMemo(() => {
-    if (!brandSlug || !brandOptions.length) return null;
+  // ---- resolve brand id from slug (if any)
+  const mappedBrandIdFromSlug = useMemo(() => {
+    if (!brandSlugParam || !brandOptions.length) return null;
     return (
-      brandOptions.find((b) => slugifyBrandLabel(b.label) === brandSlug)?.id ??
-      null
+      brandOptions.find(
+        (b) =>
+          slugifyBrandLabel(b.label) === slugifyBrandLabel(brandSlugParam)
+      )?.id ?? null
     );
-  }, [brandSlug, brandOptions]);
+  }, [brandSlugParam, brandOptions]);
 
   // ---- build tolerant index for categories & resolve
   const categoryIndex = useMemo(() => {
@@ -182,16 +209,17 @@ export default function Products() {
   }, [categoryIdParam, categoryOptions, resolvedCategory]);
 
   const activeBrandLabel = useMemo(() => {
-    if (!brandSlug || !brandOptions.length) return null;
+    if (!brandSlugParam || !brandOptions.length) return null;
     return (
-      brandOptions.find((b) => slugifyBrandLabel(b.label) === brandSlug)
-        ?.label ?? null
+      brandOptions.find(
+        (b) => slugifyBrandLabel(b.label) === slugifyBrandLabel(brandSlugParam)
+      )?.label ?? null
     );
-  }, [brandSlug, brandOptions]);
+  }, [brandSlugParam, brandOptions]);
 
   // ---- helpful banner if provided slug can’t be mapped (brand only; category prefers ID)
   useEffect(() => {
-    if (brandSlug && brandOptions.length && !mappedBrandId) {
+    if (brandSlugParam && brandOptions.length && !mappedBrandIdFromSlug) {
       setMetaNotice("Brand filter not recognized.");
     } else if (
       !categoryIdParam && // if ID provided, we trust it
@@ -204,9 +232,9 @@ export default function Products() {
       setMetaNotice(null);
     }
   }, [
-    brandSlug,
+    brandSlugParam,
     brandOptions.length,
-    mappedBrandId,
+    mappedBrandIdFromSlug,
     categorySlugParam,
     categoryOptions.length,
     resolvedCategory,
@@ -222,11 +250,19 @@ export default function Products() {
         sort,
         order,
         query: searchTerm,
-        brand: brandSlug,
+        brand: brandParam || brandSlugParam, // 👈 include raw brand param
         category: categorySlugParam,
-        categoryId: categoryIdParam, // 👈 include ID in reset
+        categoryId: categoryIdParam,
       }),
-    [sort, order, searchTerm, brandSlug, categorySlugParam, categoryIdParam]
+    [
+      sort,
+      order,
+      searchTerm,
+      brandParam,
+      brandSlugParam,
+      categorySlugParam,
+      categoryIdParam,
+    ]
   );
 
   useEffect(() => {
@@ -241,15 +277,25 @@ export default function Products() {
   // ---- build filter QS (prefer category_id from URL)
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
+
     if (sort) qs.set("sort", sort);
     if (order) qs.set("order", order);
-    if (searchTerm) qs.set("query", searchTerm);
 
-    // brand
-    if (mappedBrandId) qs.set("brand", String(mappedBrandId));
-    else if (brandSlug) qs.set("brand_slug", brandSlug);
+    // Only send 'query' when 3+ chars (same as Search.jsx)
+    if (isSearchActive) qs.set("query", searchTerm);
 
-    // category (prefer ID)
+    // ✅ BRAND: if sidebar provided numeric IDs (CSV) -> send them as brand=<csv>
+    if (brandParam && isCsvOfIds(brandParam)) {
+      qs.set("brand", normalizeCsv(brandParam));
+    } else if (mappedBrandIdFromSlug) {
+      // deep link with slug -> map to id and send as brand=<id>
+      qs.set("brand", String(mappedBrandIdFromSlug));
+    } else if (brandSlugParam) {
+      // fallback: send slug in a separate key if backend understands it
+      qs.set("brand_slug", brandSlugParam);
+    }
+
+    // CATEGORY (prefer ID)
     if (categoryIdParam) {
       qs.set("category_id", String(categoryIdParam));
     } else if (resolvedCategory?.id) {
@@ -264,9 +310,11 @@ export default function Products() {
   }, [
     sort,
     order,
+    isSearchActive,
     searchTerm,
-    mappedBrandId,
-    brandSlug,
+    brandParam,
+    brandSlugParam,
+    mappedBrandIdFromSlug,
     resolvedCategory,
     categorySlugParam,
     categoryIdParam,
@@ -278,7 +326,9 @@ export default function Products() {
       const qs = new URLSearchParams(baseFiltersQS);
       qs.set("per_page", String(PER_PAGE));
       qs.set("page", String(pageToFetch));
-      const url = `${API_ROOT}/products/bare?${qs.toString()}`;
+
+      // Use the same endpoint as Search.jsx
+      const url = `${API_V1}/products?${qs.toString()}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -309,6 +359,12 @@ export default function Products() {
     let cancelled = false;
     (async () => {
       try {
+        if (isShortSearchOnly) {
+          if (!cancelled) {
+            setItems([]); setHasMore(false); setInitialLoading(false);
+          }
+          return;
+        }
         await fetchPage(1, { append: false });
       } catch (e) {
         if (!cancelled) setError(e);
@@ -316,15 +372,12 @@ export default function Products() {
         if (!cancelled) setInitialLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchPage]);
+    return () => { cancelled = true; };
+  }, [fetchPage, isShortSearchOnly]);
 
-  // ---- onIntersect handler with a simple lock + state for spinner
+  // ---- onIntersect handler
   const handleIntersect = useCallback(async () => {
-    if (loadingLock.current || loadingMore || !hasMore || initialLoading)
-      return;
+    if (loadingLock.current || loadingMore || !hasMore || initialLoading) return;
     loadingLock.current = true;
     setLoadingMore(true);
     try {
@@ -431,13 +484,20 @@ export default function Products() {
             </div>
           )}
 
-          {items.length === 0 ? (
+          {/* Short-search guard */}
+          {isShortSearchOnly && (
             <p className="text-center text-gray-500">
-              {searchTerm
+              Shkruani të paktën {MIN_SEARCH_LEN} karaktere për të kërkuar.
+            </p>
+          )}
+
+          {!isShortSearchOnly && items.length === 0 ? (
+            <p className="text-center text-gray-500">
+              {isSearchActive
                 ? `Nuk u gjetën produkte për "${searchTerm}".`
                 : "No products match that filter."}
             </p>
-          ) : (
+          ) : !isShortSearchOnly ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {items.map((product) => (
@@ -457,7 +517,6 @@ export default function Products() {
               <InfiniteScrollSentinel
                 onIntersect={handleIntersect}
                 disabled={!hasMore}
-                // rootMargin="1400px 0px" // fetch earlier if you want
               />
 
               {/* Bottom status while loading more */}
@@ -466,13 +525,13 @@ export default function Products() {
                   <Spinner label="Loading more…" />
                 </div>
               )}
-              {!hasMore && (
+              {!loadingMore && !hasMore && (
                 <div className="my-6 text-center text-sm text-gray-500">
                   No more products
                 </div>
               )}
             </>
-          )}
+          ) : null}
         </section>
       </div>
     </div>
