@@ -136,7 +136,7 @@ export default function Menu() {
                   className="px-5 py-2 hover:bg-gray-100 text-[#132232] whitespace-nowrap transition-colors duration-150 cursor-pointer"
                 >
                   <Link
-                    to={`/products?category=${encodeURIComponent(cat.slug)}`}
+                    to={`/products?category=${cat.slug}`}
                     className="block hover:text-[#1a3c5c]"
                   >
                     {cat.name}
@@ -199,9 +199,7 @@ export default function Menu() {
                       className="hover:bg-gray-100 whitespace-nowrap"
                     >
                       <Link
-                        to={`/products?category=${encodeURIComponent(
-                          cat.slug
-                        )}`}
+                        to={`/products?category=${cat.slug}`}
                         className="block px-5 py-2 text-sm font-medium text-[#132232] hover:text-[#1a3c5c] transition-colors"
                       >
                         {cat.name}
@@ -354,9 +352,7 @@ export default function Menu() {
                                             {lvl4.map((c4) => (
                                               <li key={c4.id}>
                                                 <Link
-                                                  to={`/products?category=${encodeURIComponent(
-                                                    c4.slug
-                                                  )}`}
+                                                  to={`/products?category=${c4.slug}`}
                                                   className="block py-1 px-1 text-sm text-[#132232] hover:text-[#1a3c5c]"
                                                   onClick={closeAll}
                                                 >
