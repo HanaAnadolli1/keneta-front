@@ -136,7 +136,9 @@ export default function Menu() {
                   className="px-5 py-2 hover:bg-gray-100 text-[#132232] whitespace-nowrap transition-colors duration-150 cursor-pointer"
                 >
                   <Link
-                    to={`/products?category=${cat.slug}`}
+                    to={`/products?category=${encodeURIComponent(
+                      cat.slug
+                    )}&category_id=${cat.id}`}
                     className="block hover:text-[#1a3c5c]"
                   >
                     {cat.name}
@@ -199,7 +201,9 @@ export default function Menu() {
                       className="hover:bg-gray-100 whitespace-nowrap"
                     >
                       <Link
-                        to={`/products?category=${cat.slug}`}
+                        to={`/products?category=${encodeURIComponent(
+                          cat.slug
+                        )}&category_id=${cat.id}`}
                         className="block px-5 py-2 text-sm font-medium text-[#132232] hover:text-[#1a3c5c] transition-colors"
                       >
                         {cat.name}
@@ -282,6 +286,19 @@ export default function Menu() {
                       />
                     </button>
 
+                    {/* Quick "view all" for this root */}
+                    <div className="ml-1">
+                      <Link
+                        to={`/products?category=${encodeURIComponent(
+                          root.slug
+                        )}&category_id=${root.id}`}
+                        className="text-xs text-indigo-600 hover:underline"
+                        onClick={closeAll}
+                      >
+                        Shiko të gjitha
+                      </Link>
+                    </div>
+
                     {open && (
                       <ul className="ml-2 mt-1">
                         {lvl2.length === 0 && (
@@ -294,22 +311,28 @@ export default function Menu() {
                           const lvl3 = subcategories[c2.id] || [];
                           return (
                             <li key={c2.id} className="py-1">
-                              <button
-                                className="w-full text-left flex items-center justify-between py-1 px-1 text-sm"
-                                onClick={() => {
-                                  setActiveLevel2Id(open2 ? null : c2.id);
-                                  if (!open2) fetchChildren(c2.id);
-                                }}
-                                aria-expanded={open2}
-                              >
-                                <span>{c2.name}</span>
-                                <ChevronDown
-                                  size={16}
-                                  className={`transition-transform ${
-                                    open2 ? "rotate-180" : ""
-                                  }`}
-                                />
-                              </button>
+                              <div className="flex items-center justify-between">
+                                <button
+                                  className="text-left flex-1 py-1 px-1 text-sm"
+                                  onClick={() => {
+                                    setActiveLevel2Id(open2 ? null : c2.id);
+                                    if (!open2) fetchChildren(c2.id);
+                                  }}
+                                  aria-expanded={open2}
+                                >
+                                  {c2.name}
+                                </button>
+                                {/* Tap to filter by this Level 2 directly */}
+                                <Link
+                                  to={`/products?category=${encodeURIComponent(
+                                    c2.slug
+                                  )}&category_id=${c2.id}`}
+                                  className="text-xs text-indigo-600 px-1 hover:underline"
+                                  onClick={closeAll}
+                                >
+                                  Shiko
+                                </Link>
+                              </div>
 
                               {open2 && (
                                 <ul className="ml-3 mt-1">
@@ -323,24 +346,30 @@ export default function Menu() {
                                     const open3 = activeLevel3Id === c3.id;
                                     return (
                                       <li key={c3.id} className="py-1">
-                                        <button
-                                          className="w-full text-left flex items-center justify-between py-1 px-1 text-sm"
-                                          onClick={() => {
-                                            setActiveLevel3Id(
-                                              open3 ? null : c3.id
-                                            );
-                                            if (!open3) fetchChildren(c3.id);
-                                          }}
-                                          aria-expanded={open3}
-                                        >
-                                          <span>{c3.name}</span>
-                                          <ChevronDown
-                                            size={14}
-                                            className={`transition-transform ${
-                                              open3 ? "rotate-180" : ""
-                                            }`}
-                                          />
-                                        </button>
+                                        <div className="flex items-center justify-between">
+                                          <button
+                                            className="text-left flex-1 py-1 px-1 text-sm"
+                                            onClick={() => {
+                                              setActiveLevel3Id(
+                                                open3 ? null : c3.id
+                                              );
+                                              if (!open3) fetchChildren(c3.id);
+                                            }}
+                                            aria-expanded={open3}
+                                          >
+                                            {c3.name}
+                                          </button>
+                                          {/* Tap to filter by this Level 3 directly */}
+                                          <Link
+                                            to={`/products?category=${encodeURIComponent(
+                                              c3.slug
+                                            )}&category_id=${c3.id}`}
+                                            className="text-xs text-indigo-600 px-1 hover:underline"
+                                            onClick={closeAll}
+                                          >
+                                            Shiko
+                                          </Link>
+                                        </div>
 
                                         {open3 && (
                                           <ul className="ml-4 mt-1 space-y-1">
@@ -352,8 +381,10 @@ export default function Menu() {
                                             {lvl4.map((c4) => (
                                               <li key={c4.id}>
                                                 <Link
-                                                  to={`/products?category=${c4.slug}`}
-                                                  className="block py-1 px-1 text-sm text-[#132232] hover:text-[#1a3c5c]"
+                                                  to={`/products?category=${encodeURIComponent(
+                                                    c4.slug
+                                                  )}&category_id=${c4.id}`}
+                                                  className="block py-1 px-1 text-sm text-[#132232] hover:text-[#1a3c5c] transition-colors"
                                                   onClick={closeAll}
                                                 >
                                                   {c4.name}

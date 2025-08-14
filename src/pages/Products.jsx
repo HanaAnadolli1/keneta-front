@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import FilterSidebar from "../components/FilterSidebar";
 import ProductCard from "../components/ProductCard";
 import InfiniteScrollSentinel from "../components/InfiniteScrollSentinel";
+import Spinner from "../components/Spinner";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
 import { usePrefetchProduct, useCartMutations } from "../api/hooks";
@@ -58,11 +59,12 @@ function extractProductsPayload(resp) {
 }
 
 export default function Products() {
-  const [params] = useSearchParams(); // we read filters from URL, but we DO NOT sync page anymore
+  const [params] = useSearchParams(); // read filters from URL; we do NOT sync page in URL for infinite scroll
   const sort = params.get("sort") || "";
   const order = params.get("order") || "";
   const searchTerm = params.get("query")?.trim() || "";
   const categorySlugParam = params.get("category") || "";
+  const categoryIdParam = params.get("category_id") || ""; // 👈 prefer this
   const brandSlug = params.get("brand") || "";
 
   // meta lookups
@@ -75,6 +77,7 @@ export default function Products() {
   const [page, setPage] = useState(1); // internal page for infinite scroll
   const [hasMore, setHasMore] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false); // 👈 for spinner visibility
   const [error, setError] = useState(null);
 
   // fetch lock to avoid duplicate loads when sentinel fires rapidly
@@ -167,7 +170,17 @@ export default function Products() {
     );
   }, [categorySlugParam, categoryIndex]);
 
-  const activeCategoryLabel = resolvedCategory?.name ?? null;
+  // ---- labels (prefer ID lookup if present)
+  const activeCategoryLabel = useMemo(() => {
+    if (categoryIdParam && categoryOptions.length) {
+      return (
+        categoryOptions.find((c) => String(c.id) === String(categoryIdParam))
+          ?.name ?? null
+      );
+    }
+    return resolvedCategory?.name ?? null;
+  }, [categoryIdParam, categoryOptions, resolvedCategory]);
+
   const activeBrandLabel = useMemo(() => {
     if (!brandSlug || !brandOptions.length) return null;
     return (
@@ -176,11 +189,12 @@ export default function Products() {
     );
   }, [brandSlug, brandOptions]);
 
-  // ---- helpful banner if provided slug can’t be mapped
+  // ---- helpful banner if provided slug can’t be mapped (brand only; category prefers ID)
   useEffect(() => {
     if (brandSlug && brandOptions.length && !mappedBrandId) {
       setMetaNotice("Brand filter not recognized.");
     } else if (
+      !categoryIdParam && // if ID provided, we trust it
       categorySlugParam &&
       categoryOptions.length &&
       !resolvedCategory
@@ -196,6 +210,7 @@ export default function Products() {
     categorySlugParam,
     categoryOptions.length,
     resolvedCategory,
+    categoryIdParam,
   ]);
 
   // ------------------------------------------------------------------
@@ -209,8 +224,9 @@ export default function Products() {
         query: searchTerm,
         brand: brandSlug,
         category: categorySlugParam,
+        categoryId: categoryIdParam, // 👈 include ID in reset
       }),
-    [sort, order, searchTerm, brandSlug, categorySlugParam]
+    [sort, order, searchTerm, brandSlug, categorySlugParam, categoryIdParam]
   );
 
   useEffect(() => {
@@ -218,26 +234,30 @@ export default function Products() {
     setPage(1);
     setHasMore(true);
     setInitialLoading(true);
+    setLoadingMore(false);
     setError(null);
   }, [resetKey]);
 
-  // ---- build filter QS (no page/per_page here)
+  // ---- build filter QS (prefer category_id from URL)
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
     if (sort) qs.set("sort", sort);
     if (order) qs.set("order", order);
     if (searchTerm) qs.set("query", searchTerm);
 
-    // Prefer ID if available, else pass slug (this can change later without resetting)
+    // brand
     if (mappedBrandId) qs.set("brand", String(mappedBrandId));
     else if (brandSlug) qs.set("brand_slug", brandSlug);
 
-    if (resolvedCategory?.id)
+    // category (prefer ID)
+    if (categoryIdParam) {
+      qs.set("category_id", String(categoryIdParam));
+    } else if (resolvedCategory?.id) {
       qs.set("category_id", String(resolvedCategory.id));
-    else if (categorySlugParam) {
+    } else if (categorySlugParam) {
       const dec = decodeURIComponent(categorySlugParam);
       qs.set("category_slug", dec);
-      qs.set("category", dec); // use whichever your backend honors
+      qs.set("category", dec); // whichever your backend honors
     }
 
     return qs.toString();
@@ -249,6 +269,7 @@ export default function Products() {
     brandSlug,
     resolvedCategory,
     categorySlugParam,
+    categoryIdParam,
   ]);
 
   // ---- fetch a specific page and (optionally) append
@@ -300,18 +321,21 @@ export default function Products() {
     };
   }, [fetchPage]);
 
-  // ---- onIntersect handler with a simple lock (prevents double fires)
+  // ---- onIntersect handler with a simple lock + state for spinner
   const handleIntersect = useCallback(async () => {
-    if (loadingLock.current || !hasMore || initialLoading) return;
+    if (loadingLock.current || loadingMore || !hasMore || initialLoading)
+      return;
     loadingLock.current = true;
+    setLoadingMore(true);
     try {
       await fetchPage(page + 1, { append: true });
     } catch (e) {
       setError(e);
     } finally {
       loadingLock.current = false;
+      setLoadingMore(false);
     }
-  }, [fetchPage, page, hasMore, initialLoading]);
+  }, [fetchPage, page, hasMore, initialLoading, loadingMore]);
 
   // add to cart
   const [busyId, setBusyId] = useState(null);
@@ -354,6 +378,11 @@ export default function Products() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Centered spinner under skeletons */}
+            <div className="mt-8 flex justify-center">
+              <Spinner size="lg" label="Loading products…" />
             </div>
           </section>
         </div>
@@ -428,17 +457,13 @@ export default function Products() {
               <InfiniteScrollSentinel
                 onIntersect={handleIntersect}
                 disabled={!hasMore}
-                // You can tweak rootMargin for earlier/later loads:
-                // rootMargin="1400px 0px"
+                // rootMargin="1400px 0px" // fetch earlier if you want
               />
 
-              {/* Bottom spinner while loading next page */}
-              {loadingLock.current && (
-                <div
-                  className="my-6 text-center text-sm text-gray-500"
-                  aria-live="polite"
-                >
-                  Loading…
+              {/* Bottom status while loading more */}
+              {loadingMore && (
+                <div className="my-6 flex justify-center">
+                  <Spinner label="Loading more…" />
                 </div>
               )}
               {!hasMore && (
