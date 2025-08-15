@@ -1,6 +1,6 @@
 // src/pages/ProductDetails.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
 import { API_V1 } from "../api/config";
 import ImageGallery from "react-image-gallery";
@@ -25,6 +25,7 @@ const chunkPairs = (rows, size = 2) => {
 
 export default function ProductDetails() {
   const { url_key } = useParams();
+  const location = useLocation();
   const { addItem } = useCartMutations();
 
   const { isWishlisted, toggleWishlist } = useWishlist();
@@ -46,6 +47,16 @@ export default function ProductDetails() {
     localStorage.getItem("access_token") ||
     localStorage.getItem("token") ||
     sessionStorage.getItem("access_token");
+
+  // Open the Reviews tab automatically if URL requests it
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    const hashWantsReviews = location.hash?.toLowerCase() === "#reviews";
+    if (tab === "reviews" || hashWantsReviews) {
+      setActiveTab("reviews");
+    }
+  }, [location.search, location.hash]);
 
   // hooks above returns
   useEffect(() => {
@@ -74,6 +85,10 @@ export default function ProductDetails() {
       ignore = true;
     };
   }, [url_key]);
+
+  // If redirected back with ?openReviewForm=1, pass the flag to ProductReviews
+  const openReviewForm =
+    new URLSearchParams(location.search).get("openReviewForm") === "1";
 
   // extra rows
   const extraRows = useMemo(() => {
@@ -146,10 +161,11 @@ export default function ProductDetails() {
 
   const reviewsSummary = product?.reviews;
 
+  const { addItem: add } = { addItem }; // alias for clarity
   const handleAdd = () => {
     if (!product || qty < 1) return;
     const tid = toast.info("Adding to cart…", { duration: 0 });
-    addItem.mutate(
+    add.mutate(
       { productId: product.id, quantity: qty },
       {
         onSuccess: () => {
@@ -424,10 +440,8 @@ export default function ProductDetails() {
               <ProductReviews
                 productId={Number(product.id)}
                 summary={product.reviews}
-                accessToken={
-                  // If you use cookies for auth, pass null and handle credentials: 'include' inside the component.
-                  accessToken || null
-                }
+                accessToken={accessToken || null}
+                autoOpenForm={openReviewForm}
               />
             </div>
           )}

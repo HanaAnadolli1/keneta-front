@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "../context/ToastContext";
 import { API_V1 } from "../api/config";
+import { useLocation, Link } from "react-router-dom";
+import Modal from "./Modal";
 
 /* ---------- helpers ---------- */
 
@@ -22,15 +24,8 @@ const computeRatingDistribution = (summary, totalReviews) => {
   return [0, 0, 0, 0, 0];
 };
 
-const Star = ({ filled = false, className = "", title }) => (
-  <svg
-    aria-hidden={title ? undefined : true}
-    role={title ? "img" : "presentation"}
-    viewBox="0 0 20 20"
-    width="20"
-    height="20"
-    className={className}
-  >
+const Star = ({ filled = false }) => (
+  <svg viewBox="0 0 20 20" width="20" height="20" className="shrink-0">
     <path
       d="M10 15.27l-5.18 3.04 1.37-5.9L1 7.97l6.02-.52L10 2l2.98 5.45 6.02.52-5.19 4.44 1.37 5.9z"
       fill={filled ? "currentColor" : "none"}
@@ -58,7 +53,6 @@ const StarInput = ({ value, onChange }) => {
     <div className="inline-flex items-center gap-1 text-amber-500">
       {Array.from({ length: 5 }).map((_, i) => {
         const n = i + 1;
-        const isFilled = n <= current;
         return (
           <button
             key={n}
@@ -70,7 +64,7 @@ const StarInput = ({ value, onChange }) => {
             aria-label={`${n} star${n > 1 ? "s" : ""}`}
             title={`${n} star${n > 1 ? "s" : ""}`}
           >
-            <Star filled={isFilled} />
+            <Star filled={n <= current} />
           </button>
         );
       })}
@@ -83,12 +77,14 @@ const StarInput = ({ value, onChange }) => {
 /**
  * Props:
  * - productId: number (required)
- * - summary: product.reviews object (optional; used as fallback if list empty)
- * - accessToken: string | null (Bearer). For cookie sessions, pass null and add credentials in fetch.
+ * - summary: product.reviews object (optional; fallback if list empty)
+ * - accessToken: string | null (Bearer) — for cookie sessions, pass null and add credentials in fetch.
+ * - autoOpenForm: boolean (open modal after mount if user is logged in)
  */
-export default function ProductReviews({ productId, summary, accessToken }) {
+export default function ProductReviews({ productId, summary, accessToken, autoOpenForm = false }) {
   const toast = useToast();
   const baseApi = (API_V1 || "").replace(/\/+$/, "");
+  const location = useLocation();
 
   // list state
   const [reviews, setReviews] = useState([]);
@@ -98,20 +94,24 @@ export default function ProductReviews({ productId, summary, accessToken }) {
   const [limit, setLimit] = useState(10);
   const [total, setTotal] = useState(0);
 
-  // form state
-  const [showForm, setShowForm] = useState(false);
+  // form state (in modal)
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(5);
   const [files, setFiles] = useState([]);
 
-  // auth (adapt to your app if you use cookies or context)
   const isLoggedIn = !!accessToken;
+
+  // Auto-open after login if requested
+  useEffect(() => {
+    if (isLoggedIn && autoOpenForm) setOpen(true);
+  }, [isLoggedIn, autoOpenForm]);
 
   const headers = {
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
-  // For cookie sessions (Sanctum), remove Authorization and add `credentials: "include"` in both fetch calls.
+  // For cookie sessions (Sanctum): remove Authorization & add credentials: 'include' in fetch.
 
   const fetchReviews = async (pid, { page: p = page, limit: l = limit } = {}) => {
     if (!pid) return;
@@ -125,7 +125,6 @@ export default function ProductReviews({ productId, summary, accessToken }) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.message || `Failed (${res.status})`);
-
       const data = body?.data;
       const items = Array.isArray(data) ? data : data ? [data] : [];
       setReviews(items);
@@ -188,7 +187,7 @@ export default function ProductReviews({ productId, summary, accessToken }) {
       setComment("");
       setRating(5);
       setFiles([]);
-      setShowForm(false);
+      setOpen(false);
       toast.remove(tid);
       toast.success("Your review was submitted and is pending approval.");
       setReviews((prev) => [newReview, ...prev]);
@@ -202,27 +201,22 @@ export default function ProductReviews({ productId, summary, accessToken }) {
     }
   };
 
-  /* ---------- derive metrics from the fetched LIST (authoritative) ---------- */
+  /* ---------- derive metrics from LIST (authoritative) ---------- */
 
   const listStats = useMemo(() => {
     const total = reviews.length;
     if (!total) return null;
-
-    // counts [5,4,3,2,1]
     const counts = [5, 4, 3, 2, 1].map((s) =>
       reviews.reduce((acc, r) => acc + (Number(r.rating) === s ? 1 : 0), 0)
     );
     const percents = counts.map((c) => Math.round((c / total) * 100));
-
     const avg =
       Math.round(
         (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / total) * 10
       ) / 10;
-
     return { total, counts, percents, avg };
   }, [reviews]);
 
-  // Prefer list-derived; fallback to API summary only if list empty
   const totalReviews = listStats?.total ?? Number(summary?.total ?? 0);
   const avgRating = listStats?.avg ?? Number(summary?.average_rating ?? 0);
   const starPercents =
@@ -260,8 +254,13 @@ export default function ProductReviews({ productId, summary, accessToken }) {
     </div>
   ) : null;
 
+  // Build a login link that returns here (Reviews tab + modal open)
+  const currentPath = `${location.pathname}${location.search}`;
+  const returnTo = `${currentPath}${currentPath.includes("?") ? "&" : "?"}tab=reviews&openReviewForm=1#reviews`;
+  const loginHref = `/login?redirect=${encodeURIComponent(returnTo)}`;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" id="reviews">
       {/* Summary */}
       {distributionUI}
 
@@ -384,95 +383,99 @@ export default function ProductReviews({ productId, summary, accessToken }) {
         </div>
       </div>
 
-      {/* Add review: button + form */}
-      <div className="pt-6 border-t">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Write a review</h3>
+      {/* Footer actions */}
+      <div className="pt-6 border-t flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Write a review</h3>
         {!isLoggedIn ? (
-            <a
-              href="/login"
-              className="px-4 py-2 rounded-lg text-sm font-semibold ring-1 ring-black/10 hover:bg-gray-50"
-            >
-              Log in to review
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowForm((s) => !s)}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
-            >
-              {showForm ? "Close" : "Add review"}
-            </button>
-          )}
-        </div>
-
-        {isLoggedIn && showForm && (
-          <form onSubmit={submitReview} className="mt-4 space-y-4 p-4 rounded-xl bg-white ring-1 ring-black/5">
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-gray-700">Your rating</label>
-              <StarInput value={rating} onChange={setRating} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Title</label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full rounded-lg ring-1 ring-black/10 px-3 py-2"
-                placeholder="Summarize your experience"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Comment</label>
-              <textarea
-                required
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                className="mt-1 w-full rounded-lg ring-1 ring-black/10 px-3 py-2"
-                rows={4}
-                placeholder="What did you like or dislike?"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Attachments (images or videos)
-              </label>
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={(e) => setFiles(Array.from(e.target.files || []))}
-                className="mt-1 block"
-              />
-              {files?.length > 0 && (
-                <div className="mt-2 text-sm text-gray-600">
-                  {files.length} file{files.length > 1 ? "s" : ""} selected
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                className="h-11 px-6 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
-              >
-                Submit Review
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="h-11 px-4 rounded-xl text-sm font-semibold ring-1 ring-black/10 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          <Link
+            to={loginHref}
+            className="px-4 py-2 rounded-lg text-sm font-semibold ring-1 ring-black/10 hover:bg-gray-50"
+          >
+            Log in to review
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+          >
+            Add review
+          </button>
         )}
       </div>
+
+      {/* Modal with the form */}
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Write a review"
+        size="lg"
+      >
+        <form onSubmit={submitReview} className="space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700">Your rating</label>
+            <StarInput value={rating} onChange={setRating} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Title</label>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1 w-full rounded-lg ring-1 ring-black/10 px-3 py-2"
+              placeholder="Summarize your experience"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Comment</label>
+            <textarea
+              required
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              className="mt-1 w-full rounded-lg ring-1 ring-black/10 px-3 py-2"
+              rows={5}
+              placeholder="What did you like or dislike?"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Attachments (images or videos)
+            </label>
+            <input
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              onChange={(e) => setFiles(Array.from(e.target.files || []))}
+              className="mt-1 block"
+            />
+            {files?.length > 0 && (
+              <div className="mt-2 text-sm text-gray-600">
+                {files.length} file{files.length > 1 ? "s" : ""} selected
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="h-11 px-4 rounded-xl text-sm font-semibold ring-1 ring-black/10 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="h-11 px-6 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+            >
+              Submit Review
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
