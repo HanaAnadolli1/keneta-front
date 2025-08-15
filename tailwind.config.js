@@ -7,7 +7,12 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Host Grotesk"', "sans-serif"], // This sets it as the default
+        sans: ['"Host Grotesk"', "sans-serif"],
+      },
+      colors: {
+        primary: "var(--primary)",
+        secondary: "var(--secondary)",
+        third: "var(--third)",
       },
     },
   },

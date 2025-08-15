@@ -12,7 +12,7 @@ export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const { wishlistCount } = useWishlist(); // reacts for guests & customers
+  const { wishlistCount } = useWishlist();
   const { currentUser, logout } = useContext(AuthContext);
 
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ export default function Header() {
   }, []);
 
   function handleLogout() {
-    logout(); // fires "auth-changed" which updates WishlistContext
+    logout();
     navigate("/login");
   }
 
@@ -38,7 +38,7 @@ export default function Header() {
     <>
       <header className="flex flex-col w-full">
         {/* Top Bar */}
-        <div className="bg-[#1a3c5c] text-white text-xs md:text-sm flex justify-center">
+        <div className="bg-[var(--primary)] text-white text-xs md:text-sm flex justify-center">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-2 gap-2">
             <div>Lokacioni i depos tonë</div>
             <div className="hidden md:block text-center">
@@ -52,7 +52,7 @@ export default function Header() {
         <div className="flex justify-center bg-transparent">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-4 md:py-6 gap-4">
             {/* Logo */}
-            <div className="text-2xl md:text-4xl font-bold text-[#193653]">
+            <div className="text-2xl md:text-4xl font-bold text-[var(--secondary)]">
               <Link to="/">
                 <img
                   src={logo}
@@ -67,8 +67,8 @@ export default function Header() {
 
             {/* Account & Cart */}
             <div className="flex items-center gap-4 md:gap-6">
-              {/* Wishlist with badge from context */}
-              <Link to="/wishlist" className="relative text-[#1d3d62] text-2xl">
+              {/* Wishlist with badge */}
+              <Link to="/wishlist" className="relative text-[var(--secondary)] text-2xl">
                 <FiHeart />
                 {wishlistCount > 0 && (
                   <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-semibold">
@@ -81,11 +81,9 @@ export default function Header() {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen((o) => !o)}
-                  className="flex items-center text-[#1e456c] text-sm md:text-lg font-medium focus:outline-none"
+                  className="flex items-center text-[var(--secondary)] text-sm md:text-lg font-medium focus:outline-none"
                 >
-                  {currentUser?.first_name ||
-                    currentUser?.name ||
-                    "Llogaria ime"}
+                  {currentUser?.first_name || currentUser?.name || "Llogaria ime"}
                   <FiChevronDown className="ml-1" />
                 </button>
                 {isDropdownOpen && currentUser && (
@@ -118,9 +116,10 @@ export default function Header() {
                 )}
               </div>
 
+              {/* Cart Icon */}
               <div
                 onClick={() => setIsCartOpen(true)}
-                className="text-[#1d3d62] text-2xl cursor-pointer"
+                className="text-[var(--secondary)] text-2xl cursor-pointer"
               >
                 <FiShoppingCart />
               </div>

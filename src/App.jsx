@@ -12,6 +12,7 @@ import "./index.css";
 import Checkout from "./pages/Checkout";
 import Wishlist from "./components/Wishlist";
 import ComparePage from "./pages/ComparePage";
+import useLoadColors from "./hooks/useLoadColors"; // ⬅️ add this
 
 function NotFound() {
   return (
@@ -25,6 +26,8 @@ function NotFound() {
 }
 
 export default function App() {
+  useLoadColors(); // ⬅️ load & apply CSS vars from API
+
   return (
     <Router>
       <Header />
