@@ -14,6 +14,8 @@ import { useWishlist } from "../context/WishlistContext";
 import { useCompare } from "../context/CompareContext";
 import { useToast } from "../context/ToastContext";
 
+import ProductReviews from "../components/ProductReviews";
+
 // helper: chunk rows into groups of `size`
 const chunkPairs = (rows, size = 2) => {
   const out = [];
@@ -30,6 +32,8 @@ export default function ProductDetails() {
   const toast = useToast();
 
   const galleryRef = useRef();
+
+  // base product
   const [product, setProduct] = useState(null);
   const [qty, setQty] = useState(1);
   const [error, setError] = useState(null);
@@ -37,6 +41,13 @@ export default function ProductDetails() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("description"); // description | additional | reviews
 
+  // read customer token (adapt to your auth)
+  const accessToken =
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("access_token");
+
+  // hooks above returns
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     handleResize();
@@ -64,7 +75,7 @@ export default function ProductDetails() {
     };
   }, [url_key]);
 
-  // Additional info rows (safe when product is null)
+  // extra rows
   const extraRows = useMemo(() => {
     const p = product || {};
     const v = p?.variants && !Array.isArray(p.variants) ? p.variants : null;
@@ -98,7 +109,7 @@ export default function ProductDetails() {
   if (error) return <div className="p-8 text-red-600">{error}</div>;
   if (!product) return <div className="p-8">Loading…</div>;
 
-  // ---- computed (no hooks)
+  // computed
   const galleryImages =
     product?.images?.length > 0
       ? product.images.map((img) => ({
@@ -133,34 +144,11 @@ export default function ProductDetails() {
     galleryRef.current?.slideToIndex(index);
   };
 
-  const Stars = ({ value = 0 }) => {
-    const full = Math.floor(value);
-    const half = value - full >= 0.5;
-    return (
-      <div className="inline-flex items-center gap-0.5">
-        {Array.from({ length: 5 }).map((_, i) => {
-          if (i < full) return <span key={i}>★</span>;
-          if (i === full && half) return <span key={i}>☆</span>;
-          return (
-            <span key={i} className="opacity-40">
-              ☆
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
+  const reviewsSummary = product?.reviews;
 
-  const reviews = product?.reviews;
-  const totalReviews = Number(reviews?.total ?? 0);
-  const avgRating = Number(reviews?.average_rating ?? 0);
-
-  // ---- FASTER add to cart: no await; show toast immediately; swap toast on settle
   const handleAdd = () => {
     if (!product || qty < 1) return;
-
     const tid = toast.info("Adding to cart…", { duration: 0 });
-
     addItem.mutate(
       { productId: product.id, quantity: qty },
       {
@@ -193,7 +181,7 @@ export default function ProductDetails() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-        {/* LEFT: thumbs + main image */}
+        {/* LEFT */}
         <div className="flex gap-4">
           {galleryImages.length > 1 && (
             <div className="hidden md:flex flex-col gap-4">
@@ -230,7 +218,7 @@ export default function ProductDetails() {
           </div>
         </div>
 
-        {/* RIGHT: title, price, actions */}
+        {/* RIGHT */}
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <h1 className="text-3xl font-semibold leading-tight text-gray-900">
@@ -396,7 +384,7 @@ export default function ProductDetails() {
 
           {activeTab === "additional" && (
             <div id="tab-panel-additional" role="tabpanel">
-              {extraRows.length === 0 ? (
+              {pairs.length === 0 ? (
                 <p className="text-gray-500">No additional information.</p>
               ) : (
                 <div className="w-full">
@@ -433,40 +421,14 @@ export default function ProductDetails() {
 
           {activeTab === "reviews" && (
             <div id="tab-panel-reviews" role="tabpanel">
-              {totalReviews === 0 ? (
-                <p className="text-gray-500">No reviews yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Stars value={avgRating} />
-                    <span className="text-sm text-gray-700">
-                      {avgRating.toFixed(1)} / 5 · {totalReviews} review
-                      {totalReviews > 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  {reviews?.percentage && (
-                    <div className="space-y-1">
-                      {[5, 4, 3, 2, 1].map((star) => {
-                        const pct = Number(reviews.percentage?.[star] ?? 0);
-                        return (
-                          <div key={star} className="flex items-center gap-3">
-                            <span className="w-10 text-sm">{star}★</span>
-                            <div className="h-2 flex-1 bg-gray-100 rounded">
-                              <div
-                                className="h-2 bg-indigo-600 rounded"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                            <span className="w-12 text-right text-sm text-gray-600">
-                              {pct}%
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+              <ProductReviews
+                productId={Number(product.id)}
+                summary={product.reviews}
+                accessToken={
+                  // If you use cookies for auth, pass null and handle credentials: 'include' inside the component.
+                  accessToken || null
+                }
+              />
             </div>
           )}
         </div>

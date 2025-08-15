@@ -81,7 +81,7 @@ export default function Search({ className = "" }) {
 
   // Form submit (Enter key or search icon)
   const handleSubmit = (e) => {
-    e?.preventDefault(); // make event optional so callers without an event don't crash
+    e?.preventDefault();
     submitSearch();
   };
 
@@ -100,7 +100,11 @@ export default function Search({ className = "" }) {
         <input
           type="text"
           placeholder="Kërko..."
-          className="flex-1 px-4 py-2 border-2 border-transparent rounded-l-2xl bg-white outline-none text-[#152a41] text-sm md:text-base focus:border-[#1d446b]"
+          className="flex-1 px-4 py-2 rounded-l-2xl bg-white outline-none
+             border border-[var(--primary)] border-opacity-30
+             focus:border-opacity-100
+             text-[var(--primary)] caret-[var(--third)] text-sm md:text-base
+             transition-colors"
           value={query}
           onChange={(e) => {
             const v = e.target.value;
@@ -111,9 +115,12 @@ export default function Search({ className = "" }) {
             if (query.trim().length >= MIN_QUERY_LEN) setShow(true);
           }}
         />
+
         <button
           type="submit"
-          className="bg-[#1d446b] text-white flex items-center justify-center px-4 md:px-6 rounded-r-2xl text-sm md:text-base"
+          className="bg-[var(--primary)] hover:bg-[var(--secondary)] text-white
+                     flex items-center justify-center px-4 md:px-6 rounded-r-2xl
+                     text-sm md:text-base transition-colors"
           aria-label="Search"
           title="Search"
         >
@@ -124,28 +131,27 @@ export default function Search({ className = "" }) {
       {show && (
         <ul className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-b-2xl shadow-lg z-50 max-h-60 overflow-auto">
           {loading ? (
-            <li className="px-4 py-2 text-gray-500">Loading...</li>
+            <li className="px-4 py-2 text-[var(--primary)]">Loading...</li>
           ) : suggestions.length > 0 ? (
             <>
               {suggestions.map((item) => (
                 <li
                   key={item.id}
                   onClick={() => handleSelect(item)}
-                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm md:text-base"
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm md:text-base text-[var(--primary)]"
                 >
                   {item.name} {item.sku ? `(${item.sku})` : ""}
                 </li>
               ))}
-              {/* This row now calls submitSearch() directly (no event) */}
               <li
                 onClick={submitSearch}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm md:text-base font-medium border-t"
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm md:text-base font-medium border-t text-[var(--primary)]"
               >
                 See all results for “{query.trim()}”
               </li>
             </>
           ) : (
-            <li className="px-4 py-2 text-gray-500">
+            <li className="px-4 py-2 text-[var(--third)]">
               {query.trim().length >= MIN_QUERY_LEN
                 ? "No suggestions found"
                 : `Type at least ${MIN_QUERY_LEN} characters`}
