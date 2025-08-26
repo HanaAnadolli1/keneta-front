@@ -43,3 +43,29 @@ export function getOrderById(id) {
 export function cancelOrder(id) {
   return apiFetch(`${API_V1}/customer/orders/${id}/cancel`, { method: "POST" });
 }
+
+// --- GDPR ---
+export function getGdprRequests() {
+  return apiFetch(`${API_V1}/customer/gdpr`);
+}
+
+export function createGdprRequest(payload) {
+  // Expecting: { type: "update"|"delete", message: "..." }
+  const form = new FormData();
+  Object.entries(payload).forEach(([k, v]) => form.append(k, v ?? ""));
+  return apiFetch(`${API_V1}/customer/gdpr`, { method: "POST", body: form });
+}
+
+export function getGdprRequestById(id) {
+  return apiFetch(`${API_V1}/customer/gdpr/${id}`);
+}
+
+export function revokeGdprRequest(id) {
+  return apiFetch(`${API_V1}/customer/gdpr/revoke/${id}`, { method: "PUT" });
+}
+
+
+// --- Product reviews (by product) ---
+export function getProductReviews(productId) {
+  return apiFetch(`${API_V1}/products/${productId}/reviews`);
+}

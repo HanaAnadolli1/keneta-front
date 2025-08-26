@@ -23,6 +23,68 @@ const chunkPairs = (rows, size = 2) => {
   return out;
 };
 
+/** ------------- Description helpers ------------- **/
+
+// Detects if the string already contains HTML tags
+const looksLikeHtml = (s = "") => /<[^>]+>/.test(s);
+
+// Convert a "•item •item ..." or "• item\n• item" style string into a React <ul>
+const renderBulletList = (text = "") => {
+  if (!text) return null;
+
+  // Normalize multiple spaces and convert common separators into single spaces
+  const normalized = text.replace(/\s+/g, " ").trim();
+
+  // Split by bullet "•" (U+2022). We allow an optional space after it.
+  // We also handle cases where the string starts with a bullet or has bullets mid-string.
+  const parts = normalized
+    .split(/(?:^|[\s])•\s*/g)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  // If we didn't really split into multiple items, it's not a bullet list
+  if (parts.length <= 1) return null;
+
+  return (
+    <ul className="list-disc pl-5 space-y-1">
+      {parts.map((t, i) => (
+        <li key={i}>{t}</li>
+      ))}
+    </ul>
+  );
+};
+
+// General renderer: prefers HTML, else bullets, else newline list, else paragraph
+const renderRichText = (raw = "") => {
+  if (!raw) {
+    return <p className="text-gray-500">No description.</p>;
+  }
+
+  // 1) If backend already provides HTML, trust it (your content source controls safety)
+  if (looksLikeHtml(raw)) {
+    return <div dangerouslySetInnerHTML={{ __html: raw }} />;
+  }
+
+  // 2) If it contains "•" bullets, render them as <ul>
+  const bullets = renderBulletList(raw);
+  if (bullets) return bullets;
+
+  // 3) Fallback: split on newlines into a list (if there are several lines)
+  const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    return (
+      <ul className="list-disc pl-5 space-y-1">
+        {lines.map((t, i) => (
+          <li key={i}>{t}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  // 4) Final fallback: simple paragraph
+  return <p>{raw}</p>;
+};
+
 export default function ProductDetails() {
   const { url_key } = useParams();
   const location = useLocation();
@@ -126,7 +188,7 @@ export default function ProductDetails() {
 
   // computed
   const galleryImages =
-    product?.images?.length > 0
+    Array.isArray(product?.images) && product.images.length > 0
       ? product.images.map((img) => ({
           original: img.original_image_url,
           thumbnail: img.small_image_url || img.medium_image_url,
@@ -261,10 +323,17 @@ export default function ProductDetails() {
 
           <div className="text-2xl font-bold text-black">{unitPriceLabel}</div>
 
-          <div
-            className="text-gray-500"
-            dangerouslySetInnerHTML={{ __html: product.short_description }}
-          />
+          {/* Short description (now supports bullets & HTML) */}
+          <div className="text-gray-500">
+            {(() => {
+              const raw = product?.short_description || "";
+              if (!raw) return null;
+              if (looksLikeHtml(raw)) {
+                return <div dangerouslySetInnerHTML={{ __html: raw }} />;
+              }
+              return renderBulletList(raw) || <p>{raw}</p>;
+            })()}
+          </div>
 
           <div className="flex items-center justify-between text-sm text-gray-700">
             <span className="font-semibold">Total Amount</span>
@@ -387,14 +456,10 @@ export default function ProductDetails() {
         <div className="py-6 text-gray-700 leading-relaxed">
           {activeTab === "description" && (
             <div id="tab-panel-description" role="tabpanel">
-              <div
-                dangerouslySetInnerHTML={{
-                  __html:
-                    product.description ||
-                    product.short_description ||
-                    "No description.",
-                }}
-              />
+              {/* Renders HTML if present; otherwise turns bullet "•" text into a proper <ul> */}
+              {renderRichText(
+                product.description || product.short_description || ""
+              )}
             </div>
           )}
 

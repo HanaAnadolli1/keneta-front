@@ -24,6 +24,8 @@ import Orders from "./pages/account/Orders";
 import OrderDetail from "./pages/account/OrderDetail";
 
 import "./index.css";
+import GDPR from "./pages/account/GDPR";
+import Reviews from "./pages/account/Reviews";
 
 function NotFound() {
   return (
@@ -69,6 +71,8 @@ export default function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="gdpr" element={<GDPR />} /> 
+          <Route path="reviews" element={<Reviews />} /> 
         </Route>
 
         {/* 404 */}
