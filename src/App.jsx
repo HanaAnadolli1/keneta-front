@@ -1,18 +1,29 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import Products from "./pages/Products";
+
 import Home from "./pages/Home";
-import Brands from "./pages/Brands";
+import Products from "./pages/Products";
 import ProductDetails from "./pages/ProductDetails";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import "./index.css";
+import Brands from "./pages/Brands";
 import Checkout from "./pages/Checkout";
 import Wishlist from "./components/Wishlist";
 import ComparePage from "./pages/ComparePage";
-import useLoadColors from "./hooks/useLoadColors"; // ⬅️ add this
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+
+import useLoadColors from "./hooks/useLoadColors";
+
+// Account (protected) routes + layout
+import ProtectedRoute from "./routes/ProtectedRoute";
+import AccountShell from "./components/account/AccountShell";
+import Profile from "./pages/account/Profile";
+import Orders from "./pages/account/Orders";
+import OrderDetail from "./pages/account/OrderDetail";
+
+import "./index.css";
 
 function NotFound() {
   return (
@@ -26,12 +37,15 @@ function NotFound() {
 }
 
 export default function App() {
-  useLoadColors(); // ⬅️ load & apply CSS vars from API
+  // Load & apply CSS vars from API
+  useLoadColors();
 
   return (
     <Router>
       <Header />
+
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Home />} />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:url_key" element={<ProductDetails />} />
@@ -41,8 +55,26 @@ export default function App() {
         <Route path="/compare" element={<ComparePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
+        {/* Protected Account area */}
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <AccountShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Profile />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="orders/:id" element={<OrderDetail />} />
+        </Route>
+
+        {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+
       <Footer />
     </Router>
   );

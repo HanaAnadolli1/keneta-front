@@ -79,5 +79,5 @@ export async function apiFetch(url, options = {}) {
 
 // Fetch current logged-in user
 export async function fetchCurrentUser() {
-  return apiFetch(`${API_V1}/customer/me`);
+  return apiFetch(`${API_V1}/customer/get`);
 }
