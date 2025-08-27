@@ -6,6 +6,7 @@ import "swiper/css";
 import "swiper/css/navigation";
 import noImage from "../assets/no_image.jpg";
 import { API_V1 } from "../api/config";
+import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 
 const MIN_FOR_CAROUSEL = 7;
 
@@ -159,19 +160,19 @@ export default function CategoryNavigator() {
     <div className="mb-3 relative w-full max-w-full overflow-hidden">
       <button
         ref={prevRef}
-        className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 h-7 w-7 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+        className="hidden md:flex absolute left-[-11px] top-1/2 -translate-y-1/2 z-10 h-7 w-7 items-center justify-center text-[var(--secondary)]"
         aria-label="Prev"
         type="button"
       >
-        ‹
+        <IoIosArrowBack />
       </button>
       <button
         ref={nextRef}
-        className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 h-7 w-7 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+        className="hidden md:flex absolute right-[-11px] top-1/2 -translate-y-1/2 z-10 h-7 w-7 items-center justify-center text-[var(--secondary)]"
         aria-label="Next"
         type="button"
       >
-        ›
+        <IoIosArrowForward />
       </button>
 
       <Swiper
