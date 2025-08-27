@@ -14,16 +14,15 @@ import Spinner from "../components/Spinner";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
 import { usePrefetchProduct, useCartMutations } from "../api/hooks";
-import { API_V1 } from "../api/config"; // ⬅️ same base as Search.jsx
+import { API_V1 } from "../api/config";
+import CategoryNavigator from "../components/CategoryNavigator";
 
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
 
-// brand label → slug used in URL
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
 
-// diacritic-tolerant compare (ujitese → ujitëse)
 const normalize = (s) =>
   s
     .toLowerCase()
@@ -32,8 +31,9 @@ const normalize = (s) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-// Helpers for brand CSV
-const isCsvOfIds = (v) => typeof v === "string" && /^[0-9]+(,[0-9]+)*$/.test(v.trim());
+const isCsvOfIds = (v) =>
+  typeof v === "string" && /^[0-9]+(,[0-9]+)*$/.test(v.trim());
+
 const normalizeCsv = (csv) =>
   Array.from(
     new Set(
@@ -44,7 +44,6 @@ const normalizeCsv = (csv) =>
     )
   ).join(",");
 
-// read items + simple/length-aware pagination flags
 function extractProductsPayload(resp) {
   const items =
     resp?.items ??
@@ -72,20 +71,18 @@ function extractProductsPayload(resp) {
 }
 
 export default function Products() {
-  const [params] = useSearchParams(); // read filters from URL
+  const [params] = useSearchParams();
   const sort = params.get("sort") || "";
   const order = params.get("order") || "";
   const searchTerm = params.get("query")?.trim() || "";
   const categorySlugParam = params.get("category") || "";
-  const categoryIdParam = params.get("category_id") || ""; // prefer this
+  const categoryIdParam = params.get("category_id") || "";
 
-  // ⚠️ Sidebar writes ?brand=<CSV of ids>. Deep links might send a slug (?brand=makita) or ?brand_slug=makita.
   const brandParam = params.get("brand") || "";
   const brandSlugParam = !isCsvOfIds(brandParam)
     ? brandParam || params.get("brand_slug") || ""
-    : ""; // only treat as slug if it's NOT a numeric CSV
+    : "";
 
-  // derived flags
   const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
   const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
   const hasBrandFilter = Boolean(brandParam || brandSlugParam);
@@ -99,13 +96,12 @@ export default function Products() {
 
   // list state
   const [items, setItems] = useState([]);
-  const [page, setPage] = useState(1); // internal page for infinite scroll
+  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  // fetch lock to avoid duplicate loads
   const loadingLock = useRef(false);
 
   const { isWishlisted, toggleWishlist } = useWishlist();
@@ -113,7 +109,7 @@ export default function Products() {
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
 
-  // ---- load brands (session cache)
+  // Load brands
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -138,7 +134,7 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  // ---- load categories (session cache)
+  // Load categories
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -162,7 +158,7 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  // ---- resolve brand id from slug (if any)
+  // resolve brand
   const mappedBrandIdFromSlug = useMemo(() => {
     if (!brandSlugParam || !brandOptions.length) return null;
     return (
@@ -173,7 +169,7 @@ export default function Products() {
     );
   }, [brandSlugParam, brandOptions]);
 
-  // ---- build tolerant index for categories & resolve
+  // category tolerant index
   const categoryIndex = useMemo(() => {
     const map = new Map();
     for (const c of categoryOptions) {
@@ -181,7 +177,15 @@ export default function Products() {
       const raw = c.slug;
       map.set(raw, c);
       map.set(encodeURIComponent(raw), c);
-      map.set(normalize(raw), c);
+      map.set(
+        raw
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, ""),
+        c
+      );
     }
     return map;
   }, [categoryOptions]);
@@ -192,12 +196,18 @@ export default function Products() {
     return (
       categoryIndex.get(decoded) ||
       categoryIndex.get(categorySlugParam) ||
-      categoryIndex.get(normalize(decoded)) ||
+      categoryIndex.get(
+        decoded
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+      ) ||
       null
     );
   }, [categorySlugParam, categoryIndex]);
 
-  // ---- labels (prefer ID lookup if present)
   const activeCategoryLabel = useMemo(() => {
     if (categoryIdParam && categoryOptions.length) {
       return (
@@ -217,12 +227,11 @@ export default function Products() {
     );
   }, [brandSlugParam, brandOptions]);
 
-  // ---- helpful banner if provided slug can’t be mapped (brand only; category prefers ID)
   useEffect(() => {
     if (brandSlugParam && brandOptions.length && !mappedBrandIdFromSlug) {
       setMetaNotice("Brand filter not recognized.");
     } else if (
-      !categoryIdParam && // if ID provided, we trust it
+      !categoryIdParam &&
       categorySlugParam &&
       categoryOptions.length &&
       !resolvedCategory
@@ -241,16 +250,14 @@ export default function Products() {
     categoryIdParam,
   ]);
 
-  // ------------------------------------------------------------------
-  // Reset list ONLY when URL-level filters change (not when mappings resolve)
-  // ------------------------------------------------------------------
+  // Reset list when URL-level filters change
   const resetKey = useMemo(
     () =>
       JSON.stringify({
         sort,
         order,
         query: searchTerm,
-        brand: brandParam || brandSlugParam, // 👈 include raw brand param
+        brand: brandParam || brandSlugParam,
         category: categorySlugParam,
         categoryId: categoryIdParam,
       }),
@@ -274,43 +281,41 @@ export default function Products() {
     setError(null);
   }, [resetKey]);
 
-  // ---- build filter QS (prefer category_id from URL)
+  // Build filter QS
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
 
     if (sort) qs.set("sort", sort);
     if (order) qs.set("order", order);
 
-    // Only send 'query' when 3+ chars (same as Search.jsx)
-    if (isSearchActive) qs.set("query", searchTerm);
+    if (searchTerm.length >= MIN_SEARCH_LEN) qs.set("query", searchTerm);
 
-    // ✅ BRAND: if sidebar provided numeric IDs (CSV) -> send them as brand=<csv>
     if (brandParam && isCsvOfIds(brandParam)) {
       qs.set("brand", normalizeCsv(brandParam));
     } else if (mappedBrandIdFromSlug) {
-      // deep link with slug -> map to id and send as brand=<id>
       qs.set("brand", String(mappedBrandIdFromSlug));
     } else if (brandSlugParam) {
-      // fallback: send slug in a separate key if backend understands it
       qs.set("brand_slug", brandSlugParam);
     }
 
-    // CATEGORY (prefer ID)
     if (categoryIdParam) {
+      // ✅ category_id takes precedence
       qs.set("category_id", String(categoryIdParam));
+      // (Optional) some backends also accept 'category' as id
+      if (!qs.has("category")) qs.set("category", String(categoryIdParam));
     } else if (resolvedCategory?.id) {
       qs.set("category_id", String(resolvedCategory.id));
+      if (!qs.has("category")) qs.set("category", String(resolvedCategory.id));
     } else if (categorySlugParam) {
       const dec = decodeURIComponent(categorySlugParam);
       qs.set("category_slug", dec);
-      qs.set("category", dec); // whichever your backend honors
+      qs.set("category", dec);
     }
 
     return qs.toString();
   }, [
     sort,
     order,
-    isSearchActive,
     searchTerm,
     brandParam,
     brandSlugParam,
@@ -320,15 +325,16 @@ export default function Products() {
     categoryIdParam,
   ]);
 
-  // ---- fetch a specific page and (optionally) append
+  // fetch one page
   const fetchPage = useCallback(
     async (pageToFetch, { append }) => {
       const qs = new URLSearchParams(baseFiltersQS);
       qs.set("per_page", String(PER_PAGE));
       qs.set("page", String(pageToFetch));
 
-      // Use the same endpoint as Search.jsx
       const url = `${API_V1}/products?${qs.toString()}`;
+      // Optional: debug the outgoing URL
+      // console.debug("[products] url", url);
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -354,14 +360,16 @@ export default function Products() {
     [baseFiltersQS]
   );
 
-  // ---- initial load (page 1)
+  // initial load
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (isShortSearchOnly) {
           if (!cancelled) {
-            setItems([]); setHasMore(false); setInitialLoading(false);
+            setItems([]);
+            setHasMore(false);
+            setInitialLoading(false);
           }
           return;
         }
@@ -372,10 +380,12 @@ export default function Products() {
         if (!cancelled) setInitialLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [fetchPage, isShortSearchOnly]);
 
-  // ---- onIntersect handler
+  // infinite scroll
   const handleIntersect = useCallback(async () => {
     if (loadingLock.current || loadingMore || !hasMore || initialLoading) return;
     loadingLock.current = true;
@@ -421,6 +431,9 @@ export default function Products() {
         <div className="flex flex-col md:flex-row gap-8">
           <FilterSidebar />
           <section className="flex-1">
+            {/* Navigator placeholder to keep layout consistent */}
+            {hasCategoryFilter && <div className="mb-6" />}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="bg-white rounded-lg shadow">
@@ -433,7 +446,6 @@ export default function Products() {
               ))}
             </div>
 
-            {/* Centered spinner under skeletons */}
             <div className="mt-8 flex justify-center">
               <Spinner size="lg" label="Loading products…" />
             </div>
@@ -452,7 +464,9 @@ export default function Products() {
       <div className="flex flex-col md:flex-row gap-8">
         <FilterSidebar />
 
-        <section className="flex-1">
+        <section className="flex-1 min-w-0">
+          {hasCategoryFilter && <CategoryNavigator />}
+
           {(activeBrandLabel || activeCategoryLabel) && (
             <p className="mb-4 text-lg text-gray-700">
               Showing products for{" "}
@@ -513,13 +527,11 @@ export default function Products() {
                 ))}
               </div>
 
-              {/* Sentinel triggers the next page load when visible */}
               <InfiniteScrollSentinel
                 onIntersect={handleIntersect}
                 disabled={!hasMore}
               />
 
-              {/* Bottom status while loading more */}
               {loadingMore && (
                 <div className="my-6 flex justify-center">
                   <Spinner label="Loading more…" />

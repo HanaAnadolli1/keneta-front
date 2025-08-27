@@ -124,7 +124,7 @@ function ProductCard({
 
           {/* Price row: fixed minimum height */}
           <div className="mt-2 flex items-baseline gap-2 min-h-[1.5rem]">
-            <span className="text-indigo-600 font-bold">{priceLabel}</span>
+            <span className="text-[var(--secondary)] font-bold">{priceLabel}</span>
             {hasStrike && strikeLabel && (
               <span className="text-sm text-gray-400 line-through">
                 {strikeLabel}
@@ -159,7 +159,7 @@ function ProductCard({
               ${
                 busy
                   ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  : "bg-[var(--primary)] text-white border border-[var(--primary)] hover:bg-white hover:text-[var(--primary)] hover:border-[var(--primary)]"
               }`}
           >
             {busy ? "Adding…" : "Add to Cart"}
