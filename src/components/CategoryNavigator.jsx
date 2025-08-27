@@ -187,13 +187,13 @@ export default function CategoryNavigator() {
         // More room between items so it breathes
         spaceBetween={16}
         // Cap visible slides at 5 on md+; fewer on small screens to avoid crowding
-        slidesPerView={2.2}
+        slidesPerView={4}
         breakpoints={{
-          480: { slidesPerView: 3 },
+          480: { slidesPerView: 4 },
           640: { slidesPerView: 4 },
-          768: { slidesPerView: 5 },
-          1024: { slidesPerView: 5 },
-          1280: { slidesPerView: 5 },
+          768: { slidesPerView: 6 },
+          1024: { slidesPerView: 7 },
+          1280: { slidesPerView: 7 },
         }}
       >
         {children.map((cat) => (
