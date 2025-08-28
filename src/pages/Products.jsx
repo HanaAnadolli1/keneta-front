@@ -7,8 +7,11 @@ import React, {
   useRef,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { List as ListIcon, LayoutGrid as GridIcon } from "lucide-react";
+
 import FilterSidebar from "../components/FilterSidebar";
 import ProductCard from "../components/ProductCard";
+import ProductListItem from "../components/ProductListItem"; // ⬅️ use your list component
 import InfiniteScrollSentinel from "../components/InfiniteScrollSentinel";
 import Spinner from "../components/Spinner";
 import { useWishlist } from "../context/WishlistContext";
@@ -22,14 +25,6 @@ const MIN_SEARCH_LEN = 3;
 
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
-
-const normalize = (s) =>
-  s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 
 const isCsvOfIds = (v) =>
   typeof v === "string" && /^[0-9]+(,[0-9]+)*$/.test(v.trim());
@@ -72,10 +67,12 @@ function extractProductsPayload(resp) {
 
 export default function Products() {
   const [params] = useSearchParams();
+
   const sort = params.get("sort") || "";
   const order = params.get("order") || "";
   const searchTerm = params.get("query")?.trim() || "";
-  const categorySlugParam = params.get("category") || "";
+  const categorySlugParam =
+    params.get("category") || params.get("category_slug") || "";
   const categoryIdParam = params.get("category_id") || "";
 
   const brandParam = params.get("brand") || "";
@@ -101,6 +98,14 @@ export default function Products() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
+
+  // grid/list toggle (persist to sessionStorage)
+  const [viewMode, setViewMode] = useState(() => {
+    return sessionStorage.getItem("products.viewMode") || "grid";
+  });
+  useEffect(() => {
+    sessionStorage.setItem("products.viewMode", viewMode);
+  }, [viewMode]);
 
   const loadingLock = useRef(false);
 
@@ -134,7 +139,7 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  // Load categories — ensure the requested slug is included (fetch big page if needed)
+  // Load categories — ensure the requested slug is included
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -181,8 +186,7 @@ export default function Products() {
     if (!brandSlugParam || !brandOptions.length) return null;
     return (
       brandOptions.find(
-        (b) =>
-          slugifyBrandLabel(b.label) === slugifyBrandLabel(brandSlugParam)
+        (b) => slugifyBrandLabel(b.label) === slugifyBrandLabel(brandSlugParam)
       )?.id ?? null
     );
   }, [brandSlugParam, brandOptions]);
@@ -324,7 +328,6 @@ export default function Products() {
     }
 
     if (categoryIdParam) {
-      // category_id takes precedence
       qs.set("category_id", String(categoryIdParam));
       if (!qs.has("category")) qs.set("category", String(categoryIdParam));
     } else if (resolvedCategory?.id) {
@@ -357,7 +360,6 @@ export default function Products() {
       qs.set("page", String(pageToFetch));
 
       const url = `${API_V1}/products?${qs.toString()}`;
-
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -488,27 +490,60 @@ export default function Products() {
         <section className="flex-1 min-w-0">
           {hasCategoryFilter && <CategoryNavigator />}
 
-          {(activeBrandLabel || activeCategoryLabel) && (
-            <p className="mb-4 text-lg text-gray-700">
-              Showing products for{" "}
-              {activeCategoryLabel && (
-                <>
-                  category:{" "}
-                  <span className="font-semibold text-indigo-600">
-                    {activeCategoryLabel}
-                  </span>
-                </>
-              )}
-              {activeBrandLabel && (
-                <>
-                  {activeCategoryLabel && " and "}brand:{" "}
-                  <span className="font-semibold text-indigo-600">
-                    {activeBrandLabel}
-                  </span>
-                </>
-              )}
-            </p>
-          )}
+          <div className="mb-4 flex items-center justify-between">
+            {(activeBrandLabel || activeCategoryLabel) ? (
+              <p className="text-lg text-gray-700">
+                Showing products for{" "}
+                {activeCategoryLabel && (
+                  <>
+                    category:{" "}
+                    <span className="font-semibold text-indigo-600">
+                      {activeCategoryLabel}
+                    </span>
+                  </>
+                )}
+                {activeBrandLabel && (
+                  <>
+                    {activeCategoryLabel && " and "}brand:{" "}
+                    <span className="font-semibold text-indigo-600">
+                      {activeBrandLabel}
+                    </span>
+                  </>
+                )}
+              </p>
+            ) : (
+              <span />
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`p-2 rounded transition ${
+                  viewMode === "list"
+                    ? "text-[#132232] border border-[#132232]"
+                    : "text-gray-500 hover:text-[#132232] border border-transparent"
+                }`}
+                aria-label="List view"
+                title="List view"
+              >
+                <ListIcon size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`p-2 rounded transition ${
+                  viewMode === "grid"
+                    ? "text-[#132232] border border-[#132232]"
+                    : "text-gray-500 hover:text-[#132232] border border-transparent"
+                }`}
+                aria-label="Grid view"
+                title="Grid view"
+              >
+                <GridIcon size={18} />
+              </button>
+            </div>
+          </div>
 
           {metaNotice && (
             <div
@@ -519,7 +554,6 @@ export default function Products() {
             </div>
           )}
 
-          {/* Short-search guard */}
           {isShortSearchOnly && (
             <p className="text-center text-gray-500">
               Shkruani të paktën {MIN_SEARCH_LEN} karaktere për të kërkuar.
@@ -534,19 +568,40 @@ export default function Products() {
             </p>
           ) : !isShortSearchOnly ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {items.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    isWishlisted={isWishlisted(product.id)}
-                    toggleWishlist={toggleWishlist}
-                    handleAddToCart={handleAdd}
-                    busy={busyId === Number(product.id)}
-                    prefetch={prefetch}
-                  />
-                ))}
-              </div>
+              {/* GRID VIEW */}
+              {viewMode === "grid" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {items.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      isWishlisted={isWishlisted(product.id)}
+                      toggleWishlist={toggleWishlist}
+                      handleAddToCart={handleAdd}
+                      busy={busyId === Number(product.id)}
+                      prefetch={prefetch}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* LIST VIEW — using your component */}
+              {viewMode === "list" && (
+                <ul className="space-y-5">
+                  {items.map((product) => (
+                    <li key={product.id}>
+                      <ProductListItem
+                        product={product}
+                        isWishlisted={isWishlisted(product.id)}
+                        toggleWishlist={toggleWishlist}
+                        handleAddToCart={handleAdd}
+                        busy={busyId === Number(product.id)}
+                        prefetch={prefetch}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               <InfiniteScrollSentinel
                 onIntersect={handleIntersect}
