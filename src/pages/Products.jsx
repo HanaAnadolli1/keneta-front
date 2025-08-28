@@ -134,29 +134,47 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  // Load categories
+  // Load categories — ensure the requested slug is included (fetch big page if needed)
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
+        const slugParam =
+          (params.get("category") || params.get("category_slug") || "").trim();
+        const wanted = decodeURIComponent(slugParam || "");
+
         const cached = sessionStorage.getItem("categoryOptions");
-        if (cached) {
-          setCategoryOptions(JSON.parse(cached));
-          return;
+        let all = cached ? JSON.parse(cached) : [];
+
+        const cacheHasWanted =
+          wanted &&
+          all.some((c) => {
+            const slugs = [
+              c?.slug,
+              ...(Array.isArray(c?.translations)
+                ? c.translations.map((t) => t?.slug).filter(Boolean)
+                : []),
+            ].filter(Boolean);
+            return slugs.some((s) => s === wanted);
+          });
+
+        if (!all.length || (wanted && !cacheHasWanted)) {
+          const res = await fetch(
+            `${API_V1}/categories?sort=id&order=asc&limit=10000`,
+            { signal: ac.signal }
+          );
+          const json = await res.json();
+          all = json?.data || [];
+          sessionStorage.setItem("categoryOptions", JSON.stringify(all));
         }
-        const res = await fetch(`${API_V1}/categories?sort=id`, {
-          signal: ac.signal,
-        });
-        const json = await res.json();
-        const all = json?.data || [];
-        sessionStorage.setItem("categoryOptions", JSON.stringify(all));
+
         setCategoryOptions(all);
       } catch (e) {
         if (e.name !== "AbortError") console.warn("category load failed", e);
       }
     })();
     return () => ac.abort();
-  }, []);
+  }, [params]);
 
   // resolve brand
   const mappedBrandIdFromSlug = useMemo(() => {
@@ -169,23 +187,30 @@ export default function Products() {
     );
   }, [brandSlugParam, brandOptions]);
 
-  // category tolerant index
+  // category tolerant index (includes translation slugs)
   const categoryIndex = useMemo(() => {
     const map = new Map();
     for (const c of categoryOptions) {
-      if (!c?.slug) continue;
-      const raw = c.slug;
-      map.set(raw, c);
-      map.set(encodeURIComponent(raw), c);
-      map.set(
-        raw
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, ""),
-        c
-      );
+      const slugs = [
+        c?.slug,
+        ...(Array.isArray(c?.translations)
+          ? c.translations.map((t) => t?.slug).filter(Boolean)
+          : []),
+      ].filter(Boolean);
+
+      for (const raw of slugs) {
+        map.set(raw, c);
+        map.set(encodeURIComponent(raw), c);
+        map.set(
+          raw
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, ""),
+          c
+        );
+      }
     }
     return map;
   }, [categoryOptions]);
@@ -299,9 +324,8 @@ export default function Products() {
     }
 
     if (categoryIdParam) {
-      // ✅ category_id takes precedence
+      // category_id takes precedence
       qs.set("category_id", String(categoryIdParam));
-      // (Optional) some backends also accept 'category' as id
       if (!qs.has("category")) qs.set("category", String(categoryIdParam));
     } else if (resolvedCategory?.id) {
       qs.set("category_id", String(resolvedCategory.id));
@@ -333,8 +357,6 @@ export default function Products() {
       qs.set("page", String(pageToFetch));
 
       const url = `${API_V1}/products?${qs.toString()}`;
-      // Optional: debug the outgoing URL
-      // console.debug("[products] url", url);
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -431,7 +453,6 @@ export default function Products() {
         <div className="flex flex-col md:flex-row gap-8">
           <FilterSidebar />
           <section className="flex-1">
-            {/* Navigator placeholder to keep layout consistent */}
             {hasCategoryFilter && <div className="mb-6" />}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">

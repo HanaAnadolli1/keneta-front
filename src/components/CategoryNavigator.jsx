@@ -25,7 +25,7 @@ function CategoryCard({ cat }) {
 
   return (
     <Link
-      to={`/products?category_id=${cat.id}`}
+      to={`/products?category=${encodeURIComponent(cat.slug)}`}
       className="group px-2 py-2 flex flex-col items-center justify-center text-center"
       title={cat.name}
     >

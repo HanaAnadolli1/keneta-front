@@ -136,9 +136,7 @@ export default function Menu() {
                   className="px-5 py-2 hover:bg-gray-100 text-[#132232] whitespace-nowrap transition-colors duration-150 cursor-pointer"
                 >
                   <Link
-                    to={`/products?category=${encodeURIComponent(
-                      cat.slug
-                    )}&category_id=${cat.id}`}
+                    to={`/products?category=${encodeURIComponent(cat.slug)}`}
                     className="block hover:text-[#1a3c5c]"
                   >
                     {cat.name}
@@ -201,9 +199,7 @@ export default function Menu() {
                       className="hover:bg-gray-100 whitespace-nowrap"
                     >
                       <Link
-                        to={`/products?category=${encodeURIComponent(
-                          cat.slug
-                        )}&category_id=${cat.id}`}
+                        to={`/products?category=${encodeURIComponent(cat.slug)}`}
                         className="block px-5 py-2 text-sm font-medium text-[#132232] hover:text-[#1a3c5c] transition-colors"
                       >
                         {cat.name}
@@ -289,9 +285,7 @@ export default function Menu() {
                     {/* Quick "view all" for this root */}
                     <div className="ml-1">
                       <Link
-                        to={`/products?category=${encodeURIComponent(
-                          root.slug
-                        )}&category_id=${root.id}`}
+                        to={`/products?category=${encodeURIComponent(root.slug)}`}
                         className="text-xs text-indigo-600 hover:underline"
                         onClick={closeAll}
                       >
@@ -324,9 +318,7 @@ export default function Menu() {
                                 </button>
                                 {/* Tap to filter by this Level 2 directly */}
                                 <Link
-                                  to={`/products?category=${encodeURIComponent(
-                                    c2.slug
-                                  )}&category_id=${c2.id}`}
+                                  to={`/products?category=${encodeURIComponent(c2.slug)}`}
                                   className="text-xs text-indigo-600 px-1 hover:underline"
                                   onClick={closeAll}
                                 >
@@ -350,9 +342,7 @@ export default function Menu() {
                                           <button
                                             className="text-left flex-1 py-1 px-1 text-sm"
                                             onClick={() => {
-                                              setActiveLevel3Id(
-                                                open3 ? null : c3.id
-                                              );
+                                              setActiveLevel3Id(open3 ? null : c3.id);
                                               if (!open3) fetchChildren(c3.id);
                                             }}
                                             aria-expanded={open3}
@@ -361,9 +351,7 @@ export default function Menu() {
                                           </button>
                                           {/* Tap to filter by this Level 3 directly */}
                                           <Link
-                                            to={`/products?category=${encodeURIComponent(
-                                              c3.slug
-                                            )}&category_id=${c3.id}`}
+                                            to={`/products?category=${encodeURIComponent(c3.slug)}`}
                                             className="text-xs text-indigo-600 px-1 hover:underline"
                                             onClick={closeAll}
                                           >
@@ -383,7 +371,7 @@ export default function Menu() {
                                                 <Link
                                                   to={`/products?category=${encodeURIComponent(
                                                     c4.slug
-                                                  )}&category_id=${c4.id}`}
+                                                  )}`}
                                                   className="block py-1 px-1 text-sm text-[#132232] hover:text-[#1a3c5c] transition-colors"
                                                   onClick={closeAll}
                                                 >
