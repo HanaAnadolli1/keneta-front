@@ -27,6 +27,8 @@ import "./index.css";
 import GDPR from "./pages/account/GDPR";
 import Reviews from "./pages/account/Reviews";
 
+import BackToTop from "./components/BackToTop";
+
 function NotFound() {
   return (
     <div className="container mx-auto px-4 py-10 text-center">
@@ -44,6 +46,7 @@ export default function App() {
 
   return (
     <Router>
+      <BackToTop showAt={300} />
       <Header />
 
       <Routes>
