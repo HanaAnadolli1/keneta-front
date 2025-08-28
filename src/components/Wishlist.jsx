@@ -18,16 +18,6 @@ import logo from "../assets/logo.png";
 
 const GUEST_KEY = "guest_wishlist";
 
-// Compute API root (the grid uses /api, while API_V1 is /api/v1)
-const API_ROOT = (() => {
-  try {
-    const u = new URL(API_V1);
-    return `${u.origin}/api`;
-  } catch {
-    return "https://keneta.laratest-app.com/api";
-  }
-})();
-
 /* ----------------------------- helpers ---------------------------------- */
 
 function decodeJWT(token) {
@@ -42,17 +32,30 @@ function decodeJWT(token) {
 
 // Build a robust product image URL; fall back to inline SVG (no network)
 function getCardImage(product) {
+  const candidates = [
+    product?.base_image?.large_image_url,
+    product?.base_image?.medium_image_url,
+    product?.base_image?.small_image_url,
+    product?.thumbnail_url,
+    product?.image_url,
+    product?.images?.[0]?.url,
+    product?.images?.[0]?.large_image_url,
+    product?.images?.[0]?.medium_image_url,
+    product?.images?.[0]?.small_image_url,
+  ].filter(Boolean);
+
+  const first = candidates[0];
+  if (first) return first;
+
   return (
-    product?.base_image?.large_image_url ||
-    product?.base_image?.medium_image_url ||
     "data:image/svg+xml;utf8," +
-      encodeURIComponent(
-        `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'>
-          <rect width='100%' height='100%' fill='#f3f4f6'/>
-          <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
-            font-size='10' fill='#9ca3af'>no image</text>
-        </svg>`
-      )
+    encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'>
+        <rect width='100%' height='100%' fill='#f3f4f6'/>
+        <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
+          font-size='10' fill='#9ca3af'>no image</text>
+      </svg>`
+    )
   );
 }
 
@@ -77,10 +80,10 @@ function stripHTML(str) {
 function resolvePrices(product, sale) {
   const priceLabel = stripHTML(
     sale?.priceLabel ||
+      product?.formatted_final_price ||
       product?.formatted_price ||
       product?.price_html ||
       product?.display_price ||
-      product?.formatted_final_price ||
       (Number.isFinite(product?.final_price)
         ? formatCurrency(product.final_price, product)
         : Number.isFinite(product?.price)
@@ -105,23 +108,22 @@ function resolvePrices(product, sale) {
   return { priceLabel, strikeLabel, hasStrike };
 }
 
-// Batch-fetch the *bare* product shape so image fields match the grid
-async function fetchBareByIds(ids) {
+// Hydrate minimal product shape so image/price fields match the grid
+async function fetchBareByIds(ids, token) {
   const unique = Array.from(new Set(ids.map(Number))).filter(Number.isFinite);
   if (unique.length === 0) return [];
 
-  // Try ids[]=1&ids[]=2 style first
-  const qs1 = unique.map((id) => `ids[]=${encodeURIComponent(id)}`).join("&");
-  let res = await fetch(`${API_ROOT}/products/bare?${qs1}`, {
-    headers: { Accept: "application/json" },
-  });
+  const headers = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  // Fallback to ids=1,2 if needed
+  // Try ids[]=1 style
+  const qs1 = unique.map((id) => `ids[]=${encodeURIComponent(id)}`).join("&");
+  let res = await fetch(`${API_V1}/products/bare?${qs1}`, { headers });
+
+  // Fallback ids=1,2
   if (!res.ok) {
     const qs2 = `ids=${unique.join(",")}`;
-    res = await fetch(`${API_ROOT}/products/bare?${qs2}`, {
-      headers: { Accept: "application/json" },
-    });
+    res = await fetch(`${API_V1}/products/bare?${qs2}`, { headers });
   }
 
   const json = await res.json().catch(() => ({}));
@@ -153,7 +155,6 @@ function waitForImages(root, timeoutMs = 7000) {
   });
 }
 
-// Cross-origin helper
 function isCrossOrigin(url) {
   try {
     return new URL(url, window.location.href).origin !== window.location.origin;
@@ -162,8 +163,7 @@ function isCrossOrigin(url) {
   }
 }
 
-// Public CORS proxy: https://images.weserv.nl
-// It expects the url WITHOUT protocol; we keep querystring and add a cache-buster.
+// Public CORS proxy (for PDF capture of cross-origin images)
 function toCORSProxy(originalUrl, cacheBust = true) {
   try {
     const u = new URL(originalUrl, window.location.href);
@@ -189,7 +189,9 @@ const WishlistRow = memo(function WishlistRow({
   removeItem,
 }) {
   const product = item.product;
-  const urlKey = product?.url_key;
+
+  const urlKey =
+    product?.url_key || product?.slug || (product?.id ? String(product.id) : "");
 
   const sale = useSaleFlag(product, { apiBase: API_V1 });
   const { priceLabel, strikeLabel, hasStrike } = resolvePrices(product, sale);
@@ -200,12 +202,16 @@ const WishlistRow = memo(function WishlistRow({
   // During PDF capture, proxy cross-origin images so html2canvas can read pixels
   const imgSrc = useMemo(() => {
     if (!rawImage) return rawImage;
-    if (showHeaderForPDF && cross) {
-      return toCORSProxy(rawImage, true);
-    }
-    // normal page view
+    if (showHeaderForPDF && cross) return toCORSProxy(rawImage, true);
     return rawImage;
   }, [rawImage, cross, showHeaderForPDF]);
+
+  // ✅ Be permissive: only declare OOS if we can prove it
+  const qty = Number(product?.quantity);
+  const computedInStock =
+    product?.in_stock === true ||
+    (product?.in_stock === undefined &&
+      (!Number.isFinite(qty) || qty > 0));
 
   return (
     <div className="flex items-center justify-between gap-4 pb-4 p-2">
@@ -216,7 +222,7 @@ const WishlistRow = memo(function WishlistRow({
         <img
           src={imgSrc}
           crossOrigin={showHeaderForPDF && cross ? "anonymous" : undefined}
-          alt={product?.name || "Product"}
+          alt={product?.name || product?.product_name || `#${item.product_id}`}
           className="w-20 h-20 object-contain bg-gray-50"
           referrerPolicy={showHeaderForPDF ? "no-referrer" : undefined}
           onError={(e) => {
@@ -225,7 +231,9 @@ const WishlistRow = memo(function WishlistRow({
         />
 
         <div>
-          <p className="font-medium">{product?.name || `#${item.product_id}`}</p>
+          <p className="font-medium">
+            {product?.name || product?.product_name || `#${item.product_id}`}
+          </p>
           <div className="text-gray-600 text-sm">
             <span className="font-medium">{priceLabel || "—"}</span>
             {hasStrike && strikeLabel && (
@@ -239,7 +247,7 @@ const WishlistRow = memo(function WishlistRow({
 
       <div className="flex items-center gap-4">
         {token ? (
-          (product?.in_stock ?? (product?.quantity ?? 0) > 0) ? (
+          computedInStock ? (
             <button
               onClick={() => moveToCart(item.product_id)}
               className="bg-[#001242] text-white px-4 py-2 rounded text-sm"
@@ -335,7 +343,7 @@ export default function Wishlist() {
     return { full_name, email, phone };
   }, [currentUser, jwtClaims]);
 
-  /* -------- Load wishlist with /products/bare so images/shape match grid ---- */
+  /* -------- Load wishlist and hydrate with /api/v1/products/bare ---------- */
 
   const fetchWishlist = useCallback(async () => {
     setLoading(true);
@@ -354,25 +362,28 @@ export default function Wishlist() {
           ? json.wishlist
           : [];
 
-        const productIds = Array.from(
-          new Set(
-            rows
-              .map((r) =>
-                Number(r?.product_id ?? r?.product?.id ?? r?.id)
-              )
-              .filter(Number.isFinite)
-          )
-        );
+        const ids = [];
+        const prefilled = new Map(); // id -> product (if present)
+        for (const r of rows) {
+          const id = Number(r?.product_id ?? r?.product?.id ?? r?.id);
+          if (Number.isFinite(id)) {
+            ids.push(id);
+            if (r?.product && typeof r.product === "object") {
+              prefilled.set(id, r.product);
+            }
+          }
+        }
 
-        // 2) Hydrate via /products/bare
-        const bare = await fetchBareByIds(productIds);
+        // 2) Hydrate via /products/bare for any missing ones
+        const toFetch = ids.filter((id) => !prefilled.has(id));
+        const bare = await fetchBareByIds(toFetch, token);
         const byId = new Map(bare.map((p) => [Number(p.id), p]));
 
         // 3) Build items
-        const items = productIds.map((id) => ({
+        const items = ids.map((id) => ({
           id,
           product_id: id,
-          product: byId.get(Number(id)) || null,
+          product: prefilled.get(id) || byId.get(id) || { id },
         }));
 
         setWishlist(items);
@@ -391,12 +402,12 @@ export default function Wishlist() {
         if (ids.length === 0) {
           setWishlist([]);
         } else {
-          const bare = await fetchBareByIds(ids);
+          const bare = await fetchBareByIds(ids, null);
           const byId = new Map(bare.map((p) => [Number(p.id), p]));
           const items = ids.map((id) => ({
             id,
             product_id: id,
-            product: byId.get(Number(id)) || null,
+            product: byId.get(Number(id)) || { id },
           }));
           setWishlist(items);
         }
@@ -427,7 +438,17 @@ export default function Wishlist() {
       alert("Please select a variant on the product page.");
       return;
     }
-    if (!product || (product?.in_stock ?? (product?.quantity ?? 0) <= 0)) {
+    if (!product) {
+      alert("Product details missing.");
+      return;
+    }
+
+    // ✅ Only block if we can PROVE it's out of stock
+    const qty = Number(product?.quantity);
+    const definitelyOut =
+      product?.in_stock === false || (Number.isFinite(qty) && qty <= 0);
+
+    if (definitelyOut) {
       alert("Product is out of stock.");
       return;
     }
