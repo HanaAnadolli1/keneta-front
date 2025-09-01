@@ -7,19 +7,25 @@ export function getCustomer() {
   return apiFetch(`${API_V1}/customer/get`);
 }
 
-export function updateCustomerProfile(payload) {
-  // payload can include text fields + image[] (File)
-  const form = new FormData();
-  Object.entries(payload).forEach(([k, v]) => {
-    if (Array.isArray(v)) v.forEach(f => form.append(`${k}[]`, f));
-    else form.append(k, v ?? "");
-  });
+/**
+ * Update customer profile.
+ * Expects a FormData instance (send it directly from your form).
+ * Uses real PUT with multipart/form-data (browser sets boundary automatically).
+ */
+export function updateCustomerProfile(formData) {
+  if (!(formData instanceof FormData)) {
+    throw new Error("updateCustomerProfile expects FormData");
+  }
+
+  // Spoof PUT so Laravel/Symfony parse multipart properly
+  formData.append("_method", "PUT");
 
   return apiFetch(`${API_V1}/customer/profile`, {
-    method: "POST",
-    body: form
+    method: "POST",       // <-- POST, not PUT
+    body: formData,       // <-- FormData; don't set Content-Type
   });
 }
+
 
 // Password reset (request email link)
 export function requestPasswordReset(email) {
@@ -27,7 +33,7 @@ export function requestPasswordReset(email) {
   form.append("email", email);
   return apiFetch(`${API_V1}/customer/forgot-password`, {
     method: "POST",
-    body: form
+    body: form,
   });
 }
 
@@ -50,7 +56,6 @@ export function getGdprRequests() {
 }
 
 export function createGdprRequest(payload) {
-  // Expecting: { type: "update"|"delete", message: "..." }
   const form = new FormData();
   Object.entries(payload).forEach(([k, v]) => form.append(k, v ?? ""));
   return apiFetch(`${API_V1}/customer/gdpr`, { method: "POST", body: form });
@@ -63,7 +68,6 @@ export function getGdprRequestById(id) {
 export function revokeGdprRequest(id) {
   return apiFetch(`${API_V1}/customer/gdpr/revoke/${id}`, { method: "PUT" });
 }
-
 
 // --- Product reviews (by product) ---
 export function getProductReviews(productId) {

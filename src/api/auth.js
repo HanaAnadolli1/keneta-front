@@ -22,6 +22,27 @@ export function logout() {
   delete axios.defaults.headers.common["Authorization"];
 }
 
+// --- Helpers ---
+async function parseResponse(res) {
+  const text = await res.text();
+  try {
+    return { data: JSON.parse(text), raw: text };
+  } catch {
+    return { data: null, raw: text };
+  }
+}
+
+function buildHeaders(baseHeaders = {}, hasFormData) {
+  const token = localStorage.getItem("token");
+  return {
+    Accept: "application/json",
+    // Only add JSON Content-Type if NOT sending FormData and caller didn't set it
+    ...(hasFormData ? {} : baseHeaders["Content-Type"] ? {} : {}),
+    ...(baseHeaders || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 // Register a new customer
 export async function register(data) {
   const form = new FormData();
@@ -30,12 +51,12 @@ export async function register(data) {
 
   const res = await fetch(`${API_V1}/customer/register`, {
     method: "POST",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json" }, // don't set Content-Type for FormData
     body: form,
   });
 
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message || "Registration failed");
+  const { data: json, raw } = await parseResponse(res);
+  if (!res.ok) throw new Error(json?.message || raw || "Registration failed");
   return persistToken(json);
 }
 
@@ -53,28 +74,42 @@ export async function login({ email, password, device_name = "react" }) {
     body: form,
   });
 
-  const json = await res.json().catch(() => ({}));
+  const { data: json, raw } = await parseResponse(res);
   if (!res.ok) {
-    logout(); // Clear any existing tokens
-    throw new Error(json.message || "Login failed");
+    logout();
+    throw new Error(json?.message || raw || "Login failed");
   }
-
   return persistToken(json);
 }
 
 // Authenticated API call wrapper
 export async function apiFetch(url, options = {}) {
-  const token = localStorage.getItem("token");
-  const headers = {
-    Accept: "application/json",
-    ...(options.headers || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const { body, headers = {}, ...rest } = options;
+  const isForm = body instanceof FormData;
 
-  const res = await fetch(url, { ...options, headers });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message || "API request failed");
-  return json.data ?? json;
+  const res = await fetch(url, {
+    ...rest,
+    // Don’t force Content-Type for FormData; leave boundary to the browser
+    headers: buildHeaders(headers, isForm),
+    // If callers pass a plain object body, they should JSON.stringify it themselves.
+    // We keep it simple: pass-through whatever they provide.
+    body,
+  });
+
+  const { data: json, raw } = await parseResponse(res);
+
+  if (!res.ok) {
+    // Prefer API message, then raw text, then status text
+    const msg = json?.message || raw || res.statusText || "API request failed";
+    throw new Error(msg);
+  }
+
+  // Normalize `{ data: ... }` responses
+  if (json && typeof json === "object") {
+    return json.data ?? json;
+  }
+  // Non-JSON responses
+  return raw;
 }
 
 // Fetch current logged-in user

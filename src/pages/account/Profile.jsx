@@ -23,20 +23,35 @@ export default function Profile() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError("");
     setMessage("");
-    try {
-      const form = new FormData(e.currentTarget);
-      const payload = Object.fromEntries(form.entries());
-      const files = e.currentTarget.image?.files;
-      if (files?.length) payload["image"] = Array.from(files);
 
-      await updateCustomerProfile(payload);
+    try {
+      const formEl = e.currentTarget;
+      const form = new FormData(formEl);
+
+      // If user didn't enter a new password, remove all password fields
+      const newPw = (form.get("new_password") || "").toString().trim();
+      if (!newPw) {
+        form.delete("current_password");
+        form.delete("new_password");
+        form.delete("new_password_confirmation");
+      }
+
+      // If no image selected, remove it
+      const imgInput = formEl.elements.namedItem("image");
+      if (!(imgInput && imgInput.files && imgInput.files.length)) {
+        form.delete("image");
+      }
+
+      await updateCustomerProfile(form); // POST + _method=PUT as we set earlier
       await load();
       setEditing(false);
       setMessage("Profile updated successfully.");
@@ -49,11 +64,10 @@ export default function Profile() {
 
   if (!data) return <p>Loading…</p>;
 
-  // ===== READ MODE (exact look) =====
+  // ===== READ MODE =====
   if (!editing) {
     return (
       <div>
-        {/* Header row: title + edit button */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-semibold">Profile</h2>
           <button
@@ -67,7 +81,6 @@ export default function Profile() {
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
         {message && <p className="mb-3 text-sm text-emerald-600">{message}</p>}
 
-        {/* Rows with thin dividers */}
         <div className="bg-white rounded-xl">
           <FieldRow label="First Name">{data.first_name}</FieldRow>
           <FieldRow label="Last Name">{data.last_name}</FieldRow>
@@ -82,7 +95,6 @@ export default function Profile() {
           </FieldRow>
         </div>
 
-        {/* Delete button */}
         <div className="mt-6">
           <button
             type="button"
@@ -96,7 +108,7 @@ export default function Profile() {
     );
   }
 
-  // ===== EDIT MODE (same layout but with form) =====
+  // ===== EDIT MODE =====
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -105,10 +117,24 @@ export default function Profile() {
 
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form
+        className="space-y-5"
+        onSubmit={handleSubmit}
+        encType="multipart/form-data"
+      >
         <TwoCol>
-          <Input name="first_name" label="First Name" defaultValue={data.first_name} required />
-          <Input name="last_name" label="Last Name" defaultValue={data.last_name} required />
+          <Input
+            name="first_name"
+            label="First Name"
+            defaultValue={data.first_name}
+            required
+          />
+          <Input
+            name="last_name"
+            label="Last Name"
+            defaultValue={data.last_name}
+            required
+          />
         </TwoCol>
         <TwoCol>
           <Select
@@ -129,18 +155,34 @@ export default function Profile() {
           />
         </TwoCol>
         <TwoCol>
-          <Input name="email" label="Email" type="email" defaultValue={data.email} />
+          <Input
+            name="email"
+            label="Email"
+            type="email"
+            defaultValue={data.email}
+          />
           <Input name="phone" label="Phone" defaultValue={data.phone || ""} />
         </TwoCol>
 
         <TwoCol>
-          <Input name="current_password" label="Current Password" type="password" />
-          <Input name="new_password" label="New Password" type="password" />
+          <Input
+            name="current_password"
+            label="Current Password"
+            type="password"
+            autoComplete="current-password"
+          />
+          <Input
+            name="new_password"
+            label="New Password"
+            type="password"
+            autoComplete="new-password"
+          />
         </TwoCol>
         <Input
           name="new_password_confirmation"
           label="Confirm New Password"
           type="password"
+          autoComplete="new-password"
         />
 
         <div>
