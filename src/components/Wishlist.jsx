@@ -108,7 +108,22 @@ function resolvePrices(product, sale) {
   return { priceLabel, strikeLabel, hasStrike };
 }
 
-// Hydrate minimal product shape so image/price fields match the grid
+/** Normalize many possible API shapes into a product object */
+function normalizeProductShape(j) {
+  // common shapes: {data:{...}}, {data:[...]}, {...}, {product:{...}}
+  const p =
+    j?.data?.id
+      ? j.data
+      : Array.isArray(j?.data) && j.data[0]?.id
+      ? j.data[0]
+      : j?.product?.id
+      ? j.product
+      : j;
+
+  return p && Number(p.id) ? p : null;
+}
+
+/** Hydrate minimal product shape so image/price fields match the grid */
 async function fetchBareByIds(ids, token) {
   const unique = Array.from(new Set(ids.map(Number))).filter(Number.isFinite);
   if (unique.length === 0) return [];
@@ -116,24 +131,55 @@ async function fetchBareByIds(ids, token) {
   const headers = { Accept: "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  // Try ids[]=1 style
-  const qs1 = unique.map((id) => `ids[]=${encodeURIComponent(id)}`).join("&");
-  let res = await fetch(`${API_V1}/products/bare?${qs1}`, { headers });
+  // --- 1) Try batch endpoints first (fast path)
+  try {
+    // ids[]=1&ids[]=2
+    const qs1 = unique.map((id) => `ids[]=${encodeURIComponent(id)}`).join("&");
+    let res = await fetch(`${API_V1}/products/bare?${qs1}`, { headers });
 
-  // Fallback ids=1,2
-  if (!res.ok) {
-    const qs2 = `ids=${unique.join(",")}`;
-    res = await fetch(`${API_V1}/products/bare?${qs2}`, { headers });
+    // ids=1,2
+    if (!res.ok) {
+      const qs2 = `ids=${unique.join(",")}`;
+      res = await fetch(`${API_V1}/products/bare?${qs2}`, { headers });
+    }
+
+    if (res.ok) {
+      const json = await res.json().catch(() => ({}));
+      const items =
+        json?.items ??
+        json?.data?.items ??
+        (Array.isArray(json?.data) ? json.data : []) ??
+        json?.products ??
+        [];
+      if (Array.isArray(items) && items.length) return items;
+    }
+  } catch {
+    // fall through to per-ID
   }
 
-  const json = await res.json().catch(() => ({}));
-  const items =
-    json?.items ??
-    json?.data?.items ??
-    (Array.isArray(json?.data) ? json.data : []) ??
-    json?.products ??
-    [];
-  return items;
+  // --- 2) Fallback: fetch each product by id and normalize
+  const results = await Promise.all(
+    unique.map(async (id) => {
+      const tries = [
+        `${API_V1}/products/${id}`,
+        `${API_V1}/products?id=${id}`, // some backends
+      ];
+      for (const url of tries) {
+        try {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          const j = await r.json().catch(() => ({}));
+          const p = normalizeProductShape(j);
+          if (p) return p;
+        } catch {
+          /* try next */
+        }
+      }
+      return null;
+    })
+  );
+
+  return results.filter(Boolean);
 }
 
 // Wait until every <img> inside `root` has finished loading (or errored)
@@ -210,8 +256,7 @@ const WishlistRow = memo(function WishlistRow({
   const qty = Number(product?.quantity);
   const computedInStock =
     product?.in_stock === true ||
-    (product?.in_stock === undefined &&
-      (!Number.isFinite(qty) || qty > 0));
+    (product?.in_stock === undefined && (!Number.isFinite(qty) || qty > 0));
 
   return (
     <div className="flex items-center justify-between gap-4 pb-4 p-2">
@@ -343,7 +388,7 @@ export default function Wishlist() {
     return { full_name, email, phone };
   }, [currentUser, jwtClaims]);
 
-  /* -------- Load wishlist and hydrate with /api/v1/products/bare ---------- */
+  /* -------- Load wishlist and hydrate (batch + robust per-id fallback) ------ */
 
   const fetchWishlist = useCallback(async () => {
     setLoading(true);
@@ -374,7 +419,7 @@ export default function Wishlist() {
           }
         }
 
-        // 2) Hydrate via /products/bare for any missing ones
+        // 2) Hydrate via /products/bare or per-id for any missing ones
         const toFetch = ids.filter((id) => !prefilled.has(id));
         const bare = await fetchBareByIds(toFetch, token);
         const byId = new Map(bare.map((p) => [Number(p.id), p]));
