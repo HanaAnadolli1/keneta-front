@@ -2,9 +2,9 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 /**
- * Breadcrumb navigation component.
+ * Breadcrumb navigation.
  * items: Array<{ label: string, path?: string }>
- * The last item is considered the current page and is shown unlinked.
+ * The last item is the current page and is unlinked.
  */
 export default function Breadcrumbs({ items = [] }) {
   if (!Array.isArray(items) || items.length === 0) return null;
@@ -15,11 +15,11 @@ export default function Breadcrumbs({ items = [] }) {
         {items.map((item, idx) => {
           const isLast = idx === items.length - 1;
           return (
-            <li key={idx} className="flex items-center gap-1">
+            <li key={`${item.label}-${idx}`} className="flex items-center gap-1">
               {!isLast && item.path ? (
                 <Link
                   to={item.path}
-                  className="hover:text-indigo-600 hover:underline transition-colors"
+                  className="hover:text-gray-900 transition-colors"
                 >
                   {item.label}
                 </Link>

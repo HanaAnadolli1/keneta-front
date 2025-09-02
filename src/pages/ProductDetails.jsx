@@ -24,7 +24,7 @@ import ProductReviews from "../components/ProductReviews";
 import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 
-// Use the SAME public categories endpoints as Menu.jsx / CategoryNavigator
+// Same public endpoints as elsewhere
 const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
 
 /* ---------------- small helpers ---------------- */
@@ -69,6 +69,86 @@ const renderRichText = (raw = "") => {
     );
   }
   return <p>{raw}</p>;
+};
+
+// ---------- normalization + trail helpers ----------
+const normalizeSlug = (s = "") =>
+  String(s)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9-_/]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const normCat = (c) => {
+  if (!c) return null;
+  return {
+    id: Number(c.id ?? c.category_id ?? c?.pivot?.category_id ?? 0) || 0,
+    parent_id:
+      c.parent_id != null
+        ? Number(c.parent_id)
+        : c.parent?.id != null
+        ? Number(c.parent.id)
+        : null,
+    slug: normalizeSlug(c.slug ?? c.code ?? c.value ?? c.name ?? ""),
+    name: String(c.name ?? c.label ?? c.title ?? c.slug ?? "Category"),
+    level:
+      c.level != null
+        ? Number(c.level)
+        : c.depth != null
+        ? Number(c.depth)
+        : undefined,
+    translations: Array.isArray(c.translations) ? c.translations : [],
+    status: String(c.status ?? "1"),
+  };
+};
+
+// DFS helper that can match by slug OR id; considers translations
+const createTrailFinder = (getChildren, rootId = 1) => {
+  return async (target) => {
+    if (!target) return [];
+    const wantId = Number(target.id || 0) || null;
+    const wantSlug = target.slug ? normalizeSlug(target.slug) : null;
+    const wantSlugs = new Set(
+      [
+        wantSlug,
+        ...(Array.isArray(target.translations)
+          ? target.translations.map((t) => normalizeSlug(t?.slug)).filter(Boolean)
+          : []),
+      ].filter(Boolean)
+    );
+
+    const MAX_DEPTH = 10;
+    const stack = [{ parentId: rootId, path: [] }];
+
+    while (stack.length) {
+      const { parentId, path } = stack.pop();
+      const children = await getChildren(parentId);
+      for (const raw of children) {
+        const child = normCat(raw);
+        const nextPath = [...path, child];
+
+        const childSlug = normalizeSlug(child.slug);
+        const childTrans = new Set(
+          (child.translations || []).map((t) => normalizeSlug(t?.slug)).filter(Boolean)
+        );
+
+        const slugMatches =
+          wantSlugs.size > 0 &&
+          (wantSlugs.has(childSlug) ||
+            [...wantSlugs].some((s) => childTrans.has(s)));
+
+        if ((wantId && child.id === wantId) || slugMatches) {
+          return nextPath;
+        }
+
+        if (nextPath.length < MAX_DEPTH) {
+          stack.push({ parentId: child.id, path: nextPath });
+        }
+      }
+    }
+    return [];
+  };
 };
 
 /* ---------------- component ---------------- */
@@ -201,37 +281,21 @@ export default function ProductDetails() {
     );
     if (!res.ok) throw new Error(`cats ${res.status}`);
     const j = await res.json();
-    const rows = (j?.data || []).filter((c) => String(c.status) === "1");
+    const rows = (j?.data || []).filter(
+      (c) => String(c.status ?? "1") === "1"
+    );
     childrenCacheRef.current.set(key, rows);
     return rows;
   }, []);
 
-  // DFS from parent 1 to find full path to slug
-  const findPathToSlug = useCallback(
-    async (targetSlug) => {
-      if (!targetSlug) return [];
-      const MAX_DEPTH = 8;
-      const stack = [{ parentId: 1, path: [] }];
-
-      while (stack.length) {
-        const { parentId, path } = stack.pop();
-        const children = await getChildren(parentId);
-        for (const child of children) {
-          const nextPath = [...path, child];
-          if (child.slug === targetSlug) return nextPath;
-          if (nextPath.length < MAX_DEPTH) {
-            stack.push({ parentId: child.id, path: nextPath });
-          }
-        }
-      }
-      return [];
-    },
-    [getChildren]
-  );
+  const findTrail = useMemo(() => createTrailFinder(getChildren, 1), [getChildren]);
 
   const byId = useMemo(() => {
     const m = new Map();
-    for (const c of allCategories) m.set(String(c?.id), c);
+    for (const c of allCategories) {
+      const n = normCat(c);
+      m.set(String(n.id), n);
+    }
     return m;
   }, [allCategories]);
 
@@ -243,96 +307,96 @@ export default function ProductDetails() {
     );
   };
 
-  // Build the category trail without calling a non-existent product-categories endpoint
+  // Build the category trail
   useEffect(() => {
     if (!product) return;
 
     (async () => {
-      // 1) Gather possible categories from product (robust across shapes)
+      // 1) Gather possible categories from product
       let productCats = [];
 
       if (Array.isArray(product?.categories) && product.categories.length) {
         productCats = product.categories
-          .map((c) =>
-            c && typeof c === "object"
-              ? {
-                  id: c.id ?? c.category_id ?? c?.pivot?.category_id,
-                  slug: c.slug,
-                  name: c.name,
-                  level: c.level,
-                }
-              : null
-          )
+          .map((c) => {
+            const n = normCat(c);
+            return n?.id || n?.slug ? n : null;
+          })
           .filter(Boolean);
       } else if (Array.isArray(product?.category_ids)) {
         productCats = product.category_ids
           .map((id) => byId.get(String(id)))
-          .filter(Boolean)
-          .map((c) => ({
-            id: c.id,
-            slug: c.slug,
-            name: c.name,
-            level: c.level,
-          }));
+          .filter(Boolean);
       } else if (product?.category_id) {
         const c = byId.get(String(product.category_id));
-        if (c) {
-          productCats = [
-            { id: c.id, slug: c.slug, name: c.name, level: c.level },
-          ];
-        }
+        if (c) productCats = [c];
       } else if (product?.category && typeof product.category === "object") {
-        const cid =
-          product.category.id ??
-          product.category.category_id ??
-          product.category?.pivot?.category_id;
-        const slug = product.category.slug ?? byId.get(String(cid))?.slug;
-        const name =
-          product.category.name ?? byId.get(String(cid))?.name ?? slug;
-        if (cid || slug) {
-          productCats = [{ id: cid, slug, name, level: product.category.level }];
+        const n = normCat(product.category);
+        if (n?.id || n?.slug) productCats = [n];
+      }
+
+      // Also accept breadcrumb-like hints if the API provides them
+      if (
+        (!productCats || productCats.length === 0) &&
+        Array.isArray(product?.breadcrumbs)
+      ) {
+        const last = product.breadcrumbs.slice().pop();
+        if (last) {
+          const n = normCat(last);
+          if (n?.id || n?.slug) productCats = [n];
+        }
+      }
+      if (
+        (!productCats || productCats.length === 0) &&
+        Array.isArray(product?.category_tree)
+      ) {
+        const last = product.category_tree.slice().pop();
+        if (last) {
+          const n = normCat(last);
+          if (n?.id || n?.slug) productCats = [n];
         }
       }
 
-      // 2) LAST RESORT: if page was opened from /products?category=slug, accept it
-      const urlCategory =
-        new URLSearchParams(location.search).get("category") || null;
-      if ((!productCats || productCats.length === 0) && urlCategory) {
-        const c = allCategories.find((x) => x.slug === urlCategory);
-        if (c) {
-          productCats = [
-            { id: c.id, slug: c.slug, name: c.name, level: c.level },
-          ];
+      // 2) LAST RESORT: category hint from URL (if navigated from Products)
+      if (!productCats.length) {
+        const urlCategory =
+          new URLSearchParams(location.search).get("category") ||
+          new URLSearchParams(location.search).get("category_slug") ||
+          null;
+        if (urlCategory) {
+          const findBySlug =
+            [...byId.values()].find(
+              (x) =>
+                normalizeSlug(x.slug) === normalizeSlug(urlCategory) ||
+                (Array.isArray(x.translations) &&
+                  x.translations.some(
+                    (t) => normalizeSlug(t?.slug) === normalizeSlug(urlCategory)
+                  ))
+            ) || null;
+          if (findBySlug) productCats = [findBySlug];
         }
       }
 
       const primary = pickPrimaryCategory(productCats);
-      const slug =
-        primary?.slug ||
-        (primary?.id ? byId.get(String(primary.id))?.slug : null);
-
-      if (!slug) {
-        setCategoryTrail([]); // no category info available
+      if (!primary) {
+        setCategoryTrail([]);
         return;
       }
 
-      // 3) Walk the same tree as your menu to get the full chain
-      const path = await findPathToSlug(slug); // [{id, slug, name}, …leaf]
+      // 3) Walk the tree to build the full chain (matches by slug OR id)
+      const path = await findTrail(primary);
       if (path.length) {
         const items = path.map((n, i) =>
           i === path.length - 1
-            ? { label: n.name } // current category (unlinked)
-            : {
-                label: n.name,
-                path: `/products?category=${encodeURIComponent(n.slug)}`,
-              }
+            ? { label: n.name }
+            : { label: n.name, path: `/products?category=${encodeURIComponent(n.slug)}` }
         );
         setCategoryTrail(items);
       } else {
-        setCategoryTrail([{ label: primary?.name || slug }]);
+        // fallback to just the category label
+        setCategoryTrail([{ label: primary.name || primary.slug }]);
       }
     })();
-  }, [product, allCategories, byId, findPathToSlug, location.search]);
+  }, [product, allCategories, byId, findTrail, location.search]);
 
   /* --------- auto-open reviews tab --------- */
   useEffect(() => {
@@ -421,7 +485,7 @@ export default function ProductDetails() {
   const canAddMoreCompare = compared || count < max;
 
   const unitPriceLabel = product.formatted_price ?? "€0.00";
-  const unitPrice = Number(product?.price ?? 0);
+  const unitPrice = Number(product?.price ?? 0); // ✅ fixed
   const currencyMatch = String(product?.formatted_price || "").match(
     /[^\d.,\s-]+/
   );
@@ -434,7 +498,7 @@ export default function ProductDetails() {
     galleryRef.current?.slideToIndex(index);
   };
 
-  const { addItem: add } = { addItem };
+  const add = addItem; // ✅ simpler alias
   const handleAdd = () => {
     if (!product || qty < 1) return;
     const tid = toast.info("Adding to cart…", { duration: 0 });
@@ -470,7 +534,7 @@ export default function ProductDetails() {
   /* ---------------- render ---------------- */
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
-      {/* Breadcrumbs include the full category path (no 404 calls) */}
+      {/* Breadcrumbs include the full category path */}
       <Breadcrumbs items={pageCrumbs} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">

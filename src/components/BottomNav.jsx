@@ -38,7 +38,7 @@ export default function BottomNav() {
         <Link to="/" className="flex items-center justify-center" aria-label="Ballina">
           <Item active={pathname === "/"}>
             <Home size={22} />
-            <span>Ballina</span>
+            <span>Home</span>
           </Item>
         </Link>
 
@@ -50,7 +50,7 @@ export default function BottomNav() {
         >
           <Item active={false}>
             <MenuIcon size={22} />
-            <span>Kategoritë</span>
+            <span>Categories</span>
           </Item>
         </button>
 
@@ -62,7 +62,7 @@ export default function BottomNav() {
         >
           <Item active={false}>
             <ShoppingCart size={22} />
-            <span>Shporta</span>
+            <span>Cart</span>
           </Item>
         </button>
 
@@ -77,7 +77,7 @@ export default function BottomNav() {
                 </span>
               )}
             </div>
-            <span>Favoritet</span>
+            <span>Favorites</span>
           </Item>
         </Link>
 

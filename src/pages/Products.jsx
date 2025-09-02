@@ -24,6 +24,10 @@ import Breadcrumbs from "../components/Breadcrumbs";
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
 
+// ---------- NEW: for breadcrumb trail fallback lookups ----------
+const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
+// ---------------------------------------------------------------
+
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
 
@@ -66,9 +70,75 @@ function extractProductsPayload(resp) {
   return { items, lastPage, currentPage, hasNext };
 }
 
+// ---------- NEW: small helpers for category trail ----------
+function normCat(c) {
+  if (!c) return null;
+  return {
+    id: Number(c.id ?? c.category_id ?? c.value ?? 0) || 0,
+    parent_id:
+      c.parent_id != null
+        ? Number(c.parent_id)
+        : c.parent?.id != null
+        ? Number(c.parent.id)
+        : null,
+    slug: String(c.slug ?? c.code ?? c.value ?? c.name ?? "").toLowerCase(),
+    name: String(c.name ?? c.label ?? c.title ?? c.slug ?? "Category"),
+    level:
+      c.level != null
+        ? Number(c.level)
+        : c.depth != null
+        ? Number(c.depth)
+        : undefined,
+    status: String(c.status ?? "1"),
+  };
+}
+
+function mapById(categories) {
+  const m = new Map();
+  (categories || []).forEach((c) => {
+    const n = normCat(c);
+    if (n?.id) m.set(n.id, n);
+  });
+  return m;
+}
+
+function buildTrailFromFlatList(target, flatMap) {
+  const trail = [];
+  let cur = target ? normCat(target) : null;
+  let guard = 0;
+  while (cur && guard < 20) {
+    trail.push(cur);
+    const pid = cur.parent_id;
+    if (!pid || pid === 0 || !flatMap.has(pid)) break;
+    cur = flatMap.get(pid);
+    guard++;
+  }
+  return trail.reverse();
+}
+
+async function findTrailBySlugRemote(slug, getChildren) {
+  if (!slug) return [];
+  const MAX_DEPTH = 10;
+  const stack = [{ parentId: 1, path: [] }]; // if your root isn't 1, change here
+
+  while (stack.length) {
+    const { parentId, path } = stack.pop();
+    const children = await getChildren(parentId);
+    for (const raw of children) {
+      const child = normCat(raw);
+      const nextPath = [...path, child];
+      if (child.slug === slug) return nextPath;
+      if (nextPath.length < MAX_DEPTH) {
+        stack.push({ parentId: child.id, path: nextPath });
+      }
+    }
+  }
+  return [];
+}
+// -------------------------------------------------------------
+
 export default function Products() {
   const [params] = useSearchParams();
-  const breadcrumbs = [{ label: "Home", path: "/" }, { label: "Products" }];
 
   const sort = params.get("sort") || "";
   const order = params.get("order") || "";
@@ -454,11 +524,103 @@ export default function Products() {
     [addItem, toast]
   );
 
+  // ------------------------- NEW: Breadcrumb trail -------------------------
+  // Cache for remote children calls
+  const childrenCacheRef = useRef(new Map());
+  const getChildren = useCallback(async (parentId) => {
+    const key = String(parentId);
+    if (childrenCacheRef.current.has(key)) {
+      return childrenCacheRef.current.get(key);
+    }
+    const url = `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
+      parentId
+    )}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    const rows = (json?.data || []).filter((c) => String(c.status ?? "1") === "1");
+    childrenCacheRef.current.set(key, rows);
+    return rows;
+  }, []);
+
+  // Active category object (prefer id, else slug match)
+  const activeCategoryObj = useMemo(() => {
+    if (categoryIdParam && categoryOptions.length) {
+      const found = categoryOptions.find(
+        (c) => String(c.id) === String(categoryIdParam)
+      );
+      if (found) return normCat(found);
+    }
+    if (resolvedCategory) return normCat(resolvedCategory);
+    return null;
+  }, [categoryIdParam, categoryOptions, resolvedCategory]);
+
+  const [computedTrail, setComputedTrail] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!hasCategoryFilter) {
+        if (!cancelled) setComputedTrail([]);
+        return;
+      }
+
+      let trail = [];
+      // Try to build from local categoryOptions (id->parent_id walking)
+      if (activeCategoryObj) {
+        const byId = mapById(categoryOptions);
+        if (byId.size && (activeCategoryObj.parent_id || activeCategoryObj.level)) {
+          trail = buildTrailFromFlatList(activeCategoryObj, byId);
+        }
+      }
+
+      // Fallback: remote DFS by slug
+      if (!trail.length) {
+        const slug =
+          activeCategoryObj?.slug ||
+          (categorySlugParam ? String(decodeURIComponent(categorySlugParam)).toLowerCase() : "");
+        if (slug) {
+          trail = await findTrailBySlugRemote(slug, getChildren);
+        }
+      }
+
+      if (!cancelled) setComputedTrail(trail);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasCategoryFilter,
+    categoryOptions,
+    activeCategoryObj,
+    categorySlugParam,
+    getChildren,
+  ]);
+
+  const breadcrumbItems = useMemo(() => {
+    const base = [
+      { label: "Home", path: "/" },
+      { label: "Products", path: "/products" },
+    ];
+    if (!computedTrail.length) return base;
+
+    const trailItems = computedTrail.map((c, i) => {
+      const isLast = i === computedTrail.length - 1;
+      const to = `/products?category=${encodeURIComponent(c.slug)}`;
+      return isLast ? { label: c.name } : { label: c.name, path: to };
+    });
+
+    return [...base, ...trailItems];
+  }, [computedTrail]);
+  // ------------------------------------------------------------------------
+
   // ---- render
   if (initialLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8" aria-busy="true">
-        <Breadcrumbs items={breadcrumbs} />
+        {/* changed: use dynamic breadcrumb items */}
+        <Breadcrumbs items={breadcrumbItems} />
         <div className="flex flex-col md:flex-row gap-8">
           <FilterSidebar />
           <section className="flex-1">
@@ -491,6 +653,9 @@ export default function Products() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* NEW: show full breadcrumb trail in the normal view too */}
+      <Breadcrumbs items={breadcrumbItems} />
+
       <div className="flex flex-col md:flex-row gap-8">
         <FilterSidebar />
 
