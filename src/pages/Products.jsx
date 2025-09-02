@@ -19,6 +19,7 @@ import { useToast } from "../context/ToastContext";
 import { usePrefetchProduct, useCartMutations } from "../api/hooks";
 import { API_V1 } from "../api/config";
 import CategoryNavigator from "../components/CategoryNavigator";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
@@ -67,6 +68,7 @@ function extractProductsPayload(resp) {
 
 export default function Products() {
   const [params] = useSearchParams();
+  const breadcrumbs = [{ label: "Home", path: "/" }, { label: "Products" }];
 
   const sort = params.get("sort") || "";
   const order = params.get("order") || "";
@@ -144,8 +146,11 @@ export default function Products() {
     const ac = new AbortController();
     (async () => {
       try {
-        const slugParam =
-          (params.get("category") || params.get("category_slug") || "").trim();
+        const slugParam = (
+          params.get("category") ||
+          params.get("category_slug") ||
+          ""
+        ).trim();
         const wanted = decodeURIComponent(slugParam || "");
 
         const cached = sessionStorage.getItem("categoryOptions");
@@ -411,7 +416,8 @@ export default function Products() {
 
   // infinite scroll
   const handleIntersect = useCallback(async () => {
-    if (loadingLock.current || loadingMore || !hasMore || initialLoading) return;
+    if (loadingLock.current || loadingMore || !hasMore || initialLoading)
+      return;
     loadingLock.current = true;
     setLoadingMore(true);
     try {
@@ -452,6 +458,7 @@ export default function Products() {
   if (initialLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8" aria-busy="true">
+        <Breadcrumbs items={breadcrumbs} />
         <div className="flex flex-col md:flex-row gap-8">
           <FilterSidebar />
           <section className="flex-1">
@@ -491,7 +498,7 @@ export default function Products() {
           {hasCategoryFilter && <CategoryNavigator />}
 
           <div className="mb-4 flex items-center justify-between">
-            {(activeBrandLabel || activeCategoryLabel) ? (
+            {activeBrandLabel || activeCategoryLabel ? (
               <p className="text-lg text-gray-700">
                 Showing products for{" "}
                 {activeCategoryLabel && (
@@ -515,7 +522,8 @@ export default function Products() {
               <span />
             )}
 
-            <div className="flex items-center gap-2">
+            {/* ⬇️ Hide view toggle on mobile; show from md: up */}
+            <div className="hidden md:flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setViewMode("list")}

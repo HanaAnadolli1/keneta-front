@@ -3,6 +3,7 @@ import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { register as apiRegister } from "../api/auth";
 import { AuthContext } from "../context/AuthContext";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -38,6 +39,7 @@ export default function Register() {
 
   return (
     <div className="max-w-md mx-auto p-6">
+       <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Register" }]} />
       <h1 className="text-2xl font-bold mb-4 text-center">Register</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* First Name */}

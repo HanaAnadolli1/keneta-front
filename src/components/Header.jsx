@@ -5,6 +5,7 @@ import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
+import BottomNav from "./BottomNav";
 import logo from "../assets/logo.png";
 import Search from "./Search";
 
@@ -27,6 +28,13 @@ export default function Header() {
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Open cart when bottom nav fires an event
+  useEffect(() => {
+    const onOpenCart = () => setIsCartOpen(true);
+    window.addEventListener("keneta:openCart", onOpenCart);
+    return () => window.removeEventListener("keneta:openCart", onOpenCart);
   }, []);
 
   function handleLogout() {
@@ -65,8 +73,8 @@ export default function Header() {
             {/* Search */}
             <Search />
 
-            {/* Account & Cart */}
-            <div className="flex items-center gap-4 md:gap-6">
+            {/* Account & Cart (hidden on mobile) */}
+            <div className="hidden md:flex items-center gap-4 md:gap-6">
               {/* Wishlist with badge */}
               <Link to="/wishlist" className="relative text-[var(--secondary)] text-2xl">
                 <FiHeart />
@@ -130,6 +138,9 @@ export default function Header() {
 
       <Menu />
       <CartSidebar open={isCartOpen} onClose={() => setIsCartOpen(false)} />
+
+      {/* Mobile bottom navigation */}
+      <BottomNav />
     </>
   );
 }

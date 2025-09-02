@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 const Brands = () => {
   const [brands, setBrands] = useState([]);
@@ -31,6 +32,7 @@ const Brands = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Brands" }]} />
       <h1 className="text-2xl font-bold text-indigo-900 mb-6">Brendet</h1>
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-6">
         {brands.map((brand) => (

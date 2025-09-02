@@ -19,11 +19,14 @@ import AddressForm from "../components/AddressForm";
 import ShippingOptions from "../components/ShippingOptions";
 import PaymentOptions from "../components/PaymentOptions";
 import CartSummary from "../components/CartSummary";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export default function Checkout() {
   const navigate = useNavigate();
 
   const isLoggedIn = !!localStorage.getItem("token");
+
+  const breadcrumbs = [{ label: "Home", path: "/" }, { label: "Checkout" }];
 
   // 💡 Dynamically select correct hooks
   const addressM = isLoggedIn
@@ -79,6 +82,7 @@ export default function Checkout() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4">
+       <Breadcrumbs items={breadcrumbs} />
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
         <div className="lg:col-span-7 space-y-8">
           <AddressForm

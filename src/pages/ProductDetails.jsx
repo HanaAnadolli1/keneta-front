@@ -1,5 +1,11 @@
 // src/pages/ProductDetails.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { useCartMutations } from "../api/hooks";
 import { API_V1 } from "../api/config";
@@ -15,37 +21,29 @@ import { useCompare } from "../context/CompareContext";
 import { useToast } from "../context/ToastContext";
 
 import ProductReviews from "../components/ProductReviews";
-import ProductCard from "../components/ProductCard"; // ⟵ NEW
+import ProductCard from "../components/ProductCard";
+import Breadcrumbs from "../components/Breadcrumbs";
 
-// helper: chunk rows into groups of `size`
+// Use the SAME public categories endpoints as Menu.jsx / CategoryNavigator
+const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
+
+/* ---------------- small helpers ---------------- */
 const chunkPairs = (rows, size = 2) => {
   const out = [];
   for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
   return out;
 };
 
-/** ------------- Description helpers ------------- **/
-
-// Detects if the string already contains HTML tags
 const looksLikeHtml = (s = "") => /<[^>]+>/.test(s);
 
-// Convert a "•item •item ..." or "• item\n• item" style string into a React <ul>
 const renderBulletList = (text = "") => {
   if (!text) return null;
-
-  // Normalize multiple spaces and convert common separators into single spaces
   const normalized = text.replace(/\s+/g, " ").trim();
-
-  // Split by bullet "•" (U+2022). We allow an optional space after it.
-  // We also handle cases where the string starts with a bullet or has bullets mid-string.
   const parts = normalized
     .split(/(?:^|[\s])•\s*/g)
     .map((t) => t.trim())
     .filter(Boolean);
-
-  // If we didn't really split into multiple items, it's not a bullet list
   if (parts.length <= 1) return null;
-
   return (
     <ul className="list-disc pl-5 space-y-1">
       {parts.map((t, i) => (
@@ -55,22 +53,11 @@ const renderBulletList = (text = "") => {
   );
 };
 
-// General renderer: prefers HTML, else bullets, else newline list, else paragraph
 const renderRichText = (raw = "") => {
-  if (!raw) {
-    return <p className="text-gray-500">No description.</p>;
-  }
-
-  // 1) If backend already provides HTML, trust it (your content source controls safety)
-  if (looksLikeHtml(raw)) {
-    return <div dangerouslySetInnerHTML={{ __html: raw }} />;
-  }
-
-  // 2) If it contains "•" bullets, render them as <ul>
+  if (!raw) return <p className="text-gray-500">No description.</p>;
+  if (looksLikeHtml(raw)) return <div dangerouslySetInnerHTML={{ __html: raw }} />;
   const bullets = renderBulletList(raw);
   if (bullets) return bullets;
-
-  // 3) Fallback: split on newlines into a list (if there are several lines)
   const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (lines.length > 1) {
     return (
@@ -81,11 +68,10 @@ const renderRichText = (raw = "") => {
       </ul>
     );
   }
-
-  // 4) Final fallback: simple paragraph
   return <p>{raw}</p>;
 };
 
+/* ---------------- component ---------------- */
 export default function ProductDetails() {
   const { url_key } = useParams();
   const location = useLocation();
@@ -103,48 +89,50 @@ export default function ProductDetails() {
   const [error, setError] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState("description"); // description | additional | reviews
+  const [activeTab, setActiveTab] = useState("description");
 
-  // NEW: related products state
+  // related
   const [related, setRelated] = useState([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState(null);
 
-  // read customer token (adapt to your auth)
+  // breadcrumbs
+  const [categoryTrail, setCategoryTrail] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
+  const childrenCacheRef = useRef(new Map()); // parentId -> children[]
+
+  const breadcrumbsBase = [
+    { label: "Home", path: "/" },
+    { label: "Products", path: "/products" },
+  ];
+
   const accessToken =
     localStorage.getItem("access_token") ||
     localStorage.getItem("token") ||
     sessionStorage.getItem("access_token");
 
-  // Open the Reviews tab automatically if URL requests it
+  /* --------- responsive flag --------- */
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tab = params.get("tab");
-    const hashWantsReviews = location.hash?.toLowerCase() === "#reviews";
-    if (tab === "reviews" || hashWantsReviews) {
-      setActiveTab("reviews");
-    }
-  }, [location.search, location.hash]);
-
-  // hooks above returns
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  /* --------- product by url_key --------- */
   useEffect(() => {
     let ignore = false;
     (async () => {
       try {
-        const res = await fetch(`${API_V1}/products?url_key=${url_key}`);
+        setError(null);
+        const res = await fetch(
+          `${API_V1}/products?url_key=${encodeURIComponent(url_key)}`
+        );
         if (!res.ok) throw new Error(`Status ${res.status}`);
         const json = await res.json();
-        if (!Array.isArray(json?.data) || json.data.length === 0) {
-          throw new Error("Product not found");
-        }
-        if (!ignore) setProduct(json.data[0]);
+        const list = Array.isArray(json?.data) ? json.data : [];
+        if (!list.length) throw new Error("Product not found");
+        if (!ignore) setProduct(list[0]);
       } catch (e) {
         if (!ignore) setError(e.message);
       }
@@ -154,18 +142,34 @@ export default function ProductDetails() {
     };
   }, [url_key]);
 
-  // Fetch related products once we have the product ID
+  /* --------- all categories list (id↔slug/name map) --------- */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_V1}/categories?sort=id&order=asc&limit=10000`
+        );
+        const j = await res.json();
+        if (!cancelled) setAllCategories(Array.isArray(j?.data) ? j.data : []);
+      } catch {
+        if (!cancelled) setAllCategories([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* --------- related --------- */
   useEffect(() => {
     if (!product?.id) return;
     let ignore = false;
     const controller = new AbortController();
-
     (async () => {
       try {
         setRelatedError(null);
         setRelatedLoading(true);
-
-        // If API_V1 already equals "https://keneta.laratest-app.com/api", you could also use `${API_V1}/products/${product.id}/related`.
         const endpoint = `https://keneta.laratest-app.com/api/products/${product.id}/related`;
         const res = await fetch(endpoint, { signal: controller.signal });
         if (!res.ok) throw new Error(`Related: status ${res.status}`);
@@ -178,18 +182,167 @@ export default function ProductDetails() {
         if (!ignore) setRelatedLoading(false);
       }
     })();
-
     return () => {
       ignore = true;
       controller.abort();
     };
   }, [product?.id]);
 
-  // If redirected back with ?openReviewForm=1, pass the flag to ProductReviews
-  const openReviewForm =
-    new URLSearchParams(location.search).get("openReviewForm") === "1";
+  /* --------- breadcrumbs: menu-style traversal --------- */
+  const getChildren = useCallback(async (parentId) => {
+    const key = String(parentId);
+    if (childrenCacheRef.current.has(key)) {
+      return childrenCacheRef.current.get(key);
+    }
+    const res = await fetch(
+      `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
+        parentId
+      )}`
+    );
+    if (!res.ok) throw new Error(`cats ${res.status}`);
+    const j = await res.json();
+    const rows = (j?.data || []).filter((c) => String(c.status) === "1");
+    childrenCacheRef.current.set(key, rows);
+    return rows;
+  }, []);
 
-  // extra rows
+  // DFS from parent 1 to find full path to slug
+  const findPathToSlug = useCallback(
+    async (targetSlug) => {
+      if (!targetSlug) return [];
+      const MAX_DEPTH = 8;
+      const stack = [{ parentId: 1, path: [] }];
+
+      while (stack.length) {
+        const { parentId, path } = stack.pop();
+        const children = await getChildren(parentId);
+        for (const child of children) {
+          const nextPath = [...path, child];
+          if (child.slug === targetSlug) return nextPath;
+          if (nextPath.length < MAX_DEPTH) {
+            stack.push({ parentId: child.id, path: nextPath });
+          }
+        }
+      }
+      return [];
+    },
+    [getChildren]
+  );
+
+  const byId = useMemo(() => {
+    const m = new Map();
+    for (const c of allCategories) m.set(String(c?.id), c);
+    return m;
+  }, [allCategories]);
+
+  const pickPrimaryCategory = (cats) => {
+    if (!Array.isArray(cats) || cats.length === 0) return null;
+    return (
+      cats.slice().sort((a, b) => (b?.level ?? 0) - (a?.level ?? 0))[0] ||
+      cats[0]
+    );
+  };
+
+  // Build the category trail without calling a non-existent product-categories endpoint
+  useEffect(() => {
+    if (!product) return;
+
+    (async () => {
+      // 1) Gather possible categories from product (robust across shapes)
+      let productCats = [];
+
+      if (Array.isArray(product?.categories) && product.categories.length) {
+        productCats = product.categories
+          .map((c) =>
+            c && typeof c === "object"
+              ? {
+                  id: c.id ?? c.category_id ?? c?.pivot?.category_id,
+                  slug: c.slug,
+                  name: c.name,
+                  level: c.level,
+                }
+              : null
+          )
+          .filter(Boolean);
+      } else if (Array.isArray(product?.category_ids)) {
+        productCats = product.category_ids
+          .map((id) => byId.get(String(id)))
+          .filter(Boolean)
+          .map((c) => ({
+            id: c.id,
+            slug: c.slug,
+            name: c.name,
+            level: c.level,
+          }));
+      } else if (product?.category_id) {
+        const c = byId.get(String(product.category_id));
+        if (c) {
+          productCats = [
+            { id: c.id, slug: c.slug, name: c.name, level: c.level },
+          ];
+        }
+      } else if (product?.category && typeof product.category === "object") {
+        const cid =
+          product.category.id ??
+          product.category.category_id ??
+          product.category?.pivot?.category_id;
+        const slug = product.category.slug ?? byId.get(String(cid))?.slug;
+        const name =
+          product.category.name ?? byId.get(String(cid))?.name ?? slug;
+        if (cid || slug) {
+          productCats = [{ id: cid, slug, name, level: product.category.level }];
+        }
+      }
+
+      // 2) LAST RESORT: if page was opened from /products?category=slug, accept it
+      const urlCategory =
+        new URLSearchParams(location.search).get("category") || null;
+      if ((!productCats || productCats.length === 0) && urlCategory) {
+        const c = allCategories.find((x) => x.slug === urlCategory);
+        if (c) {
+          productCats = [
+            { id: c.id, slug: c.slug, name: c.name, level: c.level },
+          ];
+        }
+      }
+
+      const primary = pickPrimaryCategory(productCats);
+      const slug =
+        primary?.slug ||
+        (primary?.id ? byId.get(String(primary.id))?.slug : null);
+
+      if (!slug) {
+        setCategoryTrail([]); // no category info available
+        return;
+      }
+
+      // 3) Walk the same tree as your menu to get the full chain
+      const path = await findPathToSlug(slug); // [{id, slug, name}, …leaf]
+      if (path.length) {
+        const items = path.map((n, i) =>
+          i === path.length - 1
+            ? { label: n.name } // current category (unlinked)
+            : {
+                label: n.name,
+                path: `/products?category=${encodeURIComponent(n.slug)}`,
+              }
+        );
+        setCategoryTrail(items);
+      } else {
+        setCategoryTrail([{ label: primary?.name || slug }]);
+      }
+    })();
+  }, [product, allCategories, byId, findPathToSlug, location.search]);
+
+  /* --------- auto-open reviews tab --------- */
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    const hashWantsReviews = location.hash?.toLowerCase() === "#reviews";
+    if (tab === "reviews" || hashWantsReviews) setActiveTab("reviews");
+  }, [location.search, location.hash]);
+
+  /* --------- extra rows --------- */
   const extraRows = useMemo(() => {
     const p = product || {};
     const v = p?.variants && !Array.isArray(p.variants) ? p.variants : null;
@@ -220,10 +373,31 @@ export default function ProductDetails() {
 
   const pairs = chunkPairs(extraRows, 2);
 
-  if (error) return <div className="p-8 text-red-600">{error}</div>;
-  if (!product) return <div className="p-8">Loading…</div>;
+  /* --------- loading/error gates --------- */
+  const pageCrumbs = [
+    ...breadcrumbsBase,
+    ...categoryTrail,
+    { label: product?.name || "Product" },
+  ];
 
-  // computed
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-10">
+        <Breadcrumbs items={[...breadcrumbsBase, { label: "Product" }]} />
+        <div className="text-red-600">{error}</div>
+      </div>
+    );
+  }
+  if (!product) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-10">
+        <Breadcrumbs items={[...breadcrumbsBase, { label: "Product" }]} />
+        Loading…
+      </div>
+    );
+  }
+
+  /* --------- derived UI values --------- */
   const galleryImages =
     Array.isArray(product?.images) && product.images.length > 0
       ? product.images.map((img) => ({
@@ -248,9 +422,11 @@ export default function ProductDetails() {
 
   const unitPriceLabel = product.formatted_price ?? "€0.00";
   const unitPrice = Number(product?.price ?? 0);
+  const currencyMatch = String(product?.formatted_price || "").match(
+    /[^\d.,\s-]+/
+  );
   const currencySymbol =
-    product?.currency_options?.symbol ||
-    (product?.formatted_price?.match(/[^\d.,\s-]+/)?.[0] ?? "€");
+    product?.currency_options?.symbol || (currencyMatch ? currencyMatch[0] : "€");
   const totalLabel = `${currencySymbol}${(unitPrice * qty).toFixed(2)}`;
 
   const onThumbnailClick = (index) => {
@@ -258,9 +434,7 @@ export default function ProductDetails() {
     galleryRef.current?.slideToIndex(index);
   };
 
-  const reviewsSummary = product?.reviews;
-
-  const { addItem: add } = { addItem }; // alias for clarity
+  const { addItem: add } = { addItem };
   const handleAdd = () => {
     if (!product || qty < 1) return;
     const tid = toast.info("Adding to cart…", { duration: 0 });
@@ -293,8 +467,12 @@ export default function ProductDetails() {
     toast.success("Item added to compare list.");
   };
 
+  /* ---------------- render ---------------- */
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
+      {/* Breadcrumbs include the full category path (no 404 calls) */}
+      <Breadcrumbs items={pageCrumbs} />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
         {/* LEFT */}
         <div className="flex gap-4">
@@ -360,14 +538,12 @@ export default function ProductDetails() {
 
           <div className="text-2xl font-bold text-black">{unitPriceLabel}</div>
 
-          {/* Short description (now supports bullets & HTML) */}
+          {/* Short description (supports bullets & HTML) */}
           <div className="text-gray-500">
             {(() => {
               const raw = product?.short_description || "";
               if (!raw) return null;
-              if (looksLikeHtml(raw)) {
-                return <div dangerouslySetInnerHTML={{ __html: raw }} />;
-              }
+              if (looksLikeHtml(raw)) return <div dangerouslySetInnerHTML={{ __html: raw }} />;
               return renderBulletList(raw) || <p>{raw}</p>;
             })()}
           </div>
@@ -401,12 +577,11 @@ export default function ProductDetails() {
             <button
               onClick={handleAdd}
               disabled={addItem.isPending}
-              className={`h-11 px-6 rounded-xl text-sm font-semibold transition ring-1
-                ${
-                  addItem.isPending
-                    ? "bg-gray-100 text-gray-500 ring-gray-200 cursor-not-allowed"
-                    : "bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700"
-                }`}
+              className={`h-11 px-6 rounded-xl text-sm font-semibold transition ring-1 ${
+                addItem.isPending
+                  ? "bg-gray-100 text-gray-500 ring-gray-200 cursor-not-allowed"
+                  : "bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700"
+              }`}
             >
               {addItem.isPending ? "Adding…" : "Add To Cart"}
             </button>
@@ -426,8 +601,7 @@ export default function ProductDetails() {
             }
           >
             <span
-              className={`h-8 w-8 rounded-full grid place-items-center ring-1 shadow-sm
-              ${
+              className={`h-8 w-8 rounded-full grid place-items-center ring-1 shadow-sm ${
                 compared
                   ? "bg-emerald-50 ring-emerald-200 text-emerald-700"
                   : "bg-white ring-black/10 text-gray-700 group-hover:text-emerald-700"
@@ -444,20 +618,14 @@ export default function ProductDetails() {
 
       {/* Tabs */}
       <div className="mt-12">
-        <div
-          role="tablist"
-          aria-label="Product information"
-          className="flex items-center gap-8 border-b"
-        >
+        <div role="tablist" aria-label="Product information" className="flex items-center gap-8 border-b">
           <button
             role="tab"
             aria-selected={activeTab === "description"}
             aria-controls="tab-panel-description"
             onClick={() => setActiveTab("description")}
             className={`py-3 -mb-px text-sm font-medium transition ${
-              activeTab === "description"
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
+              activeTab === "description" ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-800"
             }`}
           >
             Description
@@ -468,9 +636,7 @@ export default function ProductDetails() {
             aria-controls="tab-panel-additional"
             onClick={() => setActiveTab("additional")}
             className={`py-3 -mb-px text-sm font-medium transition ${
-              activeTab === "additional"
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
+              activeTab === "additional" ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-800"
             }`}
           >
             Additional Information
@@ -481,9 +647,7 @@ export default function ProductDetails() {
             aria-controls="tab-panel-reviews"
             onClick={() => setActiveTab("reviews")}
             className={`py-3 -mb-px text-sm font-medium transition ${
-              activeTab === "reviews"
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
+              activeTab === "reviews" ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-800"
             }`}
           >
             Reviews
@@ -493,10 +657,7 @@ export default function ProductDetails() {
         <div className="py-6 text-gray-700 leading-relaxed">
           {activeTab === "description" && (
             <div id="tab-panel-description" role="tabpanel">
-              {/* Renders HTML if present; otherwise turns bullet "•" text into a proper <ul> */}
-              {renderRichText(
-                product.description || product.short_description || ""
-              )}
+              {renderRichText(product.description || product.short_description || "")}
             </div>
           )}
 
@@ -510,18 +671,12 @@ export default function ProductDetails() {
                     <div
                       key={idx}
                       className={`grid grid-cols-[max-content,1fr] lg:grid-cols-[max-content,1fr,max-content,1fr]
-                        gap-x-6 gap-y-2 px-4 py-3 ${
-                          idx % 2 === 0 ? "bg-gray-50" : "bg-white"
-                        }`}
+                        gap-x-6 gap-y-2 px-4 py-3 ${idx % 2 === 0 ? "bg-gray-50" : "bg-white"}`}
                     >
                       {row.map((pair) => (
                         <React.Fragment key={pair.label}>
-                          <div className="text-sm text-gray-500">
-                            {pair.label}
-                          </div>
-                          <div className="text-sm text-gray-800">
-                            {pair.value ?? "—"}
-                          </div>
+                          <div className="text-sm text-gray-500">{pair.label}</div>
+                          <div className="text-sm text-gray-800">{pair.value ?? "—"}</div>
                         </React.Fragment>
                       ))}
                       {row.length === 1 && (
@@ -543,7 +698,9 @@ export default function ProductDetails() {
                 productId={Number(product.id)}
                 summary={product.reviews}
                 accessToken={accessToken || null}
-                autoOpenForm={openReviewForm}
+                autoOpenForm={
+                  new URLSearchParams(location.search).get("openReviewForm") === "1"
+                }
               />
             </div>
           )}
@@ -564,11 +721,7 @@ export default function ProductDetails() {
         {relatedLoading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-64 rounded-2xl bg-gray-100 animate-pulse"
-                aria-hidden
-              />
+              <div key={i} className="h-64 rounded-2xl bg-gray-100 animate-pulse" aria-hidden />
             ))}
           </div>
         )}
@@ -586,7 +739,6 @@ export default function ProductDetails() {
         {!relatedLoading && !relatedError && related?.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
             {related.map((p) => (
-              // If your ProductCard expects different props (e.g. `item`), adjust below accordingly.
               <ProductCard key={p.id} product={p} />
             ))}
           </div>

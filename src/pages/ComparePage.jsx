@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCompare } from "../context/CompareContext";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 const ROWS = [
   {
@@ -31,6 +32,7 @@ const ROWS = [
 export default function ComparePage() {
   const { items, remove, clear } = useCompare();
   const [showDiffsOnly, setShowDiffsOnly] = useState(false);
+  const breadcrumbs = [{ label: "Home", path: "/" }, { label: "Compare" }];
 
   const diffs = useMemo(() => {
     const map = {};
@@ -50,23 +52,27 @@ export default function ComparePage() {
 
   if (items.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-12 text-center">
-        <h1 className="text-2xl font-semibold mb-2">Compare products</h1>
-        <p className="text-gray-600 mb-6">
-          You haven’t selected any products to compare.
-        </p>
-        <Link
-          to="/products"
-          className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-sm"
-        >
-          Browse products
-        </Link>
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        <Breadcrumbs items={breadcrumbs} />
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold mb-2">Compare products</h1>
+          <p className="text-gray-600 mb-6">
+            You haven’t selected any products to compare.
+          </p>
+          <Link
+            to="/products"
+            className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-sm"
+          >
+            Browse products
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+       <Breadcrumbs items={breadcrumbs} />
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
@@ -162,7 +168,7 @@ export default function ComparePage() {
                   {row.label}
                 </th>
 
-                {items.map((p, i) => (
+                {items.map((p) => (
                   <td
                     key={p.id}
                     className={`px-4 py-3 text-sm text-gray-800 align-top

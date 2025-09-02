@@ -4,6 +4,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { login as apiLogin } from "../api/auth";
 import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -61,6 +62,7 @@ export default function Login() {
 
   return (
     <div className="max-w-md mx-auto p-6">
+      <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Login" }]} />
       <h1 className="text-2xl font-bold mb-4 text-center">Login</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">

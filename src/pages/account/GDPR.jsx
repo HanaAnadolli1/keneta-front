@@ -5,6 +5,7 @@ import {
   revokeGdprRequest,
 } from "../../api/customer";
 import { X, Filter, ChevronDown, Search } from "lucide-react";
+import Breadcrumbs from "../../components/Breadcrumbs";
 
 const navyBtn =
   "rounded-xl bg-[#0b1446] text-white px-5 py-3 text-[15px] hover:opacity-95";
@@ -33,6 +34,12 @@ export default function GDPR() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [fltStatus, setFltStatus] = useState("");
   const [fltType, setFltType] = useState("");
+
+  const breadcrumbs = [
+    { label: "Home", path: "/" },
+    { label: "Account", path: "/account" },
+    { label: "GDPR" },
+  ];
 
   const load = async () => {
     try {
@@ -81,9 +88,15 @@ export default function GDPR() {
       const matchQ =
         !q ||
         String(r.id).includes(q) ||
-        String(r.status || "").toLowerCase().includes(q) ||
-        String(r.type || "").toLowerCase().includes(q) ||
-        String(r.message || "").toLowerCase().includes(q);
+        String(r.status || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.type || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(r.message || "")
+          .toLowerCase()
+          .includes(q);
       const matchStatus = !fltStatus || String(r.status) === fltStatus;
       const matchType = !fltType || String(r.type).toLowerCase() === fltType;
       return matchQ && matchStatus && matchType;
@@ -128,7 +141,7 @@ export default function GDPR() {
 
   return (
     <div>
-      {/* Header */}
+      <Breadcrumbs items={breadcrumbs} />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold">GDPR Data Requests</h2>
         <div className="flex items-center gap-3">
@@ -149,11 +162,17 @@ export default function GDPR() {
           />
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
         </div>
-        <span className="text-sm text-slate-500">{filteredAll.length} Results</span>
+        <span className="text-sm text-slate-500">
+          {filteredAll.length} Results
+        </span>
 
         <div className="ml-auto flex items-center gap-3">
           {/* Page size dropdown */}
-          <div className="relative" onBlur={() => setOpenSize(false)} tabIndex={0}>
+          <div
+            className="relative"
+            onBlur={() => setOpenSize(false)}
+            tabIndex={0}
+          >
             <button className={iconBtn} onClick={() => setOpenSize((o) => !o)}>
               {pageSize} <ChevronDown className="w-4 h-4" />
             </button>
@@ -176,8 +195,15 @@ export default function GDPR() {
           </div>
 
           {/* Filters popover */}
-          <div className="relative" onBlur={() => setFiltersOpen(false)} tabIndex={0}>
-            <button className={iconBtn} onClick={() => setFiltersOpen((o) => !o)}>
+          <div
+            className="relative"
+            onBlur={() => setFiltersOpen(false)}
+            tabIndex={0}
+          >
+            <button
+              className={iconBtn}
+              onClick={() => setFiltersOpen((o) => !o)}
+            >
               <Filter className="w-4 h-4" /> Filter
             </button>
 
@@ -264,50 +290,51 @@ export default function GDPR() {
               </tr>
             )}
 
-            {rows && visibleRows.length > 0 ? (
-              visibleRows.map((r) => {
-                const isRevokable =
-                  typeof r.status === "string" &&
-                  /pending|new|open/i.test(r.status);
-                return (
-                  <tr key={r.id}>
-                    <td className="py-3 px-4 font-medium">{r.id}</td>
-                    <td className="py-3 px-4">{r.status || "—"}</td>
-                    <td className="py-3 px-4 capitalize">{r.type || "—"}</td>
+            {rows && visibleRows.length > 0
+              ? visibleRows.map((r) => {
+                  const isRevokable =
+                    typeof r.status === "string" &&
+                    /pending|new|open/i.test(r.status);
+                  return (
+                    <tr key={r.id}>
+                      <td className="py-3 px-4 font-medium">{r.id}</td>
+                      <td className="py-3 px-4">{r.status || "—"}</td>
+                      <td className="py-3 px-4 capitalize">{r.type || "—"}</td>
+                      <td
+                        className="py-3 px-4 max-w-[420px] truncate"
+                        title={r.message}
+                      >
+                        {r.message || "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        {r.created_at ? r.created_at.slice(0, 10) : "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        {isRevokable ? (
+                          <button
+                            className="rounded-xl ring-1 ring-slate-300 px-3 py-1.5 hover:bg-slate-50"
+                            onClick={() => onRevoke(r.id)}
+                            disabled={revoking}
+                          >
+                            Revoke
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              : !error && (
+                  <tr>
                     <td
-                      className="py-3 px-4 max-w-[420px] truncate"
-                      title={r.message}
+                      colSpan={6}
+                      className="py-10 px-4 text-center text-slate-500"
                     >
-                      {r.message || "—"}
-                    </td>
-                    <td className="py-3 px-4">
-                      {r.created_at ? r.created_at.slice(0, 10) : "—"}
-                    </td>
-                    <td className="py-3 px-4">
-                      {isRevokable ? (
-                        <button
-                          className="rounded-xl ring-1 ring-slate-300 px-3 py-1.5 hover:bg-slate-50"
-                          onClick={() => onRevoke(r.id)}
-                          disabled={revoking}
-                        >
-                          Revoke
-                        </button>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                      No Records Available.
                     </td>
                   </tr>
-                );
-              })
-            ) : (
-              !error && (
-                <tr>
-                  <td colSpan={6} className="py-10 px-4 text-center text-slate-500">
-                    No Records Available.
-                  </td>
-                </tr>
-              )
-            )}
+                )}
           </tbody>
         </table>
       </div>

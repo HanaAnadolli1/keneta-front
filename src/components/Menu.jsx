@@ -23,6 +23,8 @@ async function fetchJSON(url, { signal } = {}) {
 
 export default function Menu() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState("categories"); // "categories" | "pages"
+
   const [rootCategories, setRootCategories] = useState([]);
   const [subcategories, setSubcategories] = useState({});
   const [activeRootId, setActiveRootId] = useState(null);
@@ -30,6 +32,15 @@ export default function Menu() {
   const [activeLevel3Id, setActiveLevel3Id] = useState(null);
 
   const wrapRef = useRef(null);
+
+  // desktop top nav "pages"
+  const pages = [
+    { label: "Produktet", path: "/products" },
+    { label: "Brendet", path: "/brands" },
+    { label: "Deals", path: "/deals" },
+    { label: "Të rejat", path: "/new-arrivals" },
+    { label: "Outlet", path: "/outlet" },
+  ];
 
   // root categories (abortable + cached)
   useEffect(() => {
@@ -76,7 +87,7 @@ export default function Menu() {
     setActiveLevel3Id(null);
   };
 
-  // ESC / outside-click to close
+  // ESC / outside-click to close (desktop only so it doesn't kill the mobile drawer)
   useEffect(() => {
     if (!dropdownOpen) return;
     const onKey = (e) => {
@@ -84,7 +95,7 @@ export default function Menu() {
     };
     const onClick = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        closeAll();
+        if (window.innerWidth >= 768) closeAll();
       }
     };
     document.addEventListener("keydown", onKey);
@@ -94,6 +105,16 @@ export default function Menu() {
       document.removeEventListener("pointerdown", onClick);
     };
   }, [dropdownOpen]);
+
+  // Listen for BottomNav trigger to open categories on mobile
+  useEffect(() => {
+    const onOpen = () => {
+      setActiveMobileTab("categories");
+      setDropdownOpen(true);
+    };
+    window.addEventListener("keneta:openMobileCategories", onOpen);
+    return () => window.removeEventListener("keneta:openMobileCategories", onOpen);
+  }, []);
 
   const handleHover = (level, categoryId) => {
     // desktop hover path management
@@ -151,10 +172,11 @@ export default function Menu() {
   };
 
   return (
-    <nav className="bg-white py-4 shadow" ref={wrapRef}>
-      <div className="flex items-center justify-between max-w-7xl mx-auto px-4">
+    // 👇 No white strip on mobile: styles only apply from md: and up
+    <nav className="md:bg-white md:py-4 md:shadow" ref={wrapRef}>
+      <div className="hidden md:flex items-center justify-between max-w-7xl mx-auto px-4">
         {/* Desktop Menu */}
-        <div className="hidden md:flex items-center space-x-8">
+        <div className="flex items-center space-x-8">
           {/* Dropdown Root */}
           <div
             className="relative"
@@ -214,13 +236,7 @@ export default function Menu() {
             )}
           </div>
 
-          {[
-            { label: "Produktet", path: "/products" },
-            { label: "Brendet", path: "/brands" },
-            { label: "Deals", path: "/deals" },
-            { label: "Të rejat", path: "/new-arrivals" },
-            { label: "Outlet", path: "/outlet" },
-          ].map(({ label, path }, idx) => (
+          {pages.map(({ label, path }, idx) => (
             <Link
               key={idx}
               to={path}
@@ -231,170 +247,262 @@ export default function Menu() {
             </Link>
           ))}
         </div>
-
-        {/* Mobile Toggle */}
-        <button
-          onClick={() => setDropdownOpen((prev) => !prev)}
-          className="md:hidden text-[#132232]"
-          aria-label={dropdownOpen ? "Close menu" : "Open menu"}
-          aria-expanded={dropdownOpen}
-        >
-          {dropdownOpen ? <CloseIcon size={28} /> : <MenuIcon size={28} />}
-        </button>
       </div>
 
-      {/* Mobile Off-canvas */}
+      {/* ===================== Mobile Off-canvas (opens via BottomNav event) ===================== */}
       {dropdownOpen && (
         <div className="md:hidden fixed inset-0 z-[60]">
+          {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
             aria-hidden="true"
             onClick={closeAll}
           />
-          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl p-3 overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-[#132232]">Kategoritë</span>
-              <button onClick={closeAll} aria-label="Close">
-                <CloseIcon />
-              </button>
+
+          {/* Panel */}
+          <div
+            className="
+              absolute left-0 top-0 bottom-0
+              w-[92vw] max-w-[420px]
+              bg-white rounded-r-2xl shadow-2xl
+              overflow-hidden
+              flex flex-col
+              pt-[env(safe-area-inset-top)]
+              pb-[env(safe-area-inset-bottom)]
+            "
+            role="dialog"
+            aria-label="Menu mobil"
+          >
+            {/* Header with tabs */}
+            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100">
+              <div className="flex items-center justify-between px-3 py-3">
+                <span className="font-semibold text-[#132232] text-[16px]">Menu</span>
+                <button
+                  onClick={closeAll}
+                  aria-label="Mbyll"
+                  className="p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition"
+                >
+                  <CloseIcon size={20} />
+                </button>
+              </div>
+              {/* Segmented control */}
+              <div className="px-3 pb-2">
+                <div className="grid grid-cols-2 bg-gray-100 rounded-xl p-1">
+                  {[
+                    { key: "categories", label: "Kategoritë" },
+                    { key: "pages", label: "Faqet" },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveMobileTab(tab.key)}
+                      className={`py-2 rounded-lg text-sm font-medium transition ${
+                        activeMobileTab === tab.key
+                          ? "bg-white shadow text-[#1a3c5c]"
+                          : "text-[#132232]/70 hover:text-[#132232]"
+                      }`}
+                      aria-pressed={activeMobileTab === tab.key}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <ul className="divide-y">
-              {rootCategories.map((root) => {
-                const open = activeRootId === root.id;
-                const lvl2 = subcategories[root.id] || [];
-                return (
-                  <li key={root.id} className="py-2">
-                    <button
-                      className="w-full text-left flex items-center justify-between py-2 px-1"
-                      onClick={() => {
-                        setActiveRootId(open ? null : root.id);
-                        if (!open) fetchChildren(root.id);
-                      }}
-                      aria-expanded={open}
-                    >
-                      <span className="font-medium">{root.name}</span>
-                      <ChevronDown
-                        size={18}
-                        className={`transition-transform ${
-                          open ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-
-                    {/* Quick "view all" for this root */}
-                    <div className="ml-1">
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {activeMobileTab === "pages" ? (
+                // ----------------------- PAGES LIST -----------------------
+                <ul className="space-y-1">
+                  {pages.map(({ label, path }) => (
+                    <li key={path}>
                       <Link
-                        to={`/products?category=${encodeURIComponent(root.slug)}`}
-                        className="text-xs text-indigo-600 hover:underline"
+                        to={path}
+                        className="block px-3 py-3 rounded-xl text-[15px] text-[#132232] hover:bg-gray-50 active:bg-gray-100 transition"
                         onClick={closeAll}
                       >
-                        Shiko të gjitha
+                        {label}
                       </Link>
-                    </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                // -------------------- CATEGORIES DRILLDOWN --------------------
+                <ul className="divide-y divide-gray-100">
+                  {rootCategories.map((root) => {
+                    const open = activeRootId === root.id;
+                    const lvl2 = subcategories[root.id] || [];
+                    return (
+                      <li key={root.id} className="py-1">
+                        {/* Row: root */}
+                        <button
+                          className="
+                            w-full text-left flex items-center justify-between
+                            py-3 px-2 rounded-xl
+                            hover:bg-gray-50 active:bg-gray-100
+                            transition
+                          "
+                          onClick={() => {
+                            setActiveRootId(open ? null : root.id);
+                            if (!open) fetchChildren(root.id);
+                          }}
+                          aria-expanded={open}
+                          aria-controls={`root-${root.id}`}
+                        >
+                          <span className="font-medium text-[15px] text-[#132232]">
+                            {root.name}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            {/* Quick "view all" */}
+                            <Link
+                              to={`/products?category=${encodeURIComponent(root.slug)}`}
+                              className="text-xs font-medium text-[#1a3c5c] hover:underline"
+                              onClick={closeAll}
+                            >
+                              Shiko të gjitha
+                            </Link>
+                            <ChevronDown
+                              size={18}
+                              className={`transition-transform duration-200 ${
+                                open ? "rotate-180 text-[#1a3c5c]" : "text-[#132232]"
+                              }`}
+                            />
+                          </div>
+                        </button>
 
-                    {open && (
-                      <ul className="ml-2 mt-1">
-                        {lvl2.length === 0 && (
-                          <li className="text-sm text-gray-500 py-1">
-                            Loading…
-                          </li>
-                        )}
-                        {lvl2.map((c2) => {
-                          const open2 = activeLevel2Id === c2.id;
-                          const lvl3 = subcategories[c2.id] || [];
-                          return (
-                            <li key={c2.id} className="py-1">
-                              <div className="flex items-center justify-between">
-                                <button
-                                  className="text-left flex-1 py-1 px-1 text-sm"
-                                  onClick={() => {
-                                    setActiveLevel2Id(open2 ? null : c2.id);
-                                    if (!open2) fetchChildren(c2.id);
-                                  }}
-                                  aria-expanded={open2}
-                                >
-                                  {c2.name}
-                                </button>
-                                {/* Tap to filter by this Level 2 directly */}
-                                <Link
-                                  to={`/products?category=${encodeURIComponent(c2.slug)}`}
-                                  className="text-xs text-indigo-600 px-1 hover:underline"
-                                  onClick={closeAll}
-                                >
-                                  Shiko
-                                </Link>
-                              </div>
+                        {/* Level 2 */}
+                        {open && (
+                          <ul id={`root-${root.id}`} className="ml-1 mt-1 pl-2 border-l border-gray-100">
+                            {lvl2.length === 0 && (
+                              <li className="text-sm text-gray-500 py-2 px-1">Po ngarkohet…</li>
+                            )}
+                            {lvl2.map((c2) => {
+                              const open2 = activeLevel2Id === c2.id;
+                              const lvl3 = subcategories[c2.id] || [];
+                              return (
+                                <li key={c2.id} className="py-1">
+                                  <div className="flex items-center justify-between">
+                                    <button
+                                      className="
+                                        text-left flex-1 py-2 px-2 rounded-lg
+                                        hover:bg-gray-50 active:bg-gray-100
+                                        text-[14px]
+                                      "
+                                      onClick={() => {
+                                        setActiveLevel2Id(open2 ? null : c2.id);
+                                        if (!open2) fetchChildren(c2.id);
+                                      }}
+                                      aria-expanded={open2}
+                                      aria-controls={`lvl2-${c2.id}`}
+                                    >
+                                      {c2.name}
+                                    </button>
+                                    <div className="flex items-center gap-2 pr-1">
+                                      <Link
+                                        to={`/products?category=${encodeURIComponent(c2.slug)}`}
+                                        className="text-xs text-[#1a3c5c] hover:underline"
+                                        onClick={closeAll}
+                                      >
+                                        Shiko
+                                      </Link>
+                                      <ChevronDown
+                                        size={16}
+                                        className={`transition-transform duration-200 ${
+                                          open2 ? "rotate-180 text-[#1a3c5c]" : "text-[#132232]"
+                                        }`}
+                                      />
+                                    </div>
+                                  </div>
 
-                              {open2 && (
-                                <ul className="ml-3 mt-1">
-                                  {lvl3.length === 0 && (
-                                    <li className="text-sm text-gray-500 py-1">
-                                      Loading…
-                                    </li>
-                                  )}
-                                  {lvl3.map((c3) => {
-                                    const lvl4 = subcategories[c3.id] || [];
-                                    const open3 = activeLevel3Id === c3.id;
-                                    return (
-                                      <li key={c3.id} className="py-1">
-                                        <div className="flex items-center justify-between">
-                                          <button
-                                            className="text-left flex-1 py-1 px-1 text-sm"
-                                            onClick={() => {
-                                              setActiveLevel3Id(open3 ? null : c3.id);
-                                              if (!open3) fetchChildren(c3.id);
-                                            }}
-                                            aria-expanded={open3}
-                                          >
-                                            {c3.name}
-                                          </button>
-                                          {/* Tap to filter by this Level 3 directly */}
-                                          <Link
-                                            to={`/products?category=${encodeURIComponent(c3.slug)}`}
-                                            className="text-xs text-indigo-600 px-1 hover:underline"
-                                            onClick={closeAll}
-                                          >
-                                            Shiko
-                                          </Link>
-                                        </div>
-
-                                        {open3 && (
-                                          <ul className="ml-4 mt-1 space-y-1">
-                                            {lvl4.length === 0 && (
-                                              <li className="text-sm text-gray-500 py-1">
-                                                Loading…
-                                              </li>
-                                            )}
-                                            {lvl4.map((c4) => (
-                                              <li key={c4.id}>
+                                  {/* Level 3 */}
+                                  {open2 && (
+                                    <ul
+                                      id={`lvl2-${c2.id}`}
+                                      className="ml-3 mt-1 pl-2 border-l border-gray-100"
+                                    >
+                                      {lvl3.length === 0 && (
+                                        <li className="text-sm text-gray-500 py-2 px-1">Po ngarkohet…</li>
+                                      )}
+                                      {lvl3.map((c3) => {
+                                        const lvl4 = subcategories[c3.id] || [];
+                                        const open3 = activeLevel3Id === c3.id;
+                                        return (
+                                          <li key={c3.id} className="py-1">
+                                            <div className="flex items-center justify-between">
+                                              <button
+                                                className="
+                                                  text-left flex-1 py-2 px-2 rounded-lg
+                                                  hover:bg-gray-50 active:bg-gray-100
+                                                  text-[14px]
+                                                "
+                                                onClick={() => {
+                                                  setActiveLevel3Id(open3 ? null : c3.id);
+                                                  if (!open3) fetchChildren(c3.id);
+                                                }}
+                                                aria-expanded={open3}
+                                                aria-controls={`lvl3-${c3.id}`}
+                                              >
+                                                {c3.name}
+                                              </button>
+                                              <div className="flex items-center gap-2 pr-1">
                                                 <Link
-                                                  to={`/products?category=${encodeURIComponent(
-                                                    c4.slug
-                                                  )}`}
-                                                  className="block py-1 px-1 text-sm text-[#132232] hover:text-[#1a3c5c] transition-colors"
+                                                  to={`/products?category=${encodeURIComponent(c3.slug)}`}
+                                                  className="text-xs text-[#1a3c5c] hover:underline"
                                                   onClick={closeAll}
                                                 >
-                                                  {c4.name}
+                                                  Shiko
                                                 </Link>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        )}
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                                                <ChevronDown
+                                                  size={16}
+                                                  className={`transition-transform duration-200 ${
+                                                    open3 ? "rotate-180 text-[#1a3c5c]" : "text-[#132232]"
+                                                  }`}
+                                                />
+                                              </div>
+                                            </div>
+
+                                            {/* Level 4 */}
+                                            {open3 && (
+                                              <ul
+                                                id={`lvl3-${c3.id}`}
+                                                className="ml-4 mt-1 space-y-1"
+                                              >
+                                                {lvl4.length === 0 && (
+                                                  <li className="text-sm text-gray-500 py-2 px-1">
+                                                    Po ngarkohet…
+                                                  </li>
+                                                )}
+                                                {lvl4.map((c4) => (
+                                                  <li key={c4.id}>
+                                                    <Link
+                                                      to={`/products?category=${encodeURIComponent(
+                                                        c4.slug
+                                                      )}`}
+                                                      className="block py-2 px-2 rounded-md text-[14px] text-[#132232] hover:text-[#1a3c5c] hover:bg-gray-50 transition-colors"
+                                                      onClick={closeAll}
+                                                    >
+                                                      {c4.name}
+                                                    </Link>
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}

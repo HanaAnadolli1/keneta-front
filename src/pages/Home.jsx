@@ -5,6 +5,7 @@ import Carousel from "../components/Home/Carousel";
 import Offers from "../components/Home/Offers";
 import Categories from "../components/Home/Categories";
 import DealsCarousel from "../components/Home/DealsCarousel";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 /* --------------------------------------------------------------
    query: fetch + transform → array of { id, url, subtitle, … }
@@ -37,6 +38,7 @@ export default function Home() {
 
   return (
     <div>
+       <Breadcrumbs items={[{ label: "Home" }]} />
       {error ? (
         <div className="p-8 text-red-600">Failed to load hero images.</div>
       ) : (

@@ -1,3 +1,4 @@
+// src/components/CategoryNavigator.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -8,7 +9,7 @@ import noImage from "../assets/no_image.jpg";
 import { API_V1 } from "../api/config";
 import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 
-const MIN_FOR_CAROUSEL = 7;
+const MIN_FOR_CAROUSEL = 7; // keep desktop logic the same :contentReference[oaicite:2]{index=2}
 
 function normSlug(s) {
   return (s || "")
@@ -29,7 +30,6 @@ function CategoryCard({ cat }) {
       className="group px-2 py-2 flex flex-col items-center justify-center text-center"
       title={cat.name}
     >
-      {/* taller circle & icon, but compact text */}
       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-2 overflow-hidden">
         <img src={imgSrc} alt={cat.name} className="w-8 h-8 object-contain" loading="lazy" />
       </div>
@@ -142,11 +142,39 @@ export default function CategoryNavigator() {
 
   if (!children.length) return null;
 
-  // Grid (≤6 children) — max 5 per row
+  // ≤6 children: keep desktop grid, but on mobile:
+  // - show a 4-item grid when ≤4
+  // - use a 4-up slider when >4
   if (!isCarousel) {
     return (
       <div className="mb-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        {/* Mobile behavior */}
+        <div className="md:hidden">
+          {children.length > 4 ? (
+            <Swiper
+              className="!w-full !max-w-full"
+              modules={[Navigation]}
+              navigation={false}
+              spaceBetween={12}
+              slidesPerView={4} // show 4 on mobile
+            >
+              {children.map((c) => (
+                <SwiperSlide key={c.id}>
+                  <CategoryCard cat={c} />
+                </SwiperSlide>
+              ))}
+            </Swiper>
+          ) : (
+            <div className="grid grid-cols-4 gap-4">
+              {children.map((c) => (
+                <CategoryCard key={c.id} cat={c} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop unchanged */}
+        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {children.map((c) => (
             <CategoryCard key={c.id} cat={c} />
           ))}
@@ -155,7 +183,7 @@ export default function CategoryNavigator() {
     );
   }
 
-  // Carousel (≥7 children) — cap at 5 visible on desktop
+  // ≥7 children: existing carousel (4 visible on mobile; more on larger screens)
   return (
     <div className="mb-3 relative w-full max-w-full overflow-hidden">
       <button
@@ -185,10 +213,8 @@ export default function CategoryNavigator() {
           swiper.navigation.init();
           swiper.navigation.update();
         }}
-        // More room between items so it breathes
         spaceBetween={16}
-        // Cap visible slides at 5 on md+; fewer on small screens to avoid crowding
-        slidesPerView={4}
+        slidesPerView={4} // 4 on mobile
         breakpoints={{
           480: { slidesPerView: 4 },
           640: { slidesPerView: 4 },

@@ -4,6 +4,7 @@ import FieldRow from "../../components/account/FieldRow";
 import Input from "../../components/account/Form/Input";
 import Select from "../../components/account/Form/Select";
 import TwoCol from "../../components/account/Form/TwoCol";
+import Breadcrumbs from "../../components/Breadcrumbs";
 
 export default function Profile() {
   const [data, setData] = useState(null);
@@ -11,6 +12,12 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const breadcrumbs = [
+    { label: "Home", path: "/" },
+    { label: "Account", path: "/account" },
+    { label: "Profile" },
+  ];
 
   const load = async () => {
     try {
@@ -62,12 +69,19 @@ export default function Profile() {
     }
   };
 
-  if (!data) return <p>Loading…</p>;
+  if (!data)
+    return (
+      <div>
+        <Breadcrumbs items={breadcrumbs} />
+        <p>Loading…</p>
+      </div>
+    );
 
   // ===== READ MODE =====
   if (!editing) {
     return (
       <div>
+        <Breadcrumbs items={breadcrumbs} />
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-semibold">Profile</h2>
           <button
@@ -111,6 +125,7 @@ export default function Profile() {
   // ===== EDIT MODE =====
   return (
     <div>
+      <Breadcrumbs items={breadcrumbs} />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold">Profile</h2>
       </div>
