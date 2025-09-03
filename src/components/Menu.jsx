@@ -21,6 +21,18 @@ async function fetchJSON(url, { signal } = {}) {
   return p;
 }
 
+// pick an icon URL from the category object
+function getCatIconUrl(cat) {
+  return (
+    cat?.logo_url ||
+    cat?.image_url ||
+    cat?.image?.url ||
+    cat?.thumbnail ||
+    cat?.icon ||
+    null
+  );
+}
+
 export default function Menu() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState("categories"); // "categories" | "pages"
@@ -113,7 +125,8 @@ export default function Menu() {
       setDropdownOpen(true);
     };
     window.addEventListener("keneta:openMobileCategories", onOpen);
-    return () => window.removeEventListener("keneta:openMobileCategories", onOpen);
+    return () =>
+      window.removeEventListener("keneta:openMobileCategories", onOpen);
   }, []);
 
   const handleHover = (level, categoryId) => {
@@ -144,26 +157,42 @@ export default function Menu() {
         role="menu"
         aria-label="Subcategories"
       >
-        {[level2, level3, level4].map((level, index) =>
+        {[level2, level3, level4].map((level, colIndex) =>
           level.length > 0 ? (
             <ul
-              key={index}
+              key={colIndex}
               className="min-w-[240px] h-full overflow-visible bg-white"
             >
-              {level.map((cat) => (
-                <li
-                  key={cat.id}
-                  onMouseEnter={() => handleHover(index + 2, cat.id)}
-                  className="px-5 py-2 hover:bg-gray-100 text-[#132232] whitespace-nowrap transition-colors duration-150 cursor-pointer"
-                >
-                  <Link
-                    to={`/products?category=${encodeURIComponent(cat.slug)}`}
-                    className="block hover:text-[#1a3c5c]"
+              {level.map((cat, itemIndex) => {
+                // show icons ONLY for the first two items of the first column (level-2)
+                const showIcon =
+                  colIndex === 0 && itemIndex < 2 && getCatIconUrl(cat);
+                return (
+                  <li
+                    key={cat.id}
+                    onMouseEnter={() => handleHover(colIndex + 2, cat.id)}
+                    className="px-5 py-2 hover:bg-gray-100 text-[#132232] whitespace-nowrap transition-colors duration-150 cursor-pointer"
                   >
-                    {cat.name}
-                  </Link>
-                </li>
-              ))}
+                    <Link
+                      to={`/products?category=${encodeURIComponent(cat.slug)}`}
+                      className="block hover:text-[#1a3c5c]"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {showIcon && (
+                          <img
+                            src={getCatIconUrl(cat)}
+                            alt=""
+                            className="w-5 h-5 object-contain"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        )}
+                        {cat.name}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           ) : null
         )}
@@ -214,17 +243,31 @@ export default function Menu() {
               >
                 {/* Root Categories */}
                 <ul className="min-w-[240px] h-full overflow-visible bg-white">
-                  {rootCategories.map((cat) => (
+                  {rootCategories.map((cat, idx) => (
                     <li
                       key={cat.id}
                       onMouseEnter={() => handleHover(1, cat.id)}
                       className="hover:bg-gray-100 whitespace-nowrap"
                     >
                       <Link
-                        to={`/products?category=${encodeURIComponent(cat.slug)}`}
+                        to={`/products?category=${encodeURIComponent(
+                          cat.slug
+                        )}`}
                         className="block px-5 py-2 text-sm font-medium text-[#132232] hover:text-[#1a3c5c] transition-colors"
                       >
-                        {cat.name}
+                        <span className="inline-flex items-center gap-2">
+                          {/* Only show icon for first and second root categories */}
+                          {idx < 2 && getCatIconUrl(cat) && (
+                            <img
+                              src={getCatIconUrl(cat)}
+                              alt=""
+                              className="w-5 h-5 object-contain"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          )}
+                          {cat.name}
+                        </span>
                       </Link>
                     </li>
                   ))}
@@ -276,7 +319,9 @@ export default function Menu() {
             {/* Header with tabs */}
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100">
               <div className="flex items-center justify-between px-3 py-3">
-                <span className="font-semibold text-[#132232] text-[16px]">Menu</span>
+                <span className="font-semibold text-[#132232] text-[16px]">
+                  Menu
+                </span>
                 <button
                   onClick={closeAll}
                   aria-label="Mbyll"
@@ -329,7 +374,7 @@ export default function Menu() {
               ) : (
                 // -------------------- CATEGORIES DRILLDOWN --------------------
                 <ul className="divide-y divide-gray-100">
-                  {rootCategories.map((root) => {
+                  {rootCategories.map((root, idx) => {
                     const open = activeRootId === root.id;
                     const lvl2 = subcategories[root.id] || [];
                     return (
@@ -349,13 +394,24 @@ export default function Menu() {
                           aria-expanded={open}
                           aria-controls={`root-${root.id}`}
                         >
-                          <span className="font-medium text-[15px] text-[#132232]">
+                          <span className="font-medium text-[15px] text-[#132232] inline-flex items-center gap-2">
+                            {idx < 2 && getCatIconUrl(root) && (
+                              <img
+                                src={getCatIconUrl(root)}
+                                alt=""
+                                className="w-5 h-5 object-contain"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
                             {root.name}
                           </span>
                           <div className="flex items-center gap-3">
                             {/* Quick "view all" */}
                             <Link
-                              to={`/products?category=${encodeURIComponent(root.slug)}`}
+                              to={`/products?category=${encodeURIComponent(
+                                root.slug
+                              )}`}
                               className="text-xs font-medium text-[#1a3c5c] hover:underline"
                               onClick={closeAll}
                             >
@@ -364,7 +420,9 @@ export default function Menu() {
                             <ChevronDown
                               size={18}
                               className={`transition-transform duration-200 ${
-                                open ? "rotate-180 text-[#1a3c5c]" : "text-[#132232]"
+                                open
+                                  ? "rotate-180 text-[#1a3c5c]"
+                                  : "text-[#132232]"
                               }`}
                             />
                           </div>
@@ -372,11 +430,16 @@ export default function Menu() {
 
                         {/* Level 2 */}
                         {open && (
-                          <ul id={`root-${root.id}`} className="ml-1 mt-1 pl-2 border-l border-gray-100">
+                          <ul
+                            id={`root-${root.id}`}
+                            className="ml-1 mt-1 pl-2 border-l border-gray-100"
+                          >
                             {lvl2.length === 0 && (
-                              <li className="text-sm text-gray-500 py-2 px-1">Po ngarkohet…</li>
+                              <li className="text-sm text-gray-500 py-2 px-1">
+                                Po ngarkohet…
+                              </li>
                             )}
-                            {lvl2.map((c2) => {
+                            {lvl2.map((c2, i2) => {
                               const open2 = activeLevel2Id === c2.id;
                               const lvl3 = subcategories[c2.id] || [];
                               return (
@@ -395,11 +458,24 @@ export default function Menu() {
                                       aria-expanded={open2}
                                       aria-controls={`lvl2-${c2.id}`}
                                     >
+                                      {i2 < 2 && getCatIconUrl(c2) && (
+                                        <img
+                                         src={getCatIconUrl(c2)}
+                                         alt=""
+                                         className="w-5 h-5 object-contain"
+                                         loading="lazy"
+                                         referrerPolicy="no-referrer"
+                                        />
+                                      )
+
+                                      }
                                       {c2.name}
                                     </button>
                                     <div className="flex items-center gap-2 pr-1">
                                       <Link
-                                        to={`/products?category=${encodeURIComponent(c2.slug)}`}
+                                        to={`/products?category=${encodeURIComponent(
+                                          c2.slug
+                                        )}`}
                                         className="text-xs text-[#1a3c5c] hover:underline"
                                         onClick={closeAll}
                                       >
@@ -408,7 +484,9 @@ export default function Menu() {
                                       <ChevronDown
                                         size={16}
                                         className={`transition-transform duration-200 ${
-                                          open2 ? "rotate-180 text-[#1a3c5c]" : "text-[#132232]"
+                                          open2
+                                            ? "rotate-180 text-[#1a3c5c]"
+                                            : "text-[#132232]"
                                         }`}
                                       />
                                     </div>
@@ -421,7 +499,9 @@ export default function Menu() {
                                       className="ml-3 mt-1 pl-2 border-l border-gray-100"
                                     >
                                       {lvl3.length === 0 && (
-                                        <li className="text-sm text-gray-500 py-2 px-1">Po ngarkohet…</li>
+                                        <li className="text-sm text-gray-500 py-2 px-1">
+                                          Po ngarkohet…
+                                        </li>
                                       )}
                                       {lvl3.map((c3) => {
                                         const lvl4 = subcategories[c3.id] || [];
@@ -436,8 +516,11 @@ export default function Menu() {
                                                   text-[14px]
                                                 "
                                                 onClick={() => {
-                                                  setActiveLevel3Id(open3 ? null : c3.id);
-                                                  if (!open3) fetchChildren(c3.id);
+                                                  setActiveLevel3Id(
+                                                    open3 ? null : c3.id
+                                                  );
+                                                  if (!open3)
+                                                    fetchChildren(c3.id);
                                                 }}
                                                 aria-expanded={open3}
                                                 aria-controls={`lvl3-${c3.id}`}
@@ -446,7 +529,9 @@ export default function Menu() {
                                               </button>
                                               <div className="flex items-center gap-2 pr-1">
                                                 <Link
-                                                  to={`/products?category=${encodeURIComponent(c3.slug)}`}
+                                                  to={`/products?category=${encodeURIComponent(
+                                                    c3.slug
+                                                  )}`}
                                                   className="text-xs text-[#1a3c5c] hover:underline"
                                                   onClick={closeAll}
                                                 >
@@ -455,7 +540,9 @@ export default function Menu() {
                                                 <ChevronDown
                                                   size={16}
                                                   className={`transition-transform duration-200 ${
-                                                    open3 ? "rotate-180 text-[#1a3c5c]" : "text-[#132232]"
+                                                    open3
+                                                      ? "rotate-180 text-[#1a3c5c]"
+                                                      : "text-[#132232]"
                                                   }`}
                                                 />
                                               </div>
