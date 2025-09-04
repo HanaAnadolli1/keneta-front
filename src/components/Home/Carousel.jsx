@@ -25,7 +25,7 @@ export default function Carousel({ slides = [], className = "", interval = 8000 
 
   return (
     <div
-      className={`relative w-full overflow-hidden shadow-lg h-[360px] sm:h-[480px] md:h-[560px] ${className}`}
+      className={`relative w-full overflow-hidden shadow-lg h-[360px] sm:h-[480px] md:h-[560px] rounded-2xl mt-2 ${className}`}
     >
       {slides.map((slide, i) => (
         <div
