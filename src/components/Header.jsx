@@ -19,7 +19,6 @@ export default function Header() {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
 
-  // Close account dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -30,7 +29,6 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Open cart when bottom nav fires an event
   useEffect(() => {
     const onOpenCart = () => setIsCartOpen(true);
     window.addEventListener("keneta:openCart", onOpenCart);
@@ -44,7 +42,8 @@ export default function Header() {
 
   return (
     <>
-      <header className="flex flex-col w-full">
+      {/* Sticky header */}
+      <header className="sticky top-0 z-50 flex flex-col w-full bg-white border-b border-gray-100">
         {/* Top Bar */}
         <div className="bg-[var(--primary)] text-white text-xs md:text-sm flex justify-center">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-2 gap-2">
@@ -57,7 +56,7 @@ export default function Header() {
         </div>
 
         {/* Main Header */}
-        <div className="flex justify-center bg-transparent">
+        <div className="flex justify-center">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-4 md:py-6 gap-4">
             {/* Logo */}
             <div className="text-2xl md:text-4xl font-bold text-[var(--secondary)]">
@@ -134,9 +133,12 @@ export default function Header() {
             </div>
           </div>
         </div>
+
+        {/* If you want the Menu to be sticky too, keep it inside header */}
+        <Menu />
       </header>
 
-      <Menu />
+      {/* Cart sidebar stays outside so it can overlay the page */}
       <CartSidebar open={isCartOpen} onClose={() => setIsCartOpen(false)} />
 
       {/* Mobile bottom navigation */}

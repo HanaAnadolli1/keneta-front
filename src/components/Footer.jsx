@@ -47,15 +47,13 @@ export default function Footer() {
         );
         setEmail("");
       } else {
-        // Show API error message if present
         setErrorMsg(
           data?.message ||
             "Nuk u arrit të kryhet abonimi. Ju lutem provoni sërish."
         );
       }
-    } catch (err) {
+    } catch {
       setErrorMsg("Gabim rrjeti. Ju lutem provoni sërish.");
-      // console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -64,9 +62,10 @@ export default function Footer() {
   return (
     <footer className="bg-white border-t border-[var(--primary)]/20 mt-16">
       <div className="max-w-7xl mx-auto px-4 md:px-6">
-        {/* Top: Brand + Newsletter */}
-        <section className="py-10 grid gap-10 md:grid-cols-5 items-start">
-          {/* Brand */}
+        {/* Top: Brand + Columns */}
+        {/* Make 6 columns on md+, so Newsletter can span 2 */}
+        <section className="py-8 grid gap-y-10 gap-x-6 md:gap-x-8 md:grid-cols-6 items-start">
+          {/* Brand (2 cols) */}
           <div className="md:col-span-2">
             <Link to="/" className="inline-flex items-center">
               <img src={logo} alt="Keneta Logo" className="w-40 md:w-48" />
@@ -76,7 +75,7 @@ export default function Footer() {
             </p>
           </div>
 
-          {/* Nav 1 */}
+          {/* Nav 1 (1 col) */}
           <nav className="md:col-span-1">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
               Navigimi
@@ -117,7 +116,7 @@ export default function Footer() {
             </ul>
           </nav>
 
-          {/* Nav 2 */}
+          {/* Nav 2 (1 col) */}
           <nav className="md:col-span-1">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
               Ndihmë
@@ -158,8 +157,8 @@ export default function Footer() {
             </ul>
           </nav>
 
-          {/* Newsletter */}
-          <div className="md:col-span-1 w-full">
+          {/* Newsletter (2 cols on md+) */}
+          <div className="md:col-span-2 w-full">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
               Newsletter
             </h4>
@@ -167,25 +166,32 @@ export default function Footer() {
               Merrni ofertat dhe të rejat e fundit.
             </p>
 
-            <form onSubmit={handleSubscribe} className="flex">
+            {/* Keep on one line, don't let input shrink, give it a reasonable min width */}
+            <form
+              onSubmit={handleSubscribe}
+              className="flex flex-nowrap items-stretch w-full"
+            >
               <label htmlFor="newsletter" className="sr-only">
                 Email juaj
               </label>
+
               <input
                 id="newsletter"
                 type="email"
                 placeholder="Email juaj"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-10 flex-1 px-3 rounded-l-xl bg-white outline-none
+                className="h-10 px-3 rounded-l-xl bg-white outline-none
                            border border-[var(--primary)]/30 focus:border-[var(--primary)]
                            placeholder:text-[var(--third)]/70 text-[var(--primary)] caret-[var(--third)]
-                           transition-colors"
+                           transition-colors
+                           shrink-0 min-w-[260px] md:min-w-[300px] lg:min-w-[310px] flex-1"
               />
+
               <button
                 type="submit"
                 disabled={submitting}
-                className="h-10 px-4 -ml-px rounded-r-xl text-white text-sm font-medium
+                className="shrink-0 h-10 px-4 -ml-px rounded-r-xl text-white text-sm font-medium
                            bg-[var(--secondary)] hover:bg-[var(--third)] transition-colors
                            disabled:opacity-60 disabled:cursor-not-allowed"
               >
