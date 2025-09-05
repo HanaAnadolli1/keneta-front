@@ -22,10 +22,22 @@ function useHeroCarousels() {
       // Only active image carousels
       const imageCarousels = items
         .filter((x) => x?.type === "image_carousel" && Number(x?.status) === 1)
-        .map((x) => ({
-          sort_order: Number(x?.sort_order ?? 0),
-          images: x?.options?.images ?? [],
-        }));
+        .map((x) => {
+          // prefer translation images if present, else options.images
+          const translated =
+            x?.translations?.[0]?.options?.images ??
+            x?.options?.images ??
+            [];
+          return {
+            sort_order: Number(x?.sort_order ?? 0),
+            images: translated.map((img) => ({
+              image: img?.image ?? "",
+              title: img?.title ?? "",
+              subtitle: img?.subtitle ?? "", // keep if ever added
+              link: img?.link ?? "",
+            })),
+          };
+        });
 
       const byOrder = (n) =>
         imageCarousels.find((c) => c.sort_order === n)?.images ?? [];
@@ -56,6 +68,7 @@ export default function Home() {
                 <Carousel
                   slides={isLoading ? [] : leftSlides}
                   className="h-[420px] md:h-[560px]"
+                  buttonAlign="left"      
                 />
               </div>
             )}
@@ -66,6 +79,7 @@ export default function Home() {
                 <Carousel
                   slides={isLoading ? [] : rightSlides}
                   className="h-[420px] md:h-[560px]"
+                  buttonAlign="center"    // bottom-center (matches your red mark)
                 />
               </div>
             )}
