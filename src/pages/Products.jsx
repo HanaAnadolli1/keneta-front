@@ -22,24 +22,21 @@ import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
 
 /* ================================
- * Performance + Caching Notes
- * - No giant /categories?limit=10000 fetch.
- * - Breadcrumbs trail is resolved via:
- *    • category_id → GET /categories/{id} climb parents
- *    • category_slug → bounded DFS via GET /descendant-categories
- * - Caches in sessionStorage: slug index, trail cache, children cache.
- * - All remote calls are abortable and de-duped in-flight.
+ * Fast + resilient breadcrumbs
+ * - Prefer local list (all slugs incl. translations, + normalized)
+ * - On miss: fetch full categories ONCE, retry locally
+ * - Final: bounded DFS via /descendant-categories (depth 12)
+ * - Cached: children, trails (by normalized slug)
  * ================================ */
 
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
-
-// Public endpoint used for fallback category traversal (children-by-parent)
 const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
 
-// If your true root differs, change this
-const CATEGORY_ROOT_ID = 1;
+// If your real root differs, this still works once we load full list (uses many roots)
+const FALLBACK_ROOT_ID = 1;
 
+/* ---------- utils ---------- */
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
 
@@ -56,6 +53,15 @@ const normalizeCsv = (csv) =>
     )
   ).join(",");
 
+const normSlug = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+/* ---------- payload helpers ---------- */
 function extractProductsPayload(resp) {
   const items =
     resp?.items ??
@@ -82,7 +88,7 @@ function extractProductsPayload(resp) {
   return { items, lastPage, currentPage, hasNext };
 }
 
-/* ---------------- category helpers ---------------- */
+/* ---------- category helpers ---------- */
 function normCat(c) {
   if (!c) return null;
   return {
@@ -106,49 +112,100 @@ function normCat(c) {
   };
 }
 
-/* ===== sessionStorage caches (tiny + fast) ===== */
-const SS_SLUG_INDEX = "cat.slugIndex.v1"; // slug -> {id,parent_id,name,slug}
-const SS_TRAIL_CACHE = "cat.trailCache.v1"; // slug -> Trail[]
+function mapById(categories) {
+  const m = new Map();
+  (categories || []).forEach((c) => {
+    const n = normCat(c);
+    if (n?.id) m.set(n.id, n);
+  });
+  return m;
+}
+
+function buildSlugIndex(categories) {
+  const bySlug = new Map(); // key -> normalized category
+  for (const c of categories || []) {
+    const n = normCat(c);
+    if (!n?.id) continue;
+
+    const slugs = [
+      n.slug,
+      ...(n.translations || [])
+        .map((t) => t?.slug)
+        .filter(Boolean)
+        .map((s) => s.toLowerCase()),
+    ].filter(Boolean);
+
+    for (const raw of slugs) {
+      bySlug.set(raw, n);
+      bySlug.set(encodeURIComponent(raw), n);
+      bySlug.set(normSlug(raw), n);
+    }
+  }
+  return bySlug;
+}
+
+function buildTrailFromFlatList(target, byId) {
+  const trail = [];
+  let cur = target ? normCat(target) : null;
+  let guard = 0;
+  while (cur && guard < 40) {
+    trail.push(cur);
+    const pid = cur.parent_id;
+    if (!pid || pid === 0 || !byId.has(pid)) break;
+    cur = byId.get(pid);
+    guard++;
+  }
+  return trail.reverse();
+}
+
+/* ---------- sessionStorage caches ---------- */
+const SS_TRAIL_CACHE = "cat.trailCache.v2"; // normalized slug -> Trail[]
 const SS_CHILDREN_CACHE = "cat.childrenCache.v1"; // parentId -> rows[]
+const SS_ALL_CATEGORIES = "categoryOptions"; // your existing cache key
 
-function ssGet(key, fallback) {
-  try { const v = sessionStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-  catch { return fallback; }
-}
-function ssSet(key, value) {
-  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
-}
+const ssGet = (k, fb) => {
+  try {
+    const v = sessionStorage.getItem(k);
+    return v ? JSON.parse(v) : fb;
+  } catch {
+    return fb;
+  }
+};
+const ssSet = (k, v) => {
+  try {
+    sessionStorage.setItem(k, JSON.stringify(v));
+  } catch {}
+};
 
-function getSlugIndexCache() { return ssGet(SS_SLUG_INDEX, {}); }
-function setSlugIndexCache(obj) { ssSet(SS_SLUG_INDEX, obj); }
-function getTrailCache() { return ssGet(SS_TRAIL_CACHE, {}); }
-function setTrailCache(obj) { ssSet(SS_TRAIL_CACHE, obj); }
-function getChildrenCache() { return ssGet(SS_CHILDREN_CACHE, {}); }
-function setChildrenCache(obj) { ssSet(SS_CHILDREN_CACHE, obj); }
-
-/* ===== network helpers ===== */
+/* ---------- network helpers ---------- */
 async function getCategoryById(id, { signal } = {}) {
   if (!id) return null;
-  const res = await fetch(`${API_V1}/categories/${encodeURIComponent(id)}`, { signal });
+  const res = await fetch(`${API_V1}/categories/${encodeURIComponent(id)}`, {
+    signal,
+  });
   const json = await res.json();
   return normCat(json?.data ?? json);
 }
 
-// Abortable + bounded DFS using /descendant-categories
-async function findTrailBySlugRemote(slug, getChildren, { signal, maxRequests = 16, maxDepth = 8 } = {}) {
-  if (!slug) return [];
-  const TARGET = String(slug).toLowerCase();
+// bounded DFS using /descendant-categories; can start from multiple roots
+async function findTrailBySlugRemote(
+  slugLike,
+  getChildren,
+  roots = [FALLBACK_ROOT_ID],
+  { signal, maxRequests = 48, maxDepth = 12 } = {}
+) {
+  if (!slugLike) return [];
+  const TARGET = normSlug(slugLike);
   const tokens = TARGET.split(/[^a-z0-9]+/).filter(Boolean);
   const looksRelevant = (s) => {
-    if (!s) return false;
-    if (s === TARGET) return true;
-    // any token match (e.g. "vegla", "ngjitje", ...)
-    return tokens.some((t) => s.includes(t));
+    const ns = normSlug(s);
+    if (ns === TARGET) return true;
+    return tokens.some((t) => ns.includes(t));
   };
 
   let requests = 0;
-  const stack = [{ parentId: CATEGORY_ROOT_ID, path: [] }];
   const visited = new Set();
+  const stack = roots.map((r) => ({ parentId: r, path: [] }));
 
   while (stack.length) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -157,25 +214,26 @@ async function findTrailBySlugRemote(slug, getChildren, { signal, maxRequests = 
     if (visited.has(key)) continue;
     visited.add(key);
 
-    if (++requests > maxRequests) break; // safety cap
+    if (++requests > maxRequests) break;
     const children = await getChildren(parentId, { signal });
 
-    // score children: prefer exact/longer/contains
     const scored = children
       .map(normCat)
       .map((n) => ({
         n,
         score:
-          n.slug === TARGET ? 1000 : looksRelevant(n.slug) ? n.slug.length : 0,
+          normSlug(n.slug) === TARGET
+            ? 1000
+            : looksRelevant(n.slug)
+            ? n.slug.length
+            : 0,
       }))
       .sort((a, b) => a.score - b.score);
 
-    // iterate from highest score
     for (let i = scored.length - 1; i >= 0; i--) {
       const child = scored[i].n;
       const nextPath = [...path, child];
-      const childSlug = String(child.slug || "").toLowerCase();
-      if (childSlug === TARGET) return nextPath;
+      if (normSlug(child.slug) === TARGET) return nextPath;
       if (nextPath.length < maxDepth && scored[i].score > 0) {
         stack.push({ parentId: child.id, path: nextPath });
       }
@@ -184,51 +242,49 @@ async function findTrailBySlugRemote(slug, getChildren, { signal, maxRequests = 
   return [];
 }
 
-// Cached + abortable children fetcher (in-memory + sessionStorage)
+// cached + abortable children fetcher
 function useChildrenFetcher() {
-  const memCacheRef = useRef(new Map()); // parentId -> rows[]
-  const inflightRef = useRef(new Map()); // parentId -> Promise
+  const mem = useRef(new Map());
+  const inflight = useRef(new Map());
 
   const getChildren = useCallback(async (parentId, { signal } = {}) => {
     const key = String(parentId);
 
-    // in-memory cache
-    if (memCacheRef.current.has(key)) {
-      return memCacheRef.current.get(key);
-    }
+    if (mem.current.has(key)) return mem.current.get(key);
 
-    // session cache
-    const ss = getChildrenCache();
+    const ss = ssGet(SS_CHILDREN_CACHE, {});
     if (ss[key]) {
-      memCacheRef.current.set(key, ss[key]);
+      mem.current.set(key, ss[key]);
       return ss[key];
     }
 
-    // in-flight de-dupe
-    if (inflightRef.current.has(key)) {
-      return inflightRef.current.get(key);
-    }
+    if (inflight.current.has(key)) return inflight.current.get(key);
 
-    const controller = new AbortController();
-    const onAbort = () => controller.abort();
-    signal?.addEventListener?.("abort", onAbort, { once: true });
+    const ctrl = new AbortController();
+    signal?.addEventListener?.("abort", () => ctrl.abort(), { once: true });
 
     const p = (async () => {
       try {
-        const url = `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(parentId)}`;
-        const resp = await fetch(url, { signal: controller.signal });
-        const json = await resp.json();
-        const rows = (json?.data || []).filter((c) => String(c.status ?? "1") === "1");
-        memCacheRef.current.set(key, rows);
-        const updated = { ...getChildrenCache(), [key]: rows };
-        setChildrenCache(updated);
+        const url = `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
+          parentId
+        )}`;
+        const r = await fetch(url, { signal: ctrl.signal });
+        const j = await r.json();
+        const rows = (j?.data || []).filter(
+          (c) => String(c.status ?? "1") === "1"
+        );
+        mem.current.set(key, rows);
+        ssSet(SS_CHILDREN_CACHE, {
+          ...ssGet(SS_CHILDREN_CACHE, {}),
+          [key]: rows,
+        });
         return rows;
       } finally {
-        inflightRef.current.delete(key);
+        inflight.current.delete(key);
       }
     })();
 
-    inflightRef.current.set(key, p);
+    inflight.current.set(key, p);
     return p;
   }, []);
 
@@ -245,7 +301,6 @@ export default function Products() {
   const categorySlugParam =
     params.get("category") || params.get("category_slug") || "";
   const categoryIdParam = params.get("category_id") || "";
-
   const brandParam = params.get("brand") || "";
   const brandSlugParam = !isCsvOfIds(brandParam)
     ? brandParam || params.get("brand_slug") || ""
@@ -257,7 +312,7 @@ export default function Products() {
   const isShortSearchOnly =
     !!searchTerm && !isSearchActive && !hasCategoryFilter && !hasBrandFilter;
 
-  // meta lookups
+  // meta
   const [brandOptions, setBrandOptions] = useState([]);
   const [metaNotice, setMetaNotice] = useState(null);
 
@@ -269,10 +324,10 @@ export default function Products() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  // grid/list toggle (persist to sessionStorage)
-  const [viewMode, setViewMode] = useState(() => {
-    return sessionStorage.getItem("products.viewMode") || "grid";
-  });
+  // grid/list toggle
+  const [viewMode, setViewMode] = useState(
+    () => sessionStorage.getItem("products.viewMode") || "grid"
+  );
   useEffect(() => {
     sessionStorage.setItem("products.viewMode", viewMode);
   }, [viewMode]);
@@ -298,8 +353,8 @@ export default function Products() {
           signal: ac.signal,
         });
         const json = await res.json();
-        const brandAttr = json?.data?.find?.((a) => a.code === "brand");
-        const options = brandAttr?.options ?? [];
+        const options =
+          json?.data?.find?.((a) => a.code === "brand")?.options ?? [];
         sessionStorage.setItem("brandOptions", JSON.stringify(options));
         setBrandOptions(options);
       } catch (e) {
@@ -309,7 +364,7 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  /* ---------------- FAST breadcrumbs: compute trail without mega-fetch ---------------- */
+  /* ---------------- breadcrumbs ---------------- */
   const getChildren = useChildrenFetcher();
   const [computedTrail, setComputedTrail] = useState([]);
   const [trailLoading, setTrailLoading] = useState(false);
@@ -317,6 +372,7 @@ export default function Products() {
   useEffect(() => {
     const ac = new AbortController();
     let cancelled = false;
+
     (async () => {
       if (!hasCategoryFilter) {
         if (!cancelled) {
@@ -331,62 +387,114 @@ export default function Products() {
         let trail = [];
 
         if (categoryIdParam) {
-          // climb via /categories/{id} -> parent -> ...
-          const start = await getCategoryById(categoryIdParam, { signal: ac.signal });
+          // climb parents via /categories/{id}
+          const start = await getCategoryById(categoryIdParam, {
+            signal: ac.signal,
+          });
           if (start) {
             const t = [];
             let cur = start;
             let guard = 0;
-            while (cur && guard < 20) {
+            while (cur && guard < 30) {
               t.push(cur);
               if (!cur.parent_id) break;
-              if (ac.signal.aborted) throw new DOMException("Aborted", "AbortError");
+              if (ac.signal.aborted)
+                throw new DOMException("Aborted", "AbortError");
               cur = await getCategoryById(cur.parent_id, { signal: ac.signal });
               guard++;
             }
             trail = t.reverse();
-
-            // seed caches
-            const idx = getSlugIndexCache();
-            if (start.slug)
-              idx[start.slug.toLowerCase()] = {
-                id: start.id,
-                parent_id: start.parent_id,
-                name: start.name,
-                slug: start.slug,
-              };
-            setSlugIndexCache(idx);
           }
         } else if (categorySlugParam) {
-          const slug = String(decodeURIComponent(categorySlugParam)).toLowerCase();
-          // cached trail hit?
-          const trailCache = getTrailCache();
-          const hit = trailCache[slug];
-          if (hit?.length) {
-            trail = hit;
-          } else {
-            trail = await findTrailBySlugRemote(slug, getChildren, { signal: ac.signal, maxRequests: 16, maxDepth: 8 });
-            if (trail.length) {
-              setTrailCache({ ...trailCache, [slug]: trail });
-              const idx = getSlugIndexCache();
-              for (const n of trail) {
-                if (n?.slug) idx[n.slug.toLowerCase()] = { id: n.id, parent_id: n.parent_id, name: n.name, slug: n.slug };
+          const decoded = decodeURIComponent(categorySlugParam);
+          const slugNorm = normSlug(decoded);
+
+          // --- 1) local (maybe already cached by other screens)
+          let all = ssGet(SS_ALL_CATEGORIES, []);
+          let byId = mapById(all);
+          let bySlug = buildSlugIndex(all);
+          let hit =
+            bySlug.get(decoded.toLowerCase()) ||
+            bySlug.get(categorySlugParam) ||
+            bySlug.get(slugNorm);
+
+          if (hit) {
+            trail = buildTrailFromFlatList(hit, byId);
+          }
+
+          // --- 2) If not found, load full list ONCE and retry locally
+          if (!trail.length) {
+            try {
+              const r = await fetch(
+                `${API_V1}/categories?sort=id&order=asc&limit=10000`,
+                { signal: ac.signal }
+              );
+              const j = await r.json();
+              const fresh = j?.data || [];
+              if (fresh.length) {
+                ssSet(SS_ALL_CATEGORIES, fresh);
+                all = fresh;
+                byId = mapById(all);
+                bySlug = buildSlugIndex(all);
+                hit =
+                  bySlug.get(decoded.toLowerCase()) ||
+                  bySlug.get(categorySlugParam) ||
+                  bySlug.get(slugNorm);
+                if (hit) trail = buildTrailFromFlatList(hit, byId);
               }
-              setSlugIndexCache(idx);
+            } catch {
+              /* ignore */
+            }
+          }
+
+          // --- 3) Trail cache (normalized key)
+          if (!trail.length) {
+            const cache = ssGet(SS_TRAIL_CACHE, {});
+            const cached =
+              cache[slugNorm] ||
+              cache[decoded.toLowerCase()] ||
+              cache[categorySlugParam];
+            if (cached?.length) trail = cached;
+          }
+
+          // --- 4) DFS fallback (start from best known roots)
+          if (!trail.length) {
+            // if we have full list, use all root nodes as DFS starts
+            const roots = (
+              all.length
+                ? all
+                    .filter(
+                      (c) =>
+                        c && (c.parent_id == null || Number(c.parent_id) === 0)
+                    )
+                    .map((c) => Number(c.id))
+                : [FALLBACK_ROOT_ID]
+            ).filter(Boolean);
+
+            trail = await findTrailBySlugRemote(decoded, getChildren, roots, {
+              signal: ac.signal,
+              maxRequests: 48,
+              maxDepth: 12,
+            });
+
+            if (trail.length) {
+              const table = ssGet(SS_TRAIL_CACHE, {});
+              ssSet(SS_TRAIL_CACHE, { ...table, [slugNorm]: trail });
             }
           }
         }
 
         if (!cancelled) {
           setComputedTrail(trail);
-          if ((categorySlugParam && !trail.length) && !categoryIdParam) {
+          if (categorySlugParam && !trail.length && !categoryIdParam) {
             setMetaNotice("Category filter not recognized.");
           } else {
             setMetaNotice(null);
           }
         }
       } catch (e) {
-        if (!cancelled && e?.name !== "AbortError") console.warn("trail build failed", e);
+        if (!cancelled && e?.name !== "AbortError")
+          console.warn("trail build failed", e);
       } finally {
         if (!cancelled) setTrailLoading(false);
       }
@@ -394,11 +502,11 @@ export default function Products() {
 
     return () => {
       cancelled = true;
-      ac.abort(); // cancel any in-flight children fetches
+      ac.abort();
     };
   }, [categoryIdParam, categorySlugParam, hasCategoryFilter, getChildren]);
 
-  // Persist the FULL trail so ProductDetails can reuse it
+  // Persist recent trail for other components
   useEffect(() => {
     if (computedTrail.length) {
       const compact = computedTrail.map((c) => ({
@@ -415,7 +523,7 @@ export default function Products() {
     }
   }, [computedTrail]);
 
-  /* -------- brand slug -> id / label -------- */
+  /* -------- brand helpers -------- */
   const mappedBrandIdFromSlug = useMemo(() => {
     if (!brandSlugParam || !brandOptions.length) return null;
     return (
@@ -434,12 +542,15 @@ export default function Products() {
     );
   }, [brandSlugParam, brandOptions]);
 
-  const activeCategoryLabel = useMemo(() => {
-    if (computedTrail.length) return computedTrail[computedTrail.length - 1]?.name ?? null;
-    return null;
-  }, [computedTrail]);
+  const activeCategoryLabel = useMemo(
+    () =>
+      computedTrail.length
+        ? computedTrail[computedTrail.length - 1]?.name ?? null
+        : null,
+    [computedTrail]
+  );
 
-  // Reset list when URL-level filters change
+  /* -------- reset list on filter change -------- */
   const resetKey = useMemo(
     () =>
       JSON.stringify({
@@ -470,13 +581,12 @@ export default function Products() {
     setError(null);
   }, [resetKey]);
 
-  /* -------- Build filter QS (IMPORTANT: slug vs id) -------- */
+  /* -------- Build filter QS -------- */
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
 
     if (sort) qs.set("sort", sort);
     if (order) qs.set("order", order);
-
     if (searchTerm.length >= MIN_SEARCH_LEN) qs.set("query", searchTerm);
 
     // brand
@@ -492,7 +602,10 @@ export default function Products() {
     if (categoryIdParam) {
       qs.set("category_id", String(categoryIdParam));
       qs.set("category", String(categoryIdParam));
-    } else if (computedTrail.length && computedTrail[computedTrail.length - 1]?.id) {
+    } else if (
+      computedTrail.length &&
+      computedTrail[computedTrail.length - 1]?.id
+    ) {
       const id = computedTrail[computedTrail.length - 1].id;
       qs.set("category_id", String(id));
       qs.set("category", String(id));
@@ -625,9 +738,8 @@ export default function Products() {
       });
       return [...base, ...trailItems];
     }
-    if (hasCategoryFilter && trailLoading) {
+    if (hasCategoryFilter && trailLoading)
       return [...base, { label: "Loading…" }];
-    }
     return base;
   }, [computedTrail, hasCategoryFilter, trailLoading]);
 
@@ -640,7 +752,6 @@ export default function Products() {
           <FilterSidebar />
           <section className="flex-1">
             {hasCategoryFilter && <div className="mb-6" />}
-
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="bg-white rounded-lg shadow">
@@ -652,7 +763,6 @@ export default function Products() {
                 </div>
               ))}
             </div>
-
             <div className="mt-8 flex justify-center">
               <Spinner size="lg" label="Loading products…" />
             </div>
@@ -662,9 +772,8 @@ export default function Products() {
     );
   }
 
-  if (error) {
+  if (error)
     return <p className="text-center text-red-500">Error loading products.</p>;
-  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -731,7 +840,7 @@ export default function Products() {
             </div>
           </div>
 
-          {metaNotice && (
+          {metaNotice && !trailLoading && (
             <div
               role="status"
               className="mb-4 rounded-md bg-amber-50 text-amber-900 px-3 py-2 text-sm"

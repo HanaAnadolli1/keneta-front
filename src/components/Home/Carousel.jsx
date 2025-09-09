@@ -3,12 +3,12 @@ import React, { useEffect, useState } from "react";
 const BASE_URL = "https://keneta.laratest-app.com/";
 
 /**
- * Dots-only carousel.
+ * Simple image carousel with CTA button.
  * Props:
  * - slides: [{ image, title?, subtitle?, link? }]
- * - className: extra container classes (e.g. heights)
+ * - className: container sizing (heights etc.)
  * - interval: ms between auto-advances (default 8000)
- * - buttonAlign: 'left' | 'center'  // button placement
+ * - buttonAlign: 'left' | 'center'
  */
 export default function Carousel({
   slides = [],
@@ -29,54 +29,59 @@ export default function Carousel({
 
   if (!total) return null;
 
-  // Positioning:
-  // - 'left'   => bottom-left (for 2/3 hero)
-  // - 'center' => bottom-center (for 1/3 hero)
   const overlayPos =
     buttonAlign === "left"
-      ? "left-6 md:left-10 bottom-16 items-start text-left"
-      : "left-1/2 -translate-x-1/2 bottom-16 items-center text-center";
+      ? "left-6 md:left-10 bottom-8 md:bottom-12 items-start text-left"
+      : "left-1/2 -translate-x-1/2 bottom-8 md:bottom-12 items-center text-center";
 
   return (
     <div
-      className={`relative w-full overflow-hidden shadow-lg h-[360px] sm:h-[480px] md:h-[560px] rounded-2xl mt-2 ${className}`}
+      className={`relative group w-full overflow-hidden rounded-2xl shadow-lg ${className}`}
     >
       {slides.map((slide, i) => {
         const src = slide?.image ? `${BASE_URL}${slide.image}` : "";
         const hasLink = Boolean(slide?.link);
-        const label = slide?.title ?? slide?.subtitle ?? "Explore";
+        const label = slide?.title || slide?.subtitle || "See more";
+
+        const active = i === current;
 
         return (
           <div
             key={i}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              i === current ? "opacity-100 z-10" : "opacity-0 z-0"
-            }`}
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out
+              ${
+                active
+                  ? "opacity-100 z-10"
+                  : "opacity-0 pointer-events-none z-0"
+              }`}
           >
-            {src ? (
+            {src && (
               <img
                 src={src}
-                alt=""
-                className="w-full h-full object-cover"
-                loading={i === current ? "eager" : "lazy"}
+                alt={slide?.title || ""}
+                className="absolute inset-0 w-full h-full object-cover z-[1]"
+                loading={active ? "eager" : "lazy"}
               />
-            ) : null}
+            )}
 
-            {/* Bottom overlay: optional subtitle + BUTTON (uses title; shows even if link is empty) */}
-            {(slide?.subtitle || slide?.title) && (
+            {/* Optional decorative gradient; never block clicks */}
+            <div className="absolute inset-0 z-[2] pointer-events-none bg-gradient-to-t from-black/25 via-black/5 to-transparent" />
+
+            {/* Content & Button (ALWAYS visible on the active slide) */}
+            {(slide?.subtitle || slide?.title || hasLink) && (
               <div
-                className={`absolute z-20 text-white drop-shadow flex flex-col gap-3 ${overlayPos}`}
+                className={`absolute z-[3] flex flex-col gap-3 text-white ${overlayPos}`}
               >
-                {slide?.subtitle ? (
-                  <p className="max-w-md text-base md:text-lg">
+                {slide?.subtitle && (
+                  <p className="max-w-md text-base md:text-lg drop-shadow">
                     {slide.subtitle}
                   </p>
-                ) : null}
+                )}
 
                 {hasLink ? (
                   <a
                     href={slide.link}
-                    className="inline-block bg-[var(--primary)]/80 backdrop-blur px-5 py-2 text-sm md:text-base font-semibold rounded hover:bg-white hover:text-[var(--primary)] transition"
+                    className="inline-block bg-white/90 text-[var(--primary)] px-5 py-2 text-sm md:text-base font-semibold rounded transition hover:bg-white"
                     aria-label={`Open ${label}`}
                   >
                     {label}
@@ -84,7 +89,7 @@ export default function Carousel({
                 ) : (
                   <span
                     aria-disabled="true"
-                    className="inline-block bg-[var(--primary)]/60 backdrop-blur px-5 py-2 text-sm md:text-base font-semibold rounded"
+                    className="inline-block bg-white/70 text-[var(--primary)] px-5 py-2 text-sm md:text-base font-semibold rounded"
                     title="No link provided"
                   >
                     {label}

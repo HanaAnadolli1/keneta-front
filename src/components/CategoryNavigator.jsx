@@ -1,29 +1,61 @@
 // src/components/CategoryNavigator.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/navigation";
 import noImage from "../assets/no_image.jpg";
-import { API_V1 } from "../api/config";
 import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 
-const MIN_FOR_CAROUSEL = 7; // keep desktop logic the same :contentReference[oaicite:2]{index=2}
+const MIN_FOR_CAROUSEL = 7;
+const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
+const SS_CHILDREN_CACHE = "cat.childrenCache.v1";
+const SS_TRAIL_CACHE = "cat.trailCache.v2";
+const SS_RECENT_TRAIL = "recent.trail.json";
 
-function normSlug(s) {
-  return (s || "")
+const ssGet = (k, fb) => {
+  try {
+    const v = sessionStorage.getItem(k);
+    return v ? JSON.parse(v) : fb;
+  } catch {
+    return fb;
+  }
+};
+const ssSet = (k, v) => {
+  try {
+    sessionStorage.setItem(k, JSON.stringify(v));
+  } catch {}
+};
+
+const normSlug = (s) =>
+  String(s || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+function normCat(c) {
+  if (!c) return null;
+  return {
+    id: Number(c.id ?? c.category_id ?? c.value ?? 0) || 0,
+    parent_id:
+      c.parent_id != null
+        ? Number(c.parent_id)
+        : c.parent?.id != null
+        ? Number(c.parent.id)
+        : null,
+    slug: String(c.slug ?? c.code ?? c.value ?? c.name ?? "").toLowerCase(),
+    name: String(c.name ?? c.label ?? c.title ?? c.slug ?? "Category"),
+    status: String(c.status ?? "1"),
+    image_url: c.image_url ?? c.image?.url ?? c.thumbnail ?? c.icon ?? null,
+    logo_url: c.logo_url ?? null,
+  };
 }
 
 function CategoryCard({ cat }) {
-  const imgSrc =
-    cat.logo_url || cat.image_url || cat.image?.url || cat.thumbnail || cat.icon || noImage;
-
+  const imgSrc = cat.logo_url || cat.image_url || noImage;
   return (
     <Link
       to={`/products?category=${encodeURIComponent(cat.slug)}`}
@@ -31,7 +63,12 @@ function CategoryCard({ cat }) {
       title={cat.name}
     >
       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-2 overflow-hidden">
-        <img src={imgSrc} alt={cat.name} className="w-8 h-8 object-contain" loading="lazy" />
+        <img
+          src={imgSrc}
+          alt={cat.name}
+          className="w-8 h-8 object-contain"
+          loading="lazy"
+        />
       </div>
       <span className="text-xs md:text-sm font-medium text-gray-800 leading-tight text-center whitespace-normal break-words">
         {cat.name}
@@ -40,77 +77,95 @@ function CategoryCard({ cat }) {
   );
 }
 
+function useChildrenFetcher() {
+  const mem = useRef(new Map());
+  const inflight = useRef(new Map());
+
+  return useCallback(async (parentId) => {
+    const key = String(parentId);
+
+    if (mem.current.has(key)) return mem.current.get(key);
+
+    const ss = ssGet(SS_CHILDREN_CACHE, {});
+    if (ss[key]) {
+      mem.current.set(key, ss[key]);
+      return ss[key];
+    }
+
+    if (inflight.current.has(key)) return inflight.current.get(key);
+
+    const p = (async () => {
+      const r = await fetch(
+        `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
+          parentId
+        )}`
+      );
+      const j = await r.json();
+      const rows = (j?.data || [])
+        .map(normCat)
+        .filter((c) => c && c.status === "1");
+      mem.current.set(key, rows);
+      ssSet(SS_CHILDREN_CACHE, {
+        ...ssGet(SS_CHILDREN_CACHE, {}),
+        [key]: rows,
+      });
+      inflight.current.delete(key);
+      return rows;
+    })();
+
+    inflight.current.set(key, p);
+    return p;
+  }, []);
+}
+
 export default function CategoryNavigator() {
   const [params] = useSearchParams();
-  const categorySlugParam = params.get("category") || params.get("category_slug") || "";
+  const categorySlugParam =
+    params.get("category") || params.get("category_slug") || "";
   const categoryIdParam = params.get("category_id") || "";
 
-  const [categoryOptions, setCategoryOptions] = useState([]);
-  const [children, setChildren] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const getChildren = useChildrenFetcher();
 
-  // small in-bounds nav buttons
   const prevRef = useRef(null);
   const nextRef = useRef(null);
 
-  useEffect(() => {
-    const cached = sessionStorage.getItem("categoryOptions");
-    if (cached) {
-      setCategoryOptions(JSON.parse(cached));
-      return;
-    }
-    (async () => {
-      try {
-        const r = await fetch(`${API_V1}/categories?sort=id`);
-        const j = await r.json();
-        const all = j?.data || [];
-        setCategoryOptions(all);
-        sessionStorage.setItem("categoryOptions", JSON.stringify(all));
-      } catch {
-        setCategoryOptions([]);
-      }
-    })();
-  }, []);
+  const [children, setChildren] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const resolvedCategory = useMemo(() => {
-    if (!categoryOptions.length) return null;
-    if (categoryIdParam) {
-      const id = String(categoryIdParam);
-      return categoryOptions.find((c) => String(c.id) === id) || null;
+  // derive parentId from recent trail or normalized trail cache
+  const parentId = useMemo(() => {
+    if (categoryIdParam) return Number(categoryIdParam);
+
+    const recent = ssGet(SS_RECENT_TRAIL, []);
+    if (Array.isArray(recent) && recent.length) {
+      const last = recent[recent.length - 1];
+      if (last?.id) return Number(last.id);
     }
+
     if (categorySlugParam) {
       const decoded = decodeURIComponent(categorySlugParam);
-      const candidates = new Map();
-      for (const c of categoryOptions) {
-        if (!c?.slug) continue;
-        candidates.set(c.slug, c);
-        candidates.set(encodeURIComponent(c.slug), c);
-        candidates.set(normSlug(c.slug), c);
+      const key = normSlug(decoded);
+      const tc = ssGet(SS_TRAIL_CACHE, {});
+      const trail =
+        tc[key] || tc[decoded.toLowerCase()] || tc[categorySlugParam] || null;
+      if (Array.isArray(trail) && trail.length) {
+        const last = trail[trail.length - 1];
+        if (last?.id) return Number(last.id);
       }
-      return (
-        candidates.get(decoded) ||
-        candidates.get(categorySlugParam) ||
-        candidates.get(normSlug(decoded)) ||
-        null
-      );
     }
     return null;
-  }, [categoryOptions, categorySlugParam, categoryIdParam]);
+  }, [categoryIdParam, categorySlugParam]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const parentId = resolvedCategory?.id || categoryIdParam || null;
         if (!parentId) {
           setChildren([]);
           return;
         }
-        const url = `${API_V1}/descendant-categories?parent_id=${parentId}`;
-        const r = await fetch(url);
-        const j = await r.json();
-        const rows = (j?.data || []).filter((c) => String(c.status) === "1");
+        const rows = await getChildren(parentId);
         if (!cancelled) setChildren(rows);
       } catch {
         if (!cancelled) setChildren([]);
@@ -121,7 +176,7 @@ export default function CategoryNavigator() {
     return () => {
       cancelled = true;
     };
-  }, [resolvedCategory, categoryIdParam]);
+  }, [parentId, getChildren]);
 
   const isCarousel = children.length >= MIN_FOR_CAROUSEL;
 
@@ -142,13 +197,10 @@ export default function CategoryNavigator() {
 
   if (!children.length) return null;
 
-  // ≤6 children: keep desktop grid, but on mobile:
-  // - show a 4-item grid when ≤4
-  // - use a 4-up slider when >4
   if (!isCarousel) {
     return (
       <div className="mb-3">
-        {/* Mobile behavior */}
+        {/* Mobile */}
         <div className="md:hidden">
           {children.length > 4 ? (
             <Swiper
@@ -156,7 +208,7 @@ export default function CategoryNavigator() {
               modules={[Navigation]}
               navigation={false}
               spaceBetween={12}
-              slidesPerView={4} // show 4 on mobile
+              slidesPerView={4}
             >
               {children.map((c) => (
                 <SwiperSlide key={c.id}>
@@ -173,7 +225,7 @@ export default function CategoryNavigator() {
           )}
         </div>
 
-        {/* Desktop unchanged */}
+        {/* Desktop */}
         <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {children.map((c) => (
             <CategoryCard key={c.id} cat={c} />
@@ -183,7 +235,6 @@ export default function CategoryNavigator() {
     );
   }
 
-  // ≥7 children: existing carousel (4 visible on mobile; more on larger screens)
   return (
     <div className="mb-3 relative w-full max-w-full overflow-hidden">
       <button
@@ -214,7 +265,7 @@ export default function CategoryNavigator() {
           swiper.navigation.update();
         }}
         spaceBetween={16}
-        slidesPerView={4} // 4 on mobile
+        slidesPerView={4}
         breakpoints={{
           480: { slidesPerView: 4 },
           640: { slidesPerView: 4 },
