@@ -11,7 +11,7 @@ import { List as ListIcon, LayoutGrid as GridIcon } from "lucide-react";
 
 import FilterSidebar from "../components/FilterSidebar";
 import ProductCard from "../components/ProductCard";
-import ProductListItem from "../components/ProductListItem"; // ⬅️ use your list component
+import ProductListItem from "../components/ProductListItem";
 import InfiniteScrollSentinel from "../components/InfiniteScrollSentinel";
 import Spinner from "../components/Spinner";
 import { useWishlist } from "../context/WishlistContext";
@@ -21,12 +21,24 @@ import { API_V1 } from "../api/config";
 import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
 
+/* ================================
+ * Performance + Caching Notes
+ * - No giant /categories?limit=10000 fetch.
+ * - Breadcrumbs trail is resolved via:
+ *    • category_id → GET /categories/{id} climb parents
+ *    • category_slug → bounded DFS via GET /descendant-categories
+ * - Caches in sessionStorage: slug index, trail cache, children cache.
+ * - All remote calls are abortable and de-duped in-flight.
+ * ================================ */
+
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
 
-// ---------- NEW: for breadcrumb trail fallback lookups ----------
+// Public endpoint used for fallback category traversal (children-by-parent)
 const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
-// ---------------------------------------------------------------
+
+// If your true root differs, change this
+const CATEGORY_ROOT_ID = 1;
 
 const slugifyBrandLabel = (label) =>
   encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
@@ -70,7 +82,7 @@ function extractProductsPayload(resp) {
   return { items, lastPage, currentPage, hasNext };
 }
 
-// ---------- NEW: small helpers for category trail ----------
+/* ---------------- category helpers ---------------- */
 function normCat(c) {
   if (!c) return null;
   return {
@@ -90,53 +102,140 @@ function normCat(c) {
         ? Number(c.depth)
         : undefined,
     status: String(c.status ?? "1"),
+    translations: Array.isArray(c.translations) ? c.translations : [],
   };
 }
 
-function mapById(categories) {
-  const m = new Map();
-  (categories || []).forEach((c) => {
-    const n = normCat(c);
-    if (n?.id) m.set(n.id, n);
-  });
-  return m;
+/* ===== sessionStorage caches (tiny + fast) ===== */
+const SS_SLUG_INDEX = "cat.slugIndex.v1"; // slug -> {id,parent_id,name,slug}
+const SS_TRAIL_CACHE = "cat.trailCache.v1"; // slug -> Trail[]
+const SS_CHILDREN_CACHE = "cat.childrenCache.v1"; // parentId -> rows[]
+
+function ssGet(key, fallback) {
+  try { const v = sessionStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function ssSet(key, value) {
+  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
-function buildTrailFromFlatList(target, flatMap) {
-  const trail = [];
-  let cur = target ? normCat(target) : null;
-  let guard = 0;
-  while (cur && guard < 20) {
-    trail.push(cur);
-    const pid = cur.parent_id;
-    if (!pid || pid === 0 || !flatMap.has(pid)) break;
-    cur = flatMap.get(pid);
-    guard++;
-  }
-  return trail.reverse();
+function getSlugIndexCache() { return ssGet(SS_SLUG_INDEX, {}); }
+function setSlugIndexCache(obj) { ssSet(SS_SLUG_INDEX, obj); }
+function getTrailCache() { return ssGet(SS_TRAIL_CACHE, {}); }
+function setTrailCache(obj) { ssSet(SS_TRAIL_CACHE, obj); }
+function getChildrenCache() { return ssGet(SS_CHILDREN_CACHE, {}); }
+function setChildrenCache(obj) { ssSet(SS_CHILDREN_CACHE, obj); }
+
+/* ===== network helpers ===== */
+async function getCategoryById(id, { signal } = {}) {
+  if (!id) return null;
+  const res = await fetch(`${API_V1}/categories/${encodeURIComponent(id)}`, { signal });
+  const json = await res.json();
+  return normCat(json?.data ?? json);
 }
 
-async function findTrailBySlugRemote(slug, getChildren) {
+// Abortable + bounded DFS using /descendant-categories
+async function findTrailBySlugRemote(slug, getChildren, { signal, maxRequests = 16, maxDepth = 8 } = {}) {
   if (!slug) return [];
-  const MAX_DEPTH = 10;
-  const stack = [{ parentId: 1, path: [] }]; // if your root isn't 1, change here
+  const TARGET = String(slug).toLowerCase();
+  const tokens = TARGET.split(/[^a-z0-9]+/).filter(Boolean);
+  const looksRelevant = (s) => {
+    if (!s) return false;
+    if (s === TARGET) return true;
+    // any token match (e.g. "vegla", "ngjitje", ...)
+    return tokens.some((t) => s.includes(t));
+  };
+
+  let requests = 0;
+  const stack = [{ parentId: CATEGORY_ROOT_ID, path: [] }];
+  const visited = new Set();
 
   while (stack.length) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const { parentId, path } = stack.pop();
-    const children = await getChildren(parentId);
-    for (const raw of children) {
-      const child = normCat(raw);
+    const key = String(parentId);
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    if (++requests > maxRequests) break; // safety cap
+    const children = await getChildren(parentId, { signal });
+
+    // score children: prefer exact/longer/contains
+    const scored = children
+      .map(normCat)
+      .map((n) => ({
+        n,
+        score:
+          n.slug === TARGET ? 1000 : looksRelevant(n.slug) ? n.slug.length : 0,
+      }))
+      .sort((a, b) => a.score - b.score);
+
+    // iterate from highest score
+    for (let i = scored.length - 1; i >= 0; i--) {
+      const child = scored[i].n;
       const nextPath = [...path, child];
-      if (child.slug === slug) return nextPath;
-      if (nextPath.length < MAX_DEPTH) {
+      const childSlug = String(child.slug || "").toLowerCase();
+      if (childSlug === TARGET) return nextPath;
+      if (nextPath.length < maxDepth && scored[i].score > 0) {
         stack.push({ parentId: child.id, path: nextPath });
       }
     }
   }
   return [];
 }
-// -------------------------------------------------------------
 
+// Cached + abortable children fetcher (in-memory + sessionStorage)
+function useChildrenFetcher() {
+  const memCacheRef = useRef(new Map()); // parentId -> rows[]
+  const inflightRef = useRef(new Map()); // parentId -> Promise
+
+  const getChildren = useCallback(async (parentId, { signal } = {}) => {
+    const key = String(parentId);
+
+    // in-memory cache
+    if (memCacheRef.current.has(key)) {
+      return memCacheRef.current.get(key);
+    }
+
+    // session cache
+    const ss = getChildrenCache();
+    if (ss[key]) {
+      memCacheRef.current.set(key, ss[key]);
+      return ss[key];
+    }
+
+    // in-flight de-dupe
+    if (inflightRef.current.has(key)) {
+      return inflightRef.current.get(key);
+    }
+
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+
+    const p = (async () => {
+      try {
+        const url = `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(parentId)}`;
+        const resp = await fetch(url, { signal: controller.signal });
+        const json = await resp.json();
+        const rows = (json?.data || []).filter((c) => String(c.status ?? "1") === "1");
+        memCacheRef.current.set(key, rows);
+        const updated = { ...getChildrenCache(), [key]: rows };
+        setChildrenCache(updated);
+        return rows;
+      } finally {
+        inflightRef.current.delete(key);
+      }
+    })();
+
+    inflightRef.current.set(key, p);
+    return p;
+  }, []);
+
+  return getChildren;
+}
+
+/* ---------------- component ---------------- */
 export default function Products() {
   const [params] = useSearchParams();
 
@@ -160,7 +259,6 @@ export default function Products() {
 
   // meta lookups
   const [brandOptions, setBrandOptions] = useState([]);
-  const [categoryOptions, setCategoryOptions] = useState([]);
   const [metaNotice, setMetaNotice] = useState(null);
 
   // list state
@@ -186,7 +284,7 @@ export default function Products() {
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
 
-  // Load brands
+  /* -------- Load brands -------- */
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -211,52 +309,113 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  // Load categories — ensure the requested slug is included
+  /* ---------------- FAST breadcrumbs: compute trail without mega-fetch ---------------- */
+  const getChildren = useChildrenFetcher();
+  const [computedTrail, setComputedTrail] = useState([]);
+  const [trailLoading, setTrailLoading] = useState(false);
+
   useEffect(() => {
     const ac = new AbortController();
+    let cancelled = false;
     (async () => {
+      if (!hasCategoryFilter) {
+        if (!cancelled) {
+          setComputedTrail([]);
+          setMetaNotice(null);
+        }
+        return;
+      }
+
+      setTrailLoading(true);
       try {
-        const slugParam = (
-          params.get("category") ||
-          params.get("category_slug") ||
-          ""
-        ).trim();
-        const wanted = decodeURIComponent(slugParam || "");
+        let trail = [];
 
-        const cached = sessionStorage.getItem("categoryOptions");
-        let all = cached ? JSON.parse(cached) : [];
+        if (categoryIdParam) {
+          // climb via /categories/{id} -> parent -> ...
+          const start = await getCategoryById(categoryIdParam, { signal: ac.signal });
+          if (start) {
+            const t = [];
+            let cur = start;
+            let guard = 0;
+            while (cur && guard < 20) {
+              t.push(cur);
+              if (!cur.parent_id) break;
+              if (ac.signal.aborted) throw new DOMException("Aborted", "AbortError");
+              cur = await getCategoryById(cur.parent_id, { signal: ac.signal });
+              guard++;
+            }
+            trail = t.reverse();
 
-        const cacheHasWanted =
-          wanted &&
-          all.some((c) => {
-            const slugs = [
-              c?.slug,
-              ...(Array.isArray(c?.translations)
-                ? c.translations.map((t) => t?.slug).filter(Boolean)
-                : []),
-            ].filter(Boolean);
-            return slugs.some((s) => s === wanted);
-          });
-
-        if (!all.length || (wanted && !cacheHasWanted)) {
-          const res = await fetch(
-            `${API_V1}/categories?sort=id&order=asc&limit=10000`,
-            { signal: ac.signal }
-          );
-          const json = await res.json();
-          all = json?.data || [];
-          sessionStorage.setItem("categoryOptions", JSON.stringify(all));
+            // seed caches
+            const idx = getSlugIndexCache();
+            if (start.slug)
+              idx[start.slug.toLowerCase()] = {
+                id: start.id,
+                parent_id: start.parent_id,
+                name: start.name,
+                slug: start.slug,
+              };
+            setSlugIndexCache(idx);
+          }
+        } else if (categorySlugParam) {
+          const slug = String(decodeURIComponent(categorySlugParam)).toLowerCase();
+          // cached trail hit?
+          const trailCache = getTrailCache();
+          const hit = trailCache[slug];
+          if (hit?.length) {
+            trail = hit;
+          } else {
+            trail = await findTrailBySlugRemote(slug, getChildren, { signal: ac.signal, maxRequests: 16, maxDepth: 8 });
+            if (trail.length) {
+              setTrailCache({ ...trailCache, [slug]: trail });
+              const idx = getSlugIndexCache();
+              for (const n of trail) {
+                if (n?.slug) idx[n.slug.toLowerCase()] = { id: n.id, parent_id: n.parent_id, name: n.name, slug: n.slug };
+              }
+              setSlugIndexCache(idx);
+            }
+          }
         }
 
-        setCategoryOptions(all);
+        if (!cancelled) {
+          setComputedTrail(trail);
+          if ((categorySlugParam && !trail.length) && !categoryIdParam) {
+            setMetaNotice("Category filter not recognized.");
+          } else {
+            setMetaNotice(null);
+          }
+        }
       } catch (e) {
-        if (e.name !== "AbortError") console.warn("category load failed", e);
+        if (!cancelled && e?.name !== "AbortError") console.warn("trail build failed", e);
+      } finally {
+        if (!cancelled) setTrailLoading(false);
       }
     })();
-    return () => ac.abort();
-  }, [params]);
 
-  // resolve brand
+    return () => {
+      cancelled = true;
+      ac.abort(); // cancel any in-flight children fetches
+    };
+  }, [categoryIdParam, categorySlugParam, hasCategoryFilter, getChildren]);
+
+  // Persist the FULL trail so ProductDetails can reuse it
+  useEffect(() => {
+    if (computedTrail.length) {
+      const compact = computedTrail.map((c) => ({
+        id: c.id ?? null,
+        slug: c.slug ?? "",
+        name: c.name ?? "",
+      }));
+      sessionStorage.setItem("recent.trail.json", JSON.stringify(compact));
+      const last = computedTrail[computedTrail.length - 1];
+      if (last?.slug) {
+        sessionStorage.setItem("recent.category.slug", String(last.slug));
+        sessionStorage.setItem("recent.category.name", String(last.name || ""));
+      }
+    }
+  }, [computedTrail]);
+
+  /* -------- brand slug -> id / label -------- */
   const mappedBrandIdFromSlug = useMemo(() => {
     if (!brandSlugParam || !brandOptions.length) return null;
     return (
@@ -265,62 +424,6 @@ export default function Products() {
       )?.id ?? null
     );
   }, [brandSlugParam, brandOptions]);
-
-  // category tolerant index (includes translation slugs)
-  const categoryIndex = useMemo(() => {
-    const map = new Map();
-    for (const c of categoryOptions) {
-      const slugs = [
-        c?.slug,
-        ...(Array.isArray(c?.translations)
-          ? c.translations.map((t) => t?.slug).filter(Boolean)
-          : []),
-      ].filter(Boolean);
-
-      for (const raw of slugs) {
-        map.set(raw, c);
-        map.set(encodeURIComponent(raw), c);
-        map.set(
-          raw
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, ""),
-          c
-        );
-      }
-    }
-    return map;
-  }, [categoryOptions]);
-
-  const resolvedCategory = useMemo(() => {
-    if (!categorySlugParam || !categoryIndex.size) return null;
-    const decoded = decodeURIComponent(categorySlugParam);
-    return (
-      categoryIndex.get(decoded) ||
-      categoryIndex.get(categorySlugParam) ||
-      categoryIndex.get(
-        decoded
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "")
-      ) ||
-      null
-    );
-  }, [categorySlugParam, categoryIndex]);
-
-  const activeCategoryLabel = useMemo(() => {
-    if (categoryIdParam && categoryOptions.length) {
-      return (
-        categoryOptions.find((c) => String(c.id) === String(categoryIdParam))
-          ?.name ?? null
-      );
-    }
-    return resolvedCategory?.name ?? null;
-  }, [categoryIdParam, categoryOptions, resolvedCategory]);
 
   const activeBrandLabel = useMemo(() => {
     if (!brandSlugParam || !brandOptions.length) return null;
@@ -331,28 +434,10 @@ export default function Products() {
     );
   }, [brandSlugParam, brandOptions]);
 
-  useEffect(() => {
-    if (brandSlugParam && brandOptions.length && !mappedBrandIdFromSlug) {
-      setMetaNotice("Brand filter not recognized.");
-    } else if (
-      !categoryIdParam &&
-      categorySlugParam &&
-      categoryOptions.length &&
-      !resolvedCategory
-    ) {
-      setMetaNotice("Category filter not recognized.");
-    } else {
-      setMetaNotice(null);
-    }
-  }, [
-    brandSlugParam,
-    brandOptions.length,
-    mappedBrandIdFromSlug,
-    categorySlugParam,
-    categoryOptions.length,
-    resolvedCategory,
-    categoryIdParam,
-  ]);
+  const activeCategoryLabel = useMemo(() => {
+    if (computedTrail.length) return computedTrail[computedTrail.length - 1]?.name ?? null;
+    return null;
+  }, [computedTrail]);
 
   // Reset list when URL-level filters change
   const resetKey = useMemo(
@@ -385,7 +470,7 @@ export default function Products() {
     setError(null);
   }, [resetKey]);
 
-  // Build filter QS
+  /* -------- Build filter QS (IMPORTANT: slug vs id) -------- */
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
 
@@ -394,6 +479,7 @@ export default function Products() {
 
     if (searchTerm.length >= MIN_SEARCH_LEN) qs.set("query", searchTerm);
 
+    // brand
     if (brandParam && isCsvOfIds(brandParam)) {
       qs.set("brand", normalizeCsv(brandParam));
     } else if (mappedBrandIdFromSlug) {
@@ -402,16 +488,17 @@ export default function Products() {
       qs.set("brand_slug", brandSlugParam);
     }
 
+    // category — prefer ID from computed trail / URL, else slug
     if (categoryIdParam) {
       qs.set("category_id", String(categoryIdParam));
-      if (!qs.has("category")) qs.set("category", String(categoryIdParam));
-    } else if (resolvedCategory?.id) {
-      qs.set("category_id", String(resolvedCategory.id));
-      if (!qs.has("category")) qs.set("category", String(resolvedCategory.id));
+      qs.set("category", String(categoryIdParam));
+    } else if (computedTrail.length && computedTrail[computedTrail.length - 1]?.id) {
+      const id = computedTrail[computedTrail.length - 1].id;
+      qs.set("category_id", String(id));
+      qs.set("category", String(id));
     } else if (categorySlugParam) {
       const dec = decodeURIComponent(categorySlugParam);
       qs.set("category_slug", dec);
-      qs.set("category", dec);
     }
 
     return qs.toString();
@@ -422,12 +509,12 @@ export default function Products() {
     brandParam,
     brandSlugParam,
     mappedBrandIdFromSlug,
-    resolvedCategory,
+    computedTrail,
     categorySlugParam,
     categoryIdParam,
   ]);
 
-  // fetch one page
+  /* -------- Fetch one page -------- */
   const fetchPage = useCallback(
     async (pageToFetch, { append }) => {
       const qs = new URLSearchParams(baseFiltersQS);
@@ -524,102 +611,30 @@ export default function Products() {
     [addItem, toast]
   );
 
-  // ------------------------- NEW: Breadcrumb trail -------------------------
-  // Cache for remote children calls
-  const childrenCacheRef = useRef(new Map());
-  const getChildren = useCallback(async (parentId) => {
-    const key = String(parentId);
-    if (childrenCacheRef.current.has(key)) {
-      return childrenCacheRef.current.get(key);
-    }
-    const url = `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
-      parentId
-    )}`;
-    const resp = await fetch(url);
-    const json = await resp.json();
-    const rows = (json?.data || []).filter((c) => String(c.status ?? "1") === "1");
-    childrenCacheRef.current.set(key, rows);
-    return rows;
-  }, []);
-
-  // Active category object (prefer id, else slug match)
-  const activeCategoryObj = useMemo(() => {
-    if (categoryIdParam && categoryOptions.length) {
-      const found = categoryOptions.find(
-        (c) => String(c.id) === String(categoryIdParam)
-      );
-      if (found) return normCat(found);
-    }
-    if (resolvedCategory) return normCat(resolvedCategory);
-    return null;
-  }, [categoryIdParam, categoryOptions, resolvedCategory]);
-
-  const [computedTrail, setComputedTrail] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      if (!hasCategoryFilter) {
-        if (!cancelled) setComputedTrail([]);
-        return;
-      }
-
-      let trail = [];
-      // Try to build from local categoryOptions (id->parent_id walking)
-      if (activeCategoryObj) {
-        const byId = mapById(categoryOptions);
-        if (byId.size && (activeCategoryObj.parent_id || activeCategoryObj.level)) {
-          trail = buildTrailFromFlatList(activeCategoryObj, byId);
-        }
-      }
-
-      // Fallback: remote DFS by slug
-      if (!trail.length) {
-        const slug =
-          activeCategoryObj?.slug ||
-          (categorySlugParam ? String(decodeURIComponent(categorySlugParam)).toLowerCase() : "");
-        if (slug) {
-          trail = await findTrailBySlugRemote(slug, getChildren);
-        }
-      }
-
-      if (!cancelled) setComputedTrail(trail);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    hasCategoryFilter,
-    categoryOptions,
-    activeCategoryObj,
-    categorySlugParam,
-    getChildren,
-  ]);
-
+  /* ---------------- breadcrumbs (progressive) ---------------- */
   const breadcrumbItems = useMemo(() => {
     const base = [
       { label: "Home", path: "/" },
       { label: "Products", path: "/products" },
     ];
-    if (!computedTrail.length) return base;
+    if (computedTrail.length) {
+      const trailItems = computedTrail.map((c, i) => {
+        const isLast = i === computedTrail.length - 1;
+        const to = `/products?category=${encodeURIComponent(c.slug)}`;
+        return isLast ? { label: c.name } : { label: c.name, path: to };
+      });
+      return [...base, ...trailItems];
+    }
+    if (hasCategoryFilter && trailLoading) {
+      return [...base, { label: "Loading…" }];
+    }
+    return base;
+  }, [computedTrail, hasCategoryFilter, trailLoading]);
 
-    const trailItems = computedTrail.map((c, i) => {
-      const isLast = i === computedTrail.length - 1;
-      const to = `/products?category=${encodeURIComponent(c.slug)}`;
-      return isLast ? { label: c.name } : { label: c.name, path: to };
-    });
-
-    return [...base, ...trailItems];
-  }, [computedTrail]);
-  // ------------------------------------------------------------------------
-
-  // ---- render
+  /* ---------------- render ---------------- */
   if (initialLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8" aria-busy="true">
-        {/* changed: use dynamic breadcrumb items */}
         <Breadcrumbs items={breadcrumbItems} />
         <div className="flex flex-col md:flex-row gap-8">
           <FilterSidebar />
@@ -653,7 +668,6 @@ export default function Products() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* NEW: show full breadcrumb trail in the normal view too */}
       <Breadcrumbs items={breadcrumbItems} />
 
       <div className="flex flex-col md:flex-row gap-8">
@@ -687,7 +701,6 @@ export default function Products() {
               <span />
             )}
 
-            {/* ⬇️ Hide view toggle on mobile; show from md: up */}
             <div className="hidden md:flex items-center gap-2">
               <button
                 type="button"
@@ -741,7 +754,6 @@ export default function Products() {
             </p>
           ) : !isShortSearchOnly ? (
             <>
-              {/* GRID VIEW */}
               {viewMode === "grid" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {items.map((product) => (
@@ -758,7 +770,6 @@ export default function Products() {
                 </div>
               )}
 
-              {/* LIST VIEW — using your component */}
               {viewMode === "list" && (
                 <ul className="space-y-5">
                   {items.map((product) => (

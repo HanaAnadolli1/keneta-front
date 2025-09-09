@@ -1,4 +1,3 @@
-// src/components/Menu.jsx
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu as MenuIcon, X as CloseIcon, ChevronDown } from "lucide-react";
@@ -460,15 +459,13 @@ export default function Menu() {
                                     >
                                       {i2 < 2 && getCatIconUrl(c2) && (
                                         <img
-                                         src={getCatIconUrl(c2)}
-                                         alt=""
-                                         className="w-5 h-5 object-contain"
-                                         loading="lazy"
-                                         referrerPolicy="no-referrer"
+                                          src={getCatIconUrl(c2)}
+                                          alt=""
+                                          className="w-5 h-5 object-contain"
+                                          loading="lazy"
+                                          referrerPolicy="no-referrer"
                                         />
-                                      )
-
-                                      }
+                                      )}
                                       {c2.name}
                                     </button>
                                     <div className="flex items-center gap-2 pr-1">

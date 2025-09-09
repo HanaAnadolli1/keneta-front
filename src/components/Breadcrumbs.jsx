@@ -14,18 +14,22 @@ export default function Breadcrumbs({ items = [] }) {
       <ol className="flex flex-wrap items-center gap-1 text-gray-600">
         {items.map((item, idx) => {
           const isLast = idx === items.length - 1;
+          const label = String(item.label ?? "");
           return (
-            <li key={`${item.label}-${idx}`} className="flex items-center gap-1">
+            <li key={`${label}-${idx}`} className="flex items-center gap-1">
               {!isLast && item.path ? (
                 <Link
                   to={item.path}
                   className="hover:text-gray-900 transition-colors"
                 >
-                  {item.label}
+                  {label}
                 </Link>
               ) : (
-                <span className={isLast ? "text-gray-900" : undefined}>
-                  {item.label}
+                <span
+                  className={isLast ? "text-gray-900" : undefined}
+                  aria-current={isLast ? "page" : undefined}
+                >
+                  {label}
                 </span>
               )}
               {!isLast && <span className="text-gray-400">/</span>}

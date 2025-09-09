@@ -24,7 +24,6 @@ import ProductReviews from "../components/ProductReviews";
 import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 
-// Same public endpoints as elsewhere
 const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
 
 /* ---------------- small helpers ---------------- */
@@ -71,7 +70,7 @@ const renderRichText = (raw = "") => {
   return <p>{raw}</p>;
 };
 
-// ---------- normalization + trail helpers ----------
+/* ---------- normalization + trail helpers ---------- */
 const normalizeSlug = (s = "") =>
   String(s)
     .toLowerCase()
@@ -79,6 +78,15 @@ const normalizeSlug = (s = "") =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9-_/]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+const makeSlugCandidates = (s = "") => {
+  const raw = String(s || "");
+  const dec = decodeURIComponent(raw);
+  const enc = encodeURIComponent(dec);
+  const n1 = normalizeSlug(raw);
+  const n2 = normalizeSlug(dec);
+  return new Set([raw, dec, enc, raw.toLowerCase(), dec.toLowerCase(), n1, n2]);
+};
 
 const normCat = (c) => {
   if (!c) return null;
@@ -103,50 +111,77 @@ const normCat = (c) => {
   };
 };
 
-// DFS helper that can match by slug OR id; considers translations
-const createTrailFinder = (getChildren, rootId = 1) => {
+const mapById = (categories) => {
+  const m = new Map();
+  (categories || []).forEach((c) => {
+    const n = normCat(c);
+    if (n?.id) m.set(n.id, n);
+  });
+  return m;
+};
+
+const buildTrailFromFlatList = (target, flatMap) => {
+  const trail = [];
+  let cur = target ? normCat(target) : null;
+  let guard = 0;
+  while (cur && guard < 20) {
+    trail.push(cur);
+    const pid = cur.parent_id;
+    if (!pid || pid === 0 || !flatMap.has(pid)) break;
+    cur = flatMap.get(pid);
+    guard++;
+  }
+  return trail.reverse();
+};
+
+// DFS across /descendant-categories; matches by id or robust slug; try multiple roots
+const createTrailFinder = (getChildren, rootIds = [1]) => {
   return async (target) => {
     if (!target) return [];
     const wantId = Number(target.id || 0) || null;
-    const wantSlug = target.slug ? normalizeSlug(target.slug) : null;
-    const wantSlugs = new Set(
-      [
-        wantSlug,
-        ...(Array.isArray(target.translations)
-          ? target.translations.map((t) => normalizeSlug(t?.slug)).filter(Boolean)
-          : []),
-      ].filter(Boolean)
-    );
+    const wantCandidates = new Set([
+      ...makeSlugCandidates(target.slug),
+      ...((target.translations || [])
+        .map((t) => t?.slug)
+        .filter(Boolean)
+        .flatMap((s) => [...makeSlugCandidates(s)])),
+    ]);
 
     const MAX_DEPTH = 10;
-    const stack = [{ parentId: rootId, path: [] }];
 
-    while (stack.length) {
-      const { parentId, path } = stack.pop();
-      const children = await getChildren(parentId);
-      for (const raw of children) {
-        const child = normCat(raw);
-        const nextPath = [...path, child];
+    for (const rootId of rootIds) {
+      const stack = [{ parentId: rootId, path: [] }];
 
-        const childSlug = normalizeSlug(child.slug);
-        const childTrans = new Set(
-          (child.translations || []).map((t) => normalizeSlug(t?.slug)).filter(Boolean)
-        );
+      while (stack.length) {
+        const { parentId, path } = stack.pop();
+        const children = await getChildren(parentId);
+        for (const raw of children) {
+          const child = normCat(raw);
+          const nextPath = [...path, child];
 
-        const slugMatches =
-          wantSlugs.size > 0 &&
-          (wantSlugs.has(childSlug) ||
-            [...wantSlugs].some((s) => childTrans.has(s)));
+          const childCandidates = new Set([
+            ...makeSlugCandidates(child.slug),
+            ...((child.translations || [])
+              .map((t) => t?.slug)
+              .filter(Boolean)
+              .flatMap((s) => [...makeSlugCandidates(s)])),
+          ]);
 
-        if ((wantId && child.id === wantId) || slugMatches) {
-          return nextPath;
-        }
+          const slugMatches =
+            wantCandidates.size > 0 &&
+            [...childCandidates].some((c) => wantCandidates.has(c));
 
-        if (nextPath.length < MAX_DEPTH) {
-          stack.push({ parentId: child.id, path: nextPath });
+          if ((wantId && child.id === wantId) || slugMatches) {
+            return nextPath;
+          }
+
+          if (nextPath.length < MAX_DEPTH) {
+            stack.push({ parentId: child.id, path: nextPath });
+          }
         }
       }
     }
+
     return [];
   };
 };
@@ -288,115 +323,153 @@ export default function ProductDetails() {
     return rows;
   }, []);
 
-  const findTrail = useMemo(() => createTrailFinder(getChildren, 1), [getChildren]);
-
-  const byId = useMemo(() => {
-    const m = new Map();
-    for (const c of allCategories) {
-      const n = normCat(c);
-      m.set(String(n.id), n);
-    }
-    return m;
+  // Infer roots from local list; add 1 as a safe fallback
+  const rootIds = useMemo(() => {
+    const roots = (allCategories || [])
+      .map(normCat)
+      .filter((c) => c && (!c.parent_id || c.parent_id === 0))
+      .map((c) => c.id);
+    return Array.from(new Set([...(roots || []), 1]));
   }, [allCategories]);
+
+  const findTrailRemote = useMemo(
+    () => createTrailFinder(getChildren, rootIds),
+    [getChildren, rootIds]
+  );
+
+  const byId = useMemo(() => mapById(allCategories), [allCategories]);
 
   const pickPrimaryCategory = (cats) => {
     if (!Array.isArray(cats) || cats.length === 0) return null;
-    return (
-      cats.slice().sort((a, b) => (b?.level ?? 0) - (a?.level ?? 0))[0] ||
-      cats[0]
-    );
+    const withLevel = cats.filter((c) => c.level != null);
+    if (withLevel.length) {
+      return withLevel.slice().sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
+    }
+    return cats[cats.length - 1];
   };
 
-  // Build the category trail
+  // Build the category trail (with robust fallbacks)
   useEffect(() => {
     if (!product) return;
 
     (async () => {
-      // 1) Gather possible categories from product
+      // 0) Instant UI using persisted trail from Products page (authoritative until replaced)
+      try {
+        const cachedTrail = JSON.parse(
+          sessionStorage.getItem("recent.trail.json") || "null"
+        );
+        if (Array.isArray(cachedTrail) && cachedTrail.length) {
+          const items = cachedTrail.map((n, i) =>
+            i === cachedTrail.length - 1
+              ? { label: n.name || n.slug || "Category" }
+              : {
+                  label: n.name || n.slug || "Category",
+                  path: `/products?category=${encodeURIComponent(n.slug || "")}`,
+                }
+          );
+          setCategoryTrail(items);
+        }
+      } catch {}
+
+      // Build/verify with data
       let productCats = [];
 
+      // A) from payload
       if (Array.isArray(product?.categories) && product.categories.length) {
-        productCats = product.categories
-          .map((c) => {
-            const n = normCat(c);
-            return n?.id || n?.slug ? n : null;
-          })
-          .filter(Boolean);
+        productCats = product.categories.map(normCat).filter((n) => n?.id || n?.slug);
       } else if (Array.isArray(product?.category_ids)) {
-        productCats = product.category_ids
-          .map((id) => byId.get(String(id)))
-          .filter(Boolean);
+        productCats = product.category_ids.map((id) => byId.get(Number(id))).filter(Boolean);
       } else if (product?.category_id) {
-        const c = byId.get(String(product.category_id));
+        const c = byId.get(Number(product.category_id));
         if (c) productCats = [c];
       } else if (product?.category && typeof product.category === "object") {
         const n = normCat(product.category);
         if (n?.id || n?.slug) productCats = [n];
       }
 
-      // Also accept breadcrumb-like hints if the API provides them
-      if (
-        (!productCats || productCats.length === 0) &&
-        Array.isArray(product?.breadcrumbs)
-      ) {
-        const last = product.breadcrumbs.slice().pop();
-        if (last) {
-          const n = normCat(last);
-          if (n?.id || n?.slug) productCats = [n];
-        }
+      // B) richer endpoints
+      if (!productCats.length) {
+        try {
+          const r1 = await fetch(`${API_V1}/products/${product.id}`);
+          if (r1.ok) {
+            const j1 = await r1.json();
+            const p1 = j1?.data || j1;
+            if (Array.isArray(p1?.categories)) {
+              productCats = p1.categories.map(normCat).filter((n) => n?.id || n?.slug);
+            }
+            if (!productCats.length && Array.isArray(p1?.category_ids)) {
+              productCats = p1.category_ids.map((id) => byId.get(Number(id))).filter(Boolean);
+            }
+          }
+        } catch {}
       }
-      if (
-        (!productCats || productCats.length === 0) &&
-        Array.isArray(product?.category_tree)
-      ) {
-        const last = product.category_tree.slice().pop();
-        if (last) {
-          const n = normCat(last);
-          if (n?.id || n?.slug) productCats = [n];
-        }
+      if (!productCats.length) {
+        try {
+          const r2 = await fetch(`${API_V1}/products/${product.id}/categories`);
+          if (r2.ok) {
+            const j2 = await r2.json();
+            const rows = Array.isArray(j2?.data) ? j2.data : [];
+            productCats = rows.map(normCat).filter((n) => n?.id || n?.slug);
+          }
+        } catch {}
       }
 
-      // 2) LAST RESORT: category hint from URL (if navigated from Products)
+      // C) hints
+      if (!productCats.length && Array.isArray(product?.breadcrumbs)) {
+        const last = product.breadcrumbs.slice().pop();
+        const n = normCat(last);
+        if (n?.id || n?.slug) productCats = [n];
+      }
+      if (!productCats.length && Array.isArray(product?.category_tree)) {
+        const last = product.category_tree.slice().pop();
+        const n = normCat(last);
+        if (n?.id || n?.slug) productCats = [n];
+      }
+
+      // D) URL / persisted single slug
       if (!productCats.length) {
-        const urlCategory =
-          new URLSearchParams(location.search).get("category") ||
-          new URLSearchParams(location.search).get("category_slug") ||
-          null;
-        if (urlCategory) {
-          const findBySlug =
+        const params = new URLSearchParams(location.search);
+        const urlCategory = params.get("category") || params.get("category_slug");
+        const hinted = urlCategory || sessionStorage.getItem("recent.category.slug");
+        if (hinted) {
+          const target = normalizeSlug(hinted);
+          const found =
             [...byId.values()].find(
               (x) =>
-                normalizeSlug(x.slug) === normalizeSlug(urlCategory) ||
+                normalizeSlug(x.slug) === target ||
                 (Array.isArray(x.translations) &&
-                  x.translations.some(
-                    (t) => normalizeSlug(t?.slug) === normalizeSlug(urlCategory)
-                  ))
+                  x.translations.some((t) => normalizeSlug(t?.slug) === target))
             ) || null;
-          if (findBySlug) productCats = [findBySlug];
+          if (found) productCats = [found];
         }
       }
 
-      const primary = pickPrimaryCategory(productCats);
-      if (!primary) {
-        setCategoryTrail([]);
-        return;
-      }
+      const primary = productCats.length ? pickPrimaryCategory(productCats) : null;
+      if (!primary) return;
 
-      // 3) Walk the tree to build the full chain (matches by slug OR id)
-      const path = await findTrail(primary);
-      if (path.length) {
-        const items = path.map((n, i) =>
-          i === path.length - 1
-            ? { label: n.name }
-            : { label: n.name, path: `/products?category=${encodeURIComponent(n.slug)}` }
+      // LOCAL + REMOTE, prefer longer
+      const localTrail = byId.size ? buildTrailFromFlatList(primary, byId) : [];
+      let remoteTrail = [];
+      try {
+        remoteTrail = await findTrailRemote(primary);
+      } catch {}
+
+      const best = remoteTrail.length > localTrail.length ? remoteTrail : localTrail;
+
+      if (best.length) {
+        setCategoryTrail(
+          best.map((n, i) =>
+            i === best.length - 1
+              ? { label: n.name }
+              : { label: n.name, path: `/products?category=${encodeURIComponent(n.slug)}` }
+          )
         );
-        setCategoryTrail(items);
-      } else {
-        // fallback to just the category label
+      } else if (categoryTrail.length === 0) {
         setCategoryTrail([{ label: primary.name || primary.slug }]);
       }
     })();
-  }, [product, allCategories, byId, findTrail, location.search]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, allCategories, byId, location.search]);
 
   /* --------- auto-open reviews tab --------- */
   useEffect(() => {
@@ -485,7 +558,7 @@ export default function ProductDetails() {
   const canAddMoreCompare = compared || count < max;
 
   const unitPriceLabel = product.formatted_price ?? "€0.00";
-  const unitPrice = Number(product?.price ?? 0); // ✅ fixed
+  const unitPrice = Number(product?.price ?? 0);
   const currencyMatch = String(product?.formatted_price || "").match(
     /[^\d.,\s-]+/
   );
@@ -498,7 +571,7 @@ export default function ProductDetails() {
     galleryRef.current?.slideToIndex(index);
   };
 
-  const add = addItem; // ✅ simpler alias
+  const add = addItem;
   const handleAdd = () => {
     if (!product || qty < 1) return;
     const tid = toast.info("Adding to cart…", { duration: 0 });
@@ -602,7 +675,7 @@ export default function ProductDetails() {
 
           <div className="text-2xl font-bold text-black">{unitPriceLabel}</div>
 
-          {/* Short description (supports bullets & HTML) */}
+          {/* Short description */}
           <div className="text-gray-500">
             {(() => {
               const raw = product?.short_description || "";
