@@ -183,8 +183,8 @@ async function buildHierarchyFromDescendants(targetId, targetSlug, { signal } = 
     const rootCategories = (rootData?.data || []).filter(c => c.status === 1);
     
     // Try to find the target category by searching through descendants
-    // Limit to first 8 root categories to balance speed and completeness
-    const limitedRoots = rootCategories.slice(0, 8);
+    // Limit to first 3 root categories for faster production performance
+    const limitedRoots = rootCategories.slice(0, 3);
     
     for (const root of limitedRoots) {
       const trail = await findCategoryInDescendants(targetId, targetSlug, root.id, root, { signal });
@@ -204,7 +204,7 @@ async function buildHierarchyFromDescendants(targetId, targetSlug, { signal } = 
 
 // Recursively search for a category in descendants and build complete trail (with caching)
 async function findCategoryInDescendants(targetId, targetSlug, parentId, parentCategory, { signal, depth = 0 } = {}) {
-  if (depth > 8) return []; // Allow deeper search for complete trails
+  if (depth > 4) return []; // Limit depth for faster production performance
   
   // Check cache for this parent's children
   const childrenCacheKey = `children_${parentId}`;
@@ -213,6 +213,10 @@ async function findCategoryInDescendants(targetId, targetSlug, parentId, parentC
   if (!children) {
     try {
       const res = await fetch(`${API_PUBLIC_V1}/descendant-categories?parent_id=${parentId}`, { signal });
+      if (!res.ok) {
+        console.warn(`Failed to fetch descendants of ${parentId}: ${res.status}`);
+        return [];
+      }
       const data = await res.json();
       children = (data?.data || []).filter(c => c.status === 1);
       // Cache the children
@@ -270,13 +274,13 @@ async function getCategoryById(id, { signal } = {}) {
   if (!id) return null;
   try {
     const res = await fetch(`${API_PUBLIC_V1}/categories/${encodeURIComponent(id)}`, {
-      signal,
-    });
+    signal,
+  });
     if (!res.ok) {
       console.warn(`Failed to fetch category ${id}: ${res.status} ${res.statusText}`);
       return null;
     }
-    const json = await res.json();
+  const json = await res.json();
     const category = normCat(json?.data ?? json);
     return category;
   } catch (error) {
@@ -498,27 +502,27 @@ export default function Products() {
       try {
         let trail = [];
 
-         if (categoryIdParam) {
+        if (categoryIdParam) {
            // Strategy 1: Climb parent chain via /categories/:id
-           const start = await getCategoryById(categoryIdParam, {
-             signal: ac.signal,
-           });
+          const start = await getCategoryById(categoryIdParam, {
+            signal: ac.signal,
+          });
            
-           if (start) {
-             const t = [];
-             let cur = start;
-             let guard = 0;
-             while (cur && guard < 30) {
-               t.push(cur);
+          if (start) {
+            const t = [];
+            let cur = start;
+            let guard = 0;
+            while (cur && guard < 30) {
+              t.push(cur);
                if (!cur.parent_id || cur.parent_id === 0) {
                  break;
                }
-               if (ac.signal.aborted)
-                 throw new DOMException("Aborted", "AbortError");
-               cur = await getCategoryById(cur.parent_id, { signal: ac.signal });
-               guard++;
-             }
-             trail = t.reverse();
+              if (ac.signal.aborted)
+                throw new DOMException("Aborted", "AbortError");
+              cur = await getCategoryById(cur.parent_id, { signal: ac.signal });
+              guard++;
+            }
+            trail = t.reverse();
            }
 
           // Strategy 2: If chain is flat or broken, try building from full categories list
@@ -585,7 +589,7 @@ export default function Products() {
           // --- 1) Try hierarchy-based approach (like Menu.jsx) with timeout
           try {
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Hierarchy search timeout')), 8000)
+              setTimeout(() => reject(new Error('Hierarchy search timeout')), 3000)
             );
             trail = await Promise.race([
               buildHierarchyFromDescendants(null, decoded, { signal: ac.signal }),
@@ -598,26 +602,26 @@ export default function Products() {
 
           // --- 2) If no trail, check local cache
           if (!trail.length) {
-            let all = ssGet(SS_ALL_CATEGORIES, []);
-            let byId = mapById(all);
-            let bySlug = buildSlugIndex(all);
-            let hit =
-              bySlug.get(decoded.toLowerCase()) ||
-              bySlug.get(categorySlugParam) ||
-              bySlug.get(slugNorm);
+          let all = ssGet(SS_ALL_CATEGORIES, []);
+          let byId = mapById(all);
+          let bySlug = buildSlugIndex(all);
+          let hit =
+            bySlug.get(decoded.toLowerCase()) ||
+            bySlug.get(categorySlugParam) ||
+            bySlug.get(slugNorm);
 
-            if (hit) {
-              trail = buildTrailFromFlatList(hit, byId);
+          if (hit) {
+            trail = buildTrailFromFlatList(hit, byId);
             }
           }
 
            // --- 3) Load full categories list if not found locally
-           if (!trail.length) {
-             try {
-               const r = await fetch(
+          if (!trail.length) {
+            try {
+              const r = await fetch(
                  `${API_PUBLIC_V1}/categories?sort=id&order=asc&limit=10000`,
-                 { signal: ac.signal }
-               );
+                { signal: ac.signal }
+              );
               const j = await r.json();
               const fresh = j?.data || [];
               if (fresh.length) {
@@ -847,7 +851,7 @@ export default function Products() {
       qs.set("per_page", String(PER_PAGE));
       qs.set("page", String(pageToFetch));
 
-       const url = `${API_V1}/products?${qs.toString()}`;
+      const url = `${API_V1}/products?${qs.toString()}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -938,22 +942,22 @@ export default function Products() {
   );
 
   /* ---------------- full breadcrumbs with links ---------------- */
-   const breadcrumbItems = useMemo(() => {
-     const base = [
-       { label: "Home", path: "/" },
-     ];
+  const breadcrumbItems = useMemo(() => {
+    const base = [
+      { label: "Home", path: "/" },
+    ];
     
-     if (computedTrail.length) {
-       const trailItems = computedTrail.map((c, i) => {
-         const isLast = i === computedTrail.length - 1;
+    if (computedTrail.length) {
+      const trailItems = computedTrail.map((c, i) => {
+        const isLast = i === computedTrail.length - 1;
          // Use category_id if available, otherwise fall back to slug
          const categoryParam = c.id ? `category_id=${c.id}` : `category=${encodeURIComponent(c.slug)}`;
          const to = `/products?${categoryParam}`;
-         return isLast ? { label: c.name } : { label: c.name, path: to };
-       });
+        return isLast ? { label: c.name } : { label: c.name, path: to };
+      });
        const result = [...base, ...trailItems];
        return result;
-     }
+    }
     
     if (hasCategoryFilter && trailLoading) {
       return [...base, { label: "Loading…" }];
@@ -1116,7 +1120,7 @@ export default function Products() {
               )}
 
                {hasMore && (
-                 <div className="my-6 flex justify-center">
+                <div className="my-6 flex justify-center">
                    <button
                      onClick={handleLoadMore}
                      disabled={loadingMore}
@@ -1131,13 +1135,13 @@ export default function Products() {
                        "Load More Products"
                      )}
                    </button>
-                 </div>
-               )}
+                </div>
+              )}
                {!hasMore && items.length > 0 && (
-                 <div className="my-6 text-center text-sm text-gray-500">
-                   No more products
-                 </div>
-               )}
+                <div className="my-6 text-center text-sm text-gray-500">
+                  No more products
+                </div>
+              )}
             </>
           ) : null}
         </section>
