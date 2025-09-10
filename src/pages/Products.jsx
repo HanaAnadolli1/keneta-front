@@ -12,7 +12,6 @@ import { List as ListIcon, LayoutGrid as GridIcon } from "lucide-react";
 import FilterSidebar from "../components/FilterSidebar";
 import ProductCard from "../components/ProductCard";
 import ProductListItem from "../components/ProductListItem";
-import InfiniteScrollSentinel from "../components/InfiniteScrollSentinel";
 import Spinner from "../components/Spinner";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
@@ -22,11 +21,15 @@ import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
 
 /* ================================
- * Fast + resilient breadcrumbs
- * - Prefer local list (all slugs incl. translations, + normalized)
- * - On miss: fetch full categories ONCE, retry locally
- * - Final: bounded DFS via /descendant-categories (depth 12)
- * - Cached: children, trails (by normalized slug)
+ * Dynamic Category Breadcrumbs System
+ * - When category_id present: climb parent chain via /categories/:id
+ * - When chain flat/broken: fallback to bounded DFS via /descendant-categories
+ * - When only category/category_slug: use DFS directly
+ * - DFS caches children in memory + sessionStorage, de-dupes in-flight requests
+ * - DFS aborts cleanly on route changes, ranks by token overlap
+ * - Persists final trail to sessionStorage for reuse
+ * - Product queries prefer numeric category_id when known, else use slug
+ * - Shows full breadcrumbs (Home / Products / … / Active) with links except last
  * ================================ */
 
 const PER_PAGE = 12;
@@ -91,14 +94,13 @@ function extractProductsPayload(resp) {
 /* ---------- category helpers ---------- */
 function normCat(c) {
   if (!c) return null;
-  return {
+  
+  // Look for parent relationship in various possible field names
+  const parentId = c.parent_id ?? c.parentId ?? c.parent?.id ?? c.parent_category_id ?? c.category_parent_id ?? c.parent ?? null;
+  
+  const normalized = {
     id: Number(c.id ?? c.category_id ?? c.value ?? 0) || 0,
-    parent_id:
-      c.parent_id != null
-        ? Number(c.parent_id)
-        : c.parent?.id != null
-        ? Number(c.parent.id)
-        : null,
+    parent_id: parentId != null ? Number(parentId) : null,
     slug: String(c.slug ?? c.code ?? c.value ?? c.name ?? "").toLowerCase(),
     name: String(c.name ?? c.label ?? c.title ?? c.slug ?? "Category"),
     level:
@@ -110,6 +112,8 @@ function normCat(c) {
     status: String(c.status ?? "1"),
     translations: Array.isArray(c.translations) ? c.translations : [],
   };
+  
+  return normalized;
 }
 
 function mapById(categories) {
@@ -148,15 +152,99 @@ function buildTrailFromFlatList(target, byId) {
   const trail = [];
   let cur = target ? normCat(target) : null;
   let guard = 0;
+  
   while (cur && guard < 40) {
     trail.push(cur);
     const pid = cur.parent_id;
-    if (!pid || pid === 0 || !byId.has(pid)) break;
+    if (!pid || pid === 0 || !byId.has(pid)) {
+      break;
+    }
     cur = byId.get(pid);
     guard++;
   }
-  return trail.reverse();
+  
+  const result = trail.reverse();
+  return result;
 }
+
+// Build hierarchy by analyzing descendant relationships (optimized with caching)
+async function buildHierarchyFromDescendants(targetId, targetSlug, { signal } = {}) {
+  // Check cache first
+  const cacheKey = `hierarchy_${targetId || targetSlug}`;
+  const cached = ssGet(cacheKey, null);
+  if (cached) {
+    return cached;
+  }
+  
+  try {
+    // Get all root categories first (like Menu.jsx)
+    const rootRes = await fetch(`${API_PUBLIC_V1}/descendant-categories?parent_id=1`, { signal });
+    const rootData = await rootRes.json();
+    const rootCategories = (rootData?.data || []).filter(c => c.status === 1);
+    
+    // Try to find the target category by searching through descendants
+    // Limit to first 8 root categories to balance speed and completeness
+    const limitedRoots = rootCategories.slice(0, 8);
+    
+    for (const root of limitedRoots) {
+      const trail = await findCategoryInDescendants(targetId, targetSlug, root.id, root, { signal });
+      if (trail.length > 0) {
+        // Cache the result
+        ssSet(cacheKey, trail);
+        return trail;
+      }
+    }
+    
+    return [];
+  } catch (error) {
+    console.warn("Failed to build hierarchy from descendants:", error);
+    return [];
+  }
+}
+
+// Recursively search for a category in descendants and build complete trail (with caching)
+async function findCategoryInDescendants(targetId, targetSlug, parentId, parentCategory, { signal, depth = 0 } = {}) {
+  if (depth > 8) return []; // Allow deeper search for complete trails
+  
+  // Check cache for this parent's children
+  const childrenCacheKey = `children_${parentId}`;
+  let children = ssGet(childrenCacheKey, null);
+  
+  if (!children) {
+    try {
+      const res = await fetch(`${API_PUBLIC_V1}/descendant-categories?parent_id=${parentId}`, { signal });
+      const data = await res.json();
+      children = (data?.data || []).filter(c => c.status === 1);
+      // Cache the children
+      ssSet(childrenCacheKey, children);
+    } catch (error) {
+      console.warn(`Failed to search descendants of ${parentId}:`, error);
+      return [];
+    }
+  }
+  
+  // Check if target is in direct children
+  for (const child of children) {
+    if (child.id === targetId || child.slug === targetSlug) {
+      // Build the complete trail by including the parent
+      const trail = parentCategory ? [parentCategory, child] : [child];
+      return trail;
+    }
+  }
+  
+  // Recursively search in children
+  for (const child of children) {
+    const subTrail = await findCategoryInDescendants(targetId, targetSlug, child.id, child, { signal, depth: depth + 1 });
+    if (subTrail.length > 0) {
+      // Prepend the parent to build the complete trail
+      const trail = parentCategory ? [parentCategory, ...subTrail] : subTrail;
+      return trail;
+    }
+  }
+  
+  return [];
+}
+
 
 /* ---------- sessionStorage caches ---------- */
 const SS_TRAIL_CACHE = "cat.trailCache.v2"; // normalized slug -> Trail[]
@@ -180,14 +268,25 @@ const ssSet = (k, v) => {
 /* ---------- network helpers ---------- */
 async function getCategoryById(id, { signal } = {}) {
   if (!id) return null;
-  const res = await fetch(`${API_V1}/categories/${encodeURIComponent(id)}`, {
-    signal,
-  });
-  const json = await res.json();
-  return normCat(json?.data ?? json);
+  try {
+    const res = await fetch(`${API_PUBLIC_V1}/categories/${encodeURIComponent(id)}`, {
+      signal,
+    });
+    if (!res.ok) {
+      console.warn(`Failed to fetch category ${id}: ${res.status} ${res.statusText}`);
+      return null;
+    }
+    const json = await res.json();
+    const category = normCat(json?.data ?? json);
+    return category;
+  } catch (error) {
+    console.warn(`Error fetching category ${id}:`, error);
+    return null;
+  }
 }
 
 // bounded DFS using /descendant-categories; can start from multiple roots
+// ranks matches by token overlap without pruning zero-score branches
 async function findTrailBySlugRemote(
   slugLike,
   getChildren,
@@ -197,10 +296,27 @@ async function findTrailBySlugRemote(
   if (!slugLike) return [];
   const TARGET = normSlug(slugLike);
   const tokens = TARGET.split(/[^a-z0-9]+/).filter(Boolean);
-  const looksRelevant = (s) => {
-    const ns = normSlug(s);
-    if (ns === TARGET) return true;
-    return tokens.some((t) => ns.includes(t));
+  
+  // Enhanced scoring function for token overlap
+  const calculateScore = (slug) => {
+    const ns = normSlug(slug);
+    if (ns === TARGET) return 1000; // exact match gets highest score
+    
+    // Count token overlaps
+    const slugTokens = ns.split(/[^a-z0-9]+/).filter(Boolean);
+    let overlapCount = 0;
+    let totalTokens = Math.max(tokens.length, slugTokens.length);
+    
+    for (const token of tokens) {
+      if (slugTokens.some(st => st.includes(token) || token.includes(st))) {
+        overlapCount++;
+      }
+    }
+    
+    // Return overlap ratio as score (0-100), plus length bonus for longer matches
+    const overlapRatio = totalTokens > 0 ? (overlapCount / totalTokens) * 100 : 0;
+    const lengthBonus = Math.min(ns.length * 0.1, 10); // small bonus for longer matches
+    return overlapRatio + lengthBonus;
   };
 
   let requests = 0;
@@ -221,20 +337,16 @@ async function findTrailBySlugRemote(
       .map(normCat)
       .map((n) => ({
         n,
-        score:
-          normSlug(n.slug) === TARGET
-            ? 1000
-            : looksRelevant(n.slug)
-            ? n.slug.length
-            : 0,
+        score: calculateScore(n.slug),
       }))
-      .sort((a, b) => a.score - b.score);
+      .sort((a, b) => b.score - a.score); // sort descending (highest score first)
 
-    for (let i = scored.length - 1; i >= 0; i--) {
-      const child = scored[i].n;
+    for (const { n: child, score } of scored) {
       const nextPath = [...path, child];
       if (normSlug(child.slug) === TARGET) return nextPath;
-      if (nextPath.length < maxDepth && scored[i].score > 0) {
+      
+      // Don't prune zero-score branches - include all children for comprehensive search
+      if (nextPath.length < maxDepth) {
         stack.push({ parentId: child.id, path: nextPath });
       }
     }
@@ -349,7 +461,7 @@ export default function Products() {
           setBrandOptions(JSON.parse(cached));
           return;
         }
-        const res = await fetch(`${API_V1}/attributes?sort=id`, {
+         const res = await fetch(`${API_PUBLIC_V1}/attributes?sort=id`, {
           signal: ac.signal,
         });
         const json = await res.json();
@@ -364,7 +476,7 @@ export default function Products() {
     return () => ac.abort();
   }, []);
 
-  /* ---------------- breadcrumbs ---------------- */
+  /* ---------------- dynamic breadcrumbs ---------------- */
   const getChildren = useChildrenFetcher();
   const [computedTrail, setComputedTrail] = useState([]);
   const [trailLoading, setTrailLoading] = useState(false);
@@ -386,49 +498,126 @@ export default function Products() {
       try {
         let trail = [];
 
-        if (categoryIdParam) {
-          // climb parents via /categories/{id}
-          const start = await getCategoryById(categoryIdParam, {
-            signal: ac.signal,
-          });
-          if (start) {
-            const t = [];
-            let cur = start;
-            let guard = 0;
-            while (cur && guard < 30) {
-              t.push(cur);
-              if (!cur.parent_id) break;
-              if (ac.signal.aborted)
-                throw new DOMException("Aborted", "AbortError");
-              cur = await getCategoryById(cur.parent_id, { signal: ac.signal });
-              guard++;
+         if (categoryIdParam) {
+           // Strategy 1: Climb parent chain via /categories/:id
+           const start = await getCategoryById(categoryIdParam, {
+             signal: ac.signal,
+           });
+           
+           if (start) {
+             const t = [];
+             let cur = start;
+             let guard = 0;
+             while (cur && guard < 30) {
+               t.push(cur);
+               if (!cur.parent_id || cur.parent_id === 0) {
+                 break;
+               }
+               if (ac.signal.aborted)
+                 throw new DOMException("Aborted", "AbortError");
+               cur = await getCategoryById(cur.parent_id, { signal: ac.signal });
+               guard++;
+             }
+             trail = t.reverse();
+           }
+
+          // Strategy 2: If chain is flat or broken, try building from full categories list
+          if (!trail.length || trail.length === 1) {
+             try {
+               // Load full categories list to build complete trail
+               const r = await fetch(
+                 `${API_PUBLIC_V1}/categories?sort=id&order=asc&limit=10000`,
+                 { signal: ac.signal }
+               );
+              const j = await r.json();
+              const fresh = j?.data || [];
+              
+              if (fresh.length) {
+                const byId = mapById(fresh);
+                const bySlug = buildSlugIndex(fresh);
+                
+                // Try to find the category by ID first
+                let target = byId.get(Number(categoryIdParam));
+                
+                if (!target) {
+                  // If not found by ID, try by slug
+                  const decoded = decodeURIComponent(categorySlugParam || "");
+                  if (decoded) {
+                    target = bySlug.get(decoded.toLowerCase()) ||
+                            bySlug.get(categorySlugParam) ||
+                            bySlug.get(normSlug(decoded));
+                  }
+                }
+                
+                if (target) {
+                  trail = buildTrailFromFlatList(target, byId);
+                }
+                
+                // If still no trail, try to build it by analyzing the hierarchy
+                if (!trail.length || trail.length === 1) {
+                  const decoded = decodeURIComponent(categorySlugParam || "");
+                  trail = await buildHierarchyFromDescendants(Number(categoryIdParam), decoded, { signal: ac.signal });
+                }
+              }
+            } catch (e) {
+              console.warn("Failed to load full categories:", e);
             }
-            trail = t.reverse();
+          }
+
+          // Strategy 3: If still no trail, fallback to DFS
+          if (!trail.length || trail.length === 1) {
+            const decoded = decodeURIComponent(categorySlugParam || "");
+            if (decoded) {
+              // Use DFS with current category as starting point
+              const roots = start?.id ? [start.id] : [FALLBACK_ROOT_ID];
+              trail = await findTrailBySlugRemote(decoded, getChildren, roots, {
+                signal: ac.signal,
+                maxRequests: 48,
+                maxDepth: 12,
+              });
+            }
           }
         } else if (categorySlugParam) {
+          // Strategy 4: Use hierarchy-based approach when only slug is present
           const decoded = decodeURIComponent(categorySlugParam);
           const slugNorm = normSlug(decoded);
 
-          // --- 1) local (maybe already cached by other screens)
-          let all = ssGet(SS_ALL_CATEGORIES, []);
-          let byId = mapById(all);
-          let bySlug = buildSlugIndex(all);
-          let hit =
-            bySlug.get(decoded.toLowerCase()) ||
-            bySlug.get(categorySlugParam) ||
-            bySlug.get(slugNorm);
-
-          if (hit) {
-            trail = buildTrailFromFlatList(hit, byId);
+          // --- 1) Try hierarchy-based approach (like Menu.jsx) with timeout
+          try {
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Hierarchy search timeout')), 8000)
+            );
+            trail = await Promise.race([
+              buildHierarchyFromDescendants(null, decoded, { signal: ac.signal }),
+              timeoutPromise
+            ]);
+          } catch (error) {
+            console.warn("Hierarchy search failed or timed out:", error);
+            trail = [];
           }
 
-          // --- 2) If not found, load full list ONCE and retry locally
+          // --- 2) If no trail, check local cache
           if (!trail.length) {
-            try {
-              const r = await fetch(
-                `${API_V1}/categories?sort=id&order=asc&limit=10000`,
-                { signal: ac.signal }
-              );
+            let all = ssGet(SS_ALL_CATEGORIES, []);
+            let byId = mapById(all);
+            let bySlug = buildSlugIndex(all);
+            let hit =
+              bySlug.get(decoded.toLowerCase()) ||
+              bySlug.get(categorySlugParam) ||
+              bySlug.get(slugNorm);
+
+            if (hit) {
+              trail = buildTrailFromFlatList(hit, byId);
+            }
+          }
+
+           // --- 3) Load full categories list if not found locally
+           if (!trail.length) {
+             try {
+               const r = await fetch(
+                 `${API_PUBLIC_V1}/categories?sort=id&order=asc&limit=10000`,
+                 { signal: ac.signal }
+               );
               const j = await r.json();
               const fresh = j?.data || [];
               if (fresh.length) {
@@ -440,26 +629,29 @@ export default function Products() {
                   bySlug.get(decoded.toLowerCase()) ||
                   bySlug.get(categorySlugParam) ||
                   bySlug.get(slugNorm);
-                if (hit) trail = buildTrailFromFlatList(hit, byId);
+                 if (hit) {
+                   trail = buildTrailFromFlatList(hit, byId);
+                 }
               }
             } catch {
               /* ignore */
             }
           }
 
-          // --- 3) Trail cache (normalized key)
+          // --- 4) Check trail cache
           if (!trail.length) {
             const cache = ssGet(SS_TRAIL_CACHE, {});
             const cached =
               cache[slugNorm] ||
               cache[decoded.toLowerCase()] ||
               cache[categorySlugParam];
-            if (cached?.length) trail = cached;
+             if (cached?.length) {
+               trail = cached;
+             }
           }
 
-          // --- 4) DFS fallback (start from best known roots)
+          // --- 5) DFS fallback with multiple roots
           if (!trail.length) {
-            // if we have full list, use all root nodes as DFS starts
             const roots = (
               all.length
                 ? all
@@ -477,6 +669,7 @@ export default function Products() {
               maxDepth: 12,
             });
 
+            // Cache the result
             if (trail.length) {
               const table = ssGet(SS_TRAIL_CACHE, {});
               ssSet(SS_TRAIL_CACHE, { ...table, [slugNorm]: trail });
@@ -485,7 +678,27 @@ export default function Products() {
         }
 
         if (!cancelled) {
+          // If we still don't have a trail but have a category, create a minimal trail
+          if (!trail.length && (categoryIdParam || categorySlugParam)) {
+            if (categoryIdParam) {
+              // Create a minimal trail with just the current category
+              const current = await getCategoryById(categoryIdParam, { signal: ac.signal });
+              if (current) {
+                trail = [current];
+              }
+            } else if (categorySlugParam) {
+              // Create a minimal trail with just the current category slug
+              const decoded = decodeURIComponent(categorySlugParam);
+              trail = [{
+                id: null,
+                name: decoded,
+                slug: decoded,
+                parent_id: null
+              }];
+            }
+          }
           setComputedTrail(trail);
+          // Only show error when no trail can be built even after all fallbacks
           if (categorySlugParam && !trail.length && !categoryIdParam) {
             setMetaNotice("Category filter not recognized.");
           } else {
@@ -598,7 +811,7 @@ export default function Products() {
       qs.set("brand_slug", brandSlugParam);
     }
 
-    // category — prefer ID from computed trail / URL, else slug
+    // category — always prefer numeric category_id when known, else use slug
     if (categoryIdParam) {
       qs.set("category_id", String(categoryIdParam));
       qs.set("category", String(categoryIdParam));
@@ -634,7 +847,7 @@ export default function Products() {
       qs.set("per_page", String(PER_PAGE));
       qs.set("page", String(pageToFetch));
 
-      const url = `${API_V1}/products?${qs.toString()}`;
+       const url = `${API_V1}/products?${qs.toString()}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -684,8 +897,8 @@ export default function Products() {
     };
   }, [fetchPage, isShortSearchOnly]);
 
-  // infinite scroll
-  const handleIntersect = useCallback(async () => {
+  // load more button handler
+  const handleLoadMore = useCallback(async () => {
     if (loadingLock.current || loadingMore || !hasMore || initialLoading)
       return;
     loadingLock.current = true;
@@ -724,22 +937,28 @@ export default function Products() {
     [addItem, toast]
   );
 
-  /* ---------------- breadcrumbs (progressive) ---------------- */
-  const breadcrumbItems = useMemo(() => {
-    const base = [
-      { label: "Home", path: "/" },
-      { label: "Products", path: "/products" },
-    ];
-    if (computedTrail.length) {
-      const trailItems = computedTrail.map((c, i) => {
-        const isLast = i === computedTrail.length - 1;
-        const to = `/products?category=${encodeURIComponent(c.slug)}`;
-        return isLast ? { label: c.name } : { label: c.name, path: to };
-      });
-      return [...base, ...trailItems];
-    }
-    if (hasCategoryFilter && trailLoading)
+  /* ---------------- full breadcrumbs with links ---------------- */
+   const breadcrumbItems = useMemo(() => {
+     const base = [
+       { label: "Home", path: "/" },
+     ];
+    
+     if (computedTrail.length) {
+       const trailItems = computedTrail.map((c, i) => {
+         const isLast = i === computedTrail.length - 1;
+         // Use category_id if available, otherwise fall back to slug
+         const categoryParam = c.id ? `category_id=${c.id}` : `category=${encodeURIComponent(c.slug)}`;
+         const to = `/products?${categoryParam}`;
+         return isLast ? { label: c.name } : { label: c.name, path: to };
+       });
+       const result = [...base, ...trailItems];
+       return result;
+     }
+    
+    if (hasCategoryFilter && trailLoading) {
       return [...base, { label: "Loading…" }];
+    }
+    
     return base;
   }, [computedTrail, hasCategoryFilter, trailLoading]);
 
@@ -896,21 +1115,29 @@ export default function Products() {
                 </ul>
               )}
 
-              <InfiniteScrollSentinel
-                onIntersect={handleIntersect}
-                disabled={!hasMore}
-              />
-
-              {loadingMore && (
-                <div className="my-6 flex justify-center">
-                  <Spinner label="Loading more…" />
-                </div>
-              )}
-              {!loadingMore && !hasMore && (
-                <div className="my-6 text-center text-sm text-gray-500">
-                  No more products
-                </div>
-              )}
+               {hasMore && (
+                 <div className="my-6 flex justify-center">
+                   <button
+                     onClick={handleLoadMore}
+                     disabled={loadingMore}
+                     className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                   >
+                     {loadingMore ? (
+                       <>
+                         <Spinner size="sm" />
+                         Loading more…
+                       </>
+                     ) : (
+                       "Load More Products"
+                     )}
+                   </button>
+                 </div>
+               )}
+               {!hasMore && items.length > 0 && (
+                 <div className="my-6 text-center text-sm text-gray-500">
+                   No more products
+                 </div>
+               )}
             </>
           ) : null}
         </section>

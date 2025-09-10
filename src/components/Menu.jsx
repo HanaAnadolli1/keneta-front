@@ -46,7 +46,7 @@ export default function Menu() {
 
   // desktop top nav "pages"
   const pages = [
-    { label: "Produktet", path: "/products" },
+    // { label: "Produktet", path: "/products" },
     { label: "Brendet", path: "/brands" },
     { label: "Deals", path: "/deals" },
     { label: "Të rejat", path: "/new-arrivals" },
