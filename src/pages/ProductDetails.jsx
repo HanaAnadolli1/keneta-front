@@ -218,7 +218,6 @@ export default function ProductDetails() {
 
   const breadcrumbsBase = [
     { label: "Home", path: "/" },
-    { label: "Products", path: "/products" },
   ];
 
   const accessToken =
