@@ -414,9 +414,8 @@ export default function Products() {
     params.get("category") || params.get("category_slug") || "";
   const categoryIdParam = params.get("category_id") || "";
   const brandParam = params.get("brand") || "";
-  const brandSlugParam = !isCsvOfIds(brandParam)
-    ? brandParam || params.get("brand_slug") || ""
-    : "";
+  // Brand parameter now contains brand names (comma-separated) instead of IDs
+  const brandSlugParam = params.get("brand_slug") || "";
 
   const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
   const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
@@ -737,23 +736,24 @@ export default function Products() {
   }, [computedTrail]);
 
   /* -------- brand helpers -------- */
-  const mappedBrandIdFromSlug = useMemo(() => {
-    if (!brandSlugParam || !brandOptions.length) return null;
-    return (
-      brandOptions.find(
-        (b) => slugifyBrandLabel(b.label) === slugifyBrandLabel(brandSlugParam)
-      )?.id ?? null
-    );
-  }, [brandSlugParam, brandOptions]);
+  // Parse brand names from URL parameter
+  const selectedBrandNames = useMemo(() => {
+    if (!brandParam) return [];
+    return brandParam.split(",").map(name => decodeURIComponent(name.trim())).filter(Boolean);
+  }, [brandParam]);
+
+  // Map brand names to IDs for API calls
+  const mappedBrandIds = useMemo(() => {
+    if (!selectedBrandNames.length || !brandOptions.length) return [];
+    return selectedBrandNames
+      .map(name => brandOptions.find(b => b.label === name)?.id)
+      .filter(Boolean);
+  }, [selectedBrandNames, brandOptions]);
 
   const activeBrandLabel = useMemo(() => {
-    if (!brandSlugParam || !brandOptions.length) return null;
-    return (
-      brandOptions.find(
-        (b) => slugifyBrandLabel(b.label) === slugifyBrandLabel(brandSlugParam)
-      )?.label ?? null
-    );
-  }, [brandSlugParam, brandOptions]);
+    if (!selectedBrandNames.length) return null;
+    return selectedBrandNames.join(", ");
+  }, [selectedBrandNames]);
 
   const activeCategoryLabel = useMemo(
     () =>
@@ -770,7 +770,8 @@ export default function Products() {
         sort,
         order,
         query: searchTerm,
-        brand: brandParam || brandSlugParam,
+        brand: brandParam,
+        brandSlug: brandSlugParam,
         category: categorySlugParam,
         categoryId: categoryIdParam,
       }),
@@ -802,11 +803,9 @@ export default function Products() {
     if (order) qs.set("order", order);
     if (searchTerm.length >= MIN_SEARCH_LEN) qs.set("query", searchTerm);
 
-    // brand
-    if (brandParam && isCsvOfIds(brandParam)) {
-      qs.set("brand", normalizeCsv(brandParam));
-    } else if (mappedBrandIdFromSlug) {
-      qs.set("brand", String(mappedBrandIdFromSlug));
+    // brand - use mapped IDs for API calls
+    if (mappedBrandIds.length > 0) {
+      qs.set("brand", mappedBrandIds.join(","));
     } else if (brandSlugParam) {
       qs.set("brand_slug", brandSlugParam);
     }
@@ -832,9 +831,8 @@ export default function Products() {
     sort,
     order,
     searchTerm,
-    brandParam,
+    mappedBrandIds,
     brandSlugParam,
-    mappedBrandIdFromSlug,
     computedTrail,
     categorySlugParam,
     categoryIdParam,

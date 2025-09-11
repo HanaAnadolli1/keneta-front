@@ -89,14 +89,18 @@ function parseSelected(searchParams, code) {
   );
 }
 
-function toggleValue(searchParams, setSearchParams, code, id) {
+function toggleValue(searchParams, setSearchParams, code, id, label) {
   const set = parseSelected(searchParams, code);
-  const key = String(id);
+  // For brand filtering, use the label (name) instead of ID
+  const key = code === "brand" ? String(label) : String(id);
   if (set.has(key)) set.delete(key);
   else set.add(key);
 
   const qs = new URLSearchParams(searchParams);
-  const csv = [...set].join(",");
+  // For brand filtering, encode the names properly for URL
+  const csv = code === "brand" 
+    ? [...set].map(name => encodeURIComponent(name)).join(",")
+    : [...set].join(",");
 
   if (csv) qs.set(code, csv);
   else qs.delete(code);
@@ -143,9 +147,14 @@ function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
 
   const selectAllFiltered = () => {
     if (!filtered.length) return;
-    const ids = filtered.map((o) => String(o.id));
+    // For brand filtering, use labels instead of IDs
+    const values = filtered.map((o) => attr.code === "brand" ? String(o.label) : String(o.id));
     const qs = new URLSearchParams(searchParams);
-    qs.set(attr.code, ids.join(","));
+    // For brand filtering, encode the names properly for URL
+    const csv = attr.code === "brand" 
+      ? values.map(name => encodeURIComponent(name)).join(",")
+      : values.join(",");
+    qs.set(attr.code, csv);
     if (attr.code === "brand") qs.delete("brand_slug");
     qs.delete("page");
     setSearchParams(qs);
@@ -240,7 +249,9 @@ function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
               <p className="text-xs text-gray-500 px-1">No results</p>
             ) : (
               filtered.map((opt) => {
-                const checked = selectedSet.has(String(opt.id));
+                // For brand filtering, check against label instead of ID
+                const key = attr.code === "brand" ? String(opt.label) : String(opt.id);
+                const checked = selectedSet.has(key);
                 return (
                   <label
                     key={opt.id}
@@ -254,7 +265,8 @@ function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
                           searchParams,
                           setSearchParams,
                           attr.code,
-                          opt.id
+                          opt.id,
+                          opt.label
                         )
                       }
                       className="rounded border-[#1d3d62] text-[#1d3d62] focus:ring-[#1d3d62]"
