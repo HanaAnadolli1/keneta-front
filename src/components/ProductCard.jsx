@@ -26,7 +26,7 @@ function ProductCard({
   // sale flag uses PDP dates (frontend-only)
   const { saleActive, pct, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
     product,
-    { apiBase: "https://keneta.laratest-app.com/api/v1" }
+    { apiBase: "https://keneta.laratest-app.com/api/v2" }
   );
 
   return (
@@ -124,7 +124,9 @@ function ProductCard({
 
           {/* Price row: fixed minimum height */}
           <div className="mt-2 flex items-baseline gap-2 min-h-[1.5rem]">
-            <span className="text-[var(--secondary)] font-bold">{priceLabel}</span>
+            <span className="text-[var(--secondary)] font-bold">
+              {priceLabel}
+            </span>
             {hasStrike && strikeLabel && (
               <span className="text-sm text-gray-400 line-through">
                 {strikeLabel}

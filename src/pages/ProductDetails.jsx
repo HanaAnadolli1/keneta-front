@@ -24,7 +24,7 @@ import ProductReviews from "../components/ProductReviews";
 import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 
-const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
+const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v2";
 
 /* ---------------- small helpers ---------------- */
 const chunkPairs = (rows, size = 2) => {
@@ -54,10 +54,14 @@ const renderBulletList = (text = "") => {
 
 const renderRichText = (raw = "") => {
   if (!raw) return <p className="text-gray-500">No description.</p>;
-  if (looksLikeHtml(raw)) return <div dangerouslySetInnerHTML={{ __html: raw }} />;
+  if (looksLikeHtml(raw))
+    return <div dangerouslySetInnerHTML={{ __html: raw }} />;
   const bullets = renderBulletList(raw);
   if (bullets) return bullets;
-  const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (lines.length > 1) {
     return (
       <ul className="list-disc pl-5 space-y-1">
@@ -141,10 +145,10 @@ const createTrailFinder = (getChildren, rootIds = [1]) => {
     const wantId = Number(target.id || 0) || null;
     const wantCandidates = new Set([
       ...makeSlugCandidates(target.slug),
-      ...((target.translations || [])
+      ...(target.translations || [])
         .map((t) => t?.slug)
         .filter(Boolean)
-        .flatMap((s) => [...makeSlugCandidates(s)])),
+        .flatMap((s) => [...makeSlugCandidates(s)]),
     ]);
 
     const MAX_DEPTH = 10;
@@ -161,10 +165,10 @@ const createTrailFinder = (getChildren, rootIds = [1]) => {
 
           const childCandidates = new Set([
             ...makeSlugCandidates(child.slug),
-            ...((child.translations || [])
+            ...(child.translations || [])
               .map((t) => t?.slug)
               .filter(Boolean)
-              .flatMap((s) => [...makeSlugCandidates(s)])),
+              .flatMap((s) => [...makeSlugCandidates(s)]),
           ]);
 
           const slugMatches =
@@ -216,9 +220,7 @@ export default function ProductDetails() {
   const [allCategories, setAllCategories] = useState([]);
   const childrenCacheRef = useRef(new Map()); // parentId -> children[]
 
-  const breadcrumbsBase = [
-    { label: "Home", path: "/" },
-  ];
+  const breadcrumbsBase = [{ label: "Home", path: "/" }];
 
   const accessToken =
     localStorage.getItem("access_token") ||
@@ -315,9 +317,7 @@ export default function ProductDetails() {
     );
     if (!res.ok) throw new Error(`cats ${res.status}`);
     const j = await res.json();
-    const rows = (j?.data || []).filter(
-      (c) => String(c.status ?? "1") === "1"
-    );
+    const rows = (j?.data || []).filter((c) => String(c.status ?? "1") === "1");
     childrenCacheRef.current.set(key, rows);
     return rows;
   }, []);
@@ -342,7 +342,9 @@ export default function ProductDetails() {
     if (!Array.isArray(cats) || cats.length === 0) return null;
     const withLevel = cats.filter((c) => c.level != null);
     if (withLevel.length) {
-      return withLevel.slice().sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
+      return withLevel
+        .slice()
+        .sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
     }
     return cats[cats.length - 1];
   };
@@ -363,7 +365,9 @@ export default function ProductDetails() {
               ? { label: n.name || n.slug || "Category" }
               : {
                   label: n.name || n.slug || "Category",
-                  path: `/products?category=${encodeURIComponent(n.slug || "")}`,
+                  path: `/products?category=${encodeURIComponent(
+                    n.slug || ""
+                  )}`,
                 }
           );
           setCategoryTrail(items);
@@ -375,9 +379,13 @@ export default function ProductDetails() {
 
       // A) from payload
       if (Array.isArray(product?.categories) && product.categories.length) {
-        productCats = product.categories.map(normCat).filter((n) => n?.id || n?.slug);
+        productCats = product.categories
+          .map(normCat)
+          .filter((n) => n?.id || n?.slug);
       } else if (Array.isArray(product?.category_ids)) {
-        productCats = product.category_ids.map((id) => byId.get(Number(id))).filter(Boolean);
+        productCats = product.category_ids
+          .map((id) => byId.get(Number(id)))
+          .filter(Boolean);
       } else if (product?.category_id) {
         const c = byId.get(Number(product.category_id));
         if (c) productCats = [c];
@@ -394,10 +402,14 @@ export default function ProductDetails() {
             const j1 = await r1.json();
             const p1 = j1?.data || j1;
             if (Array.isArray(p1?.categories)) {
-              productCats = p1.categories.map(normCat).filter((n) => n?.id || n?.slug);
+              productCats = p1.categories
+                .map(normCat)
+                .filter((n) => n?.id || n?.slug);
             }
             if (!productCats.length && Array.isArray(p1?.category_ids)) {
-              productCats = p1.category_ids.map((id) => byId.get(Number(id))).filter(Boolean);
+              productCats = p1.category_ids
+                .map((id) => byId.get(Number(id)))
+                .filter(Boolean);
             }
           }
         } catch {}
@@ -428,8 +440,10 @@ export default function ProductDetails() {
       // D) URL / persisted single slug
       if (!productCats.length) {
         const params = new URLSearchParams(location.search);
-        const urlCategory = params.get("category") || params.get("category_slug");
-        const hinted = urlCategory || sessionStorage.getItem("recent.category.slug");
+        const urlCategory =
+          params.get("category") || params.get("category_slug");
+        const hinted =
+          urlCategory || sessionStorage.getItem("recent.category.slug");
         if (hinted) {
           const target = normalizeSlug(hinted);
           const found =
@@ -443,7 +457,9 @@ export default function ProductDetails() {
         }
       }
 
-      const primary = productCats.length ? pickPrimaryCategory(productCats) : null;
+      const primary = productCats.length
+        ? pickPrimaryCategory(productCats)
+        : null;
       if (!primary) return;
 
       // LOCAL + REMOTE, prefer longer
@@ -453,21 +469,25 @@ export default function ProductDetails() {
         remoteTrail = await findTrailRemote(primary);
       } catch {}
 
-      const best = remoteTrail.length > localTrail.length ? remoteTrail : localTrail;
+      const best =
+        remoteTrail.length > localTrail.length ? remoteTrail : localTrail;
 
       if (best.length) {
         setCategoryTrail(
           best.map((n, i) =>
             i === best.length - 1
               ? { label: n.name }
-              : { label: n.name, path: `/products?category=${encodeURIComponent(n.slug)}` }
+              : {
+                  label: n.name,
+                  path: `/products?category=${encodeURIComponent(n.slug)}`,
+                }
           )
         );
       } else if (categoryTrail.length === 0) {
         setCategoryTrail([{ label: primary.name || primary.slug }]);
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, allCategories, byId, location.search]);
 
   /* --------- auto-open reviews tab --------- */
@@ -562,7 +582,8 @@ export default function ProductDetails() {
     /[^\d.,\s-]+/
   );
   const currencySymbol =
-    product?.currency_options?.symbol || (currencyMatch ? currencyMatch[0] : "€");
+    product?.currency_options?.symbol ||
+    (currencyMatch ? currencyMatch[0] : "€");
   const totalLabel = `${currencySymbol}${(unitPrice * qty).toFixed(2)}`;
 
   const onThumbnailClick = (index) => {
@@ -679,7 +700,8 @@ export default function ProductDetails() {
             {(() => {
               const raw = product?.short_description || "";
               if (!raw) return null;
-              if (looksLikeHtml(raw)) return <div dangerouslySetInnerHTML={{ __html: raw }} />;
+              if (looksLikeHtml(raw))
+                return <div dangerouslySetInnerHTML={{ __html: raw }} />;
               return renderBulletList(raw) || <p>{raw}</p>;
             })()}
           </div>
@@ -754,14 +776,20 @@ export default function ProductDetails() {
 
       {/* Tabs */}
       <div className="mt-12">
-        <div role="tablist" aria-label="Product information" className="flex items-center gap-8 border-b">
+        <div
+          role="tablist"
+          aria-label="Product information"
+          className="flex items-center gap-8 border-b"
+        >
           <button
             role="tab"
             aria-selected={activeTab === "description"}
             aria-controls="tab-panel-description"
             onClick={() => setActiveTab("description")}
             className={`py-3 -mb-px text-sm font-medium transition ${
-              activeTab === "description" ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-800"
+              activeTab === "description"
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
             }`}
           >
             Description
@@ -772,7 +800,9 @@ export default function ProductDetails() {
             aria-controls="tab-panel-additional"
             onClick={() => setActiveTab("additional")}
             className={`py-3 -mb-px text-sm font-medium transition ${
-              activeTab === "additional" ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-800"
+              activeTab === "additional"
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
             }`}
           >
             Additional Information
@@ -783,7 +813,9 @@ export default function ProductDetails() {
             aria-controls="tab-panel-reviews"
             onClick={() => setActiveTab("reviews")}
             className={`py-3 -mb-px text-sm font-medium transition ${
-              activeTab === "reviews" ? "border-b-2 border-gray-900 text-gray-900" : "text-gray-500 hover:text-gray-800"
+              activeTab === "reviews"
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-500 hover:text-gray-800"
             }`}
           >
             Reviews
@@ -793,7 +825,9 @@ export default function ProductDetails() {
         <div className="py-6 text-gray-700 leading-relaxed">
           {activeTab === "description" && (
             <div id="tab-panel-description" role="tabpanel">
-              {renderRichText(product.description || product.short_description || "")}
+              {renderRichText(
+                product.description || product.short_description || ""
+              )}
             </div>
           )}
 
@@ -807,12 +841,18 @@ export default function ProductDetails() {
                     <div
                       key={idx}
                       className={`grid grid-cols-[max-content,1fr] lg:grid-cols-[max-content,1fr,max-content,1fr]
-                        gap-x-6 gap-y-2 px-4 py-3 ${idx % 2 === 0 ? "bg-gray-50" : "bg-white"}`}
+                        gap-x-6 gap-y-2 px-4 py-3 ${
+                          idx % 2 === 0 ? "bg-gray-50" : "bg-white"
+                        }`}
                     >
                       {row.map((pair) => (
                         <React.Fragment key={pair.label}>
-                          <div className="text-sm text-gray-500">{pair.label}</div>
-                          <div className="text-sm text-gray-800">{pair.value ?? "—"}</div>
+                          <div className="text-sm text-gray-500">
+                            {pair.label}
+                          </div>
+                          <div className="text-sm text-gray-800">
+                            {pair.value ?? "—"}
+                          </div>
                         </React.Fragment>
                       ))}
                       {row.length === 1 && (
@@ -835,7 +875,8 @@ export default function ProductDetails() {
                 summary={product.reviews}
                 accessToken={accessToken || null}
                 autoOpenForm={
-                  new URLSearchParams(location.search).get("openReviewForm") === "1"
+                  new URLSearchParams(location.search).get("openReviewForm") ===
+                  "1"
                 }
               />
             </div>
@@ -850,14 +891,20 @@ export default function ProductDetails() {
             Related products
           </h2>
           {related?.length > 0 && (
-            <span className="text-sm text-gray-500">{related.length} items</span>
+            <span className="text-sm text-gray-500">
+              {related.length} items
+            </span>
           )}
         </div>
 
         {relatedLoading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-64 rounded-2xl bg-gray-100 animate-pulse" aria-hidden />
+              <div
+                key={i}
+                className="h-64 rounded-2xl bg-gray-100 animate-pulse"
+                aria-hidden
+              />
             ))}
           </div>
         )}

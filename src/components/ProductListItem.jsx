@@ -25,7 +25,7 @@ function ProductListItem({
 
   const { saleActive, pct, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
     product,
-    { apiBase: "https://keneta.laratest-app.com/api/v1" }
+    { apiBase: "https://keneta.laratest-app.com/api/v2" }
   );
 
   const imgSrc =
@@ -84,7 +84,9 @@ function ProductListItem({
                   e.stopPropagation();
                   toggleWishlist?.(idNum);
                   toast.success(
-                    isWishlisted ? "Removed from wishlist." : "Added to wishlist."
+                    isWishlisted
+                      ? "Removed from wishlist."
+                      : "Added to wishlist."
                   );
                 }}
                 className="h-9 w-9 rounded-full grid place-items-center bg-white/95 backdrop-blur ring-1 ring-black/5 shadow-sm hover:ring-red-200"
@@ -127,7 +129,11 @@ function ProductListItem({
                       ? "text-emerald-600 ring-emerald-200"
                       : "text-gray-500 hover:text-emerald-600 hover:ring-emerald-200"
                   }
-                  ${!canAddMore && !compared ? "opacity-50 cursor-not-allowed" : ""}`}
+                  ${
+                    !canAddMore && !compared
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
               >
                 <MdCompareArrows className="text-xl" />
               </button>

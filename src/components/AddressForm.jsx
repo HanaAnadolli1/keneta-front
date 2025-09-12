@@ -6,6 +6,8 @@ export default function AddressForm({
   onSubmit,
   loading,
   error,
+  isLoggedIn = false,
+  title = "Billing Address",
 }) {
   const handleChange = (e) => {
     const { name, value, checked } = e.target;
@@ -29,7 +31,14 @@ export default function AddressForm({
       }}
       className="bg-white shadow rounded-lg p-8 space-y-6"
     >
-      <h2 className="text-2xl font-semibold text-gray-800">Billing Address</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold text-gray-800">{title}</h2>
+        {isLoggedIn && (
+          <span className="text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+            ✓ Autofilled from your profile
+          </span>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Company Name */}
         <div>

@@ -12,7 +12,7 @@ function useHeroCarousels() {
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await fetch(
-        "https://keneta.laratest-app.com/api/v1/theme/customizations"
+        "https://keneta.laratest-app.com/api/v2/theme/customizations"
       );
       if (!res.ok) throw new Error("network");
       const json = await res.json();

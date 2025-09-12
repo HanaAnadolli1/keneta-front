@@ -9,7 +9,7 @@ import noImage from "../assets/no_image.jpg";
 import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 
 const MIN_FOR_CAROUSEL = 7;
-const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
+const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v2";
 const SS_CHILDREN_CACHE = "cat.childrenCache.v1";
 const SS_TRAIL_CACHE = "cat.trailCache.v2";
 const SS_RECENT_TRAIL = "recent.trail.json";

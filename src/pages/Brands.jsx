@@ -10,7 +10,7 @@ const Brands = () => {
     const fetchBrands = async () => {
       try {
         const response = await fetch(
-          "https://keneta.laratest-app.com/api/v1/attributes?sort=id"
+          "https://keneta.laratest-app.com/api/v2/attributes?sort=id"
         );
         const data = await response.json();
 
@@ -38,7 +38,9 @@ const Brands = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Brands" }]} />
+      <Breadcrumbs
+        items={[{ label: "Home", path: "/" }, { label: "Brands" }]}
+      />
       <h1 className="text-2xl font-bold text-indigo-900 mb-6">Brendet</h1>
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-6">
         {brands.map((brand) => (

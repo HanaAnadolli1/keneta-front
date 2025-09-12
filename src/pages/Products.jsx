@@ -34,7 +34,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
-const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v1";
+const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v2";
 
 // If your real root differs, this still works once we load full list (uses many roots)
 const FALLBACK_ROOT_ID = 1;

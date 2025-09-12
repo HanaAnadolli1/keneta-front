@@ -10,6 +10,15 @@ export const AuthContext = createContext({
   logout: () => {},
 });
 
+// Custom hook to use the auth context
+export function useAuthContext() {
+  const context = React.useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuthContext must be used within an AuthProvider');
+  }
+  return context;
+}
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     const raw = localStorage.getItem("user");

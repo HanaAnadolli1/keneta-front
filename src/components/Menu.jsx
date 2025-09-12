@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu as MenuIcon, X as CloseIcon, ChevronDown } from "lucide-react";
 
-const API_BASE = "https://keneta.laratest-app.com/api/v1";
+const API_BASE = "https://keneta.laratest-app.com/api/v2";
 
 // simple in-memory cache to avoid duplicate GETs for the same URL
 const jsonCache = new Map();
