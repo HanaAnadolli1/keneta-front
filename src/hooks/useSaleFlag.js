@@ -41,7 +41,7 @@ const extractDates = (details) => {
  */
 export default function useSaleFlag(product, { apiBase } = {}) {
   const id = product?.id ? Number(product.id) : null;
-  const base = apiBase || "/api/v1"; // <-- set to your base if different
+  const base = apiBase || "/api/v2"; // <-- set to your base if different
 
   const { data } = useQuery({
     queryKey: ["product-detail", id],

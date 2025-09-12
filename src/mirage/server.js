@@ -26,8 +26,8 @@ export function makeServer({ environment = "development" } = {}) {
     },
 
     routes() {
-      // ── Catalog under /api/v1 ─────────────────────────────────────────────
-      this.namespace = "api/v1";
+      // ── Catalog under /api/v2 ─────────────────────────────────────────────
+      this.namespace = "api/v2";
 
       this.get("/products", (schema, req) => {
         const all = schema.products.all().models.map((m) => m.attrs);

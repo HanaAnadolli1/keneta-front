@@ -8,12 +8,12 @@ export default defineConfig({
 
   server: {
     proxy: {
-      // 👇 /v1 maps to Laravel /api/v1
-      "/v1": {
+      // 👇 /v2 maps to Laravel /api/v2
+      "/v2": {
         target: "https://keneta.laratest-app.com/api",
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/v1/, "/v1"),
+        rewrite: (path) => path.replace(/^\/v2/, "/v2"),
       },
       // 👇 /checkout maps to Laravel /api/checkout
       "/checkout": {

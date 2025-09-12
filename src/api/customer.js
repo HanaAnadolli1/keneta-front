@@ -5,8 +5,8 @@ import { apiFetch } from "./auth";
 /**
  * If your backend exposes a stable PDF route, set this env var:
  *   VITE_INVOICE_PDF_PATH_TEMPLATE=/customer/invoices/{id}/pdf
- * or (if full path includes /api/v1)
- *   VITE_INVOICE_PDF_PATH_TEMPLATE=/v1/customer/invoices/{id}/pdf
+ * or (if full path includes /api/v2)
+ *   VITE_INVOICE_PDF_PATH_TEMPLATE=/v2/customer/invoices/{id}/pdf
  *
  * Use {id} where the invoice id goes. Leading slash is optional.
  */
@@ -81,12 +81,12 @@ function extractPdfUrlFromDetail(detail) {
 function buildPdfUrlFromTemplate(id) {
   if (!PDF_PATH_TEMPLATE) return null;
   const templ = PDF_PATH_TEMPLATE.replace("{id}", encodeURIComponent(id));
-  // If the template starts with /v1/... we assume it's already API-relative.
+  // If the template starts with /v2/... we assume it's already API-relative.
   if (templ.startsWith("/v")) {
-    return joinUrl(API_V1.replace(/\/v1$/, ""), templ); // handle API_V1 base
+    return joinUrl(API_V1.replace(/\/v2$/, ""), templ); // handle API_V1 base
   }
   // Otherwise join with API base origin
-  return joinUrl(API_V1.replace(/\/v1$/, ""), templ);
+  return joinUrl(API_V1.replace(/\/v2$/, ""), templ);
 }
 
 async function tryFetchPdf(url, { withAcceptHeader = true } = {}) {
@@ -158,7 +158,9 @@ export async function downloadInvoicePdf(id) {
       const useAccept = i === candidates.length - 1;
       return await tryFetchPdf(url, { withAcceptHeader: useAccept });
     } catch (e) {
-      errors.push(`${url.replace(API_V1, "/v1")}: ${e?.message || "unknown error"}`);
+      errors.push(
+        `${url.replace(API_V1, "/v2")}: ${e?.message || "unknown error"}`
+      );
     }
   }
 
