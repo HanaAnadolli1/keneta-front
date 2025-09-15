@@ -109,7 +109,7 @@ export function makeServer({ environment = "development" } = {}) {
       });
 
       this.delete("/checkout/cart/remove/:id", (schema, req) => {
-        schema.cartItems.find(req.params.id)?.destroy();
+        schema.cartItems.find(req.params.id)?.destroy(); 
         return new Response(204);
       });
     },
