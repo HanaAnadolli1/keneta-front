@@ -8,7 +8,6 @@ export default defineConfig({
 
   server: {
     proxy: {
-      // 👇 /v2 maps to Laravel /api/v2
       "/v2": {
         target: "https://keneta.laratest-app.com/api",
         changeOrigin: true,
