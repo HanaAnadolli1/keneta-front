@@ -15,7 +15,6 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/v2/, "/v2"),
       },
-      // 👇 /checkout maps to Laravel /api/checkout
       "/checkout": {
         target: "https://keneta.laratest-app.com/api",
         changeOrigin: true,
