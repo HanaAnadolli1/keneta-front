@@ -10,7 +10,7 @@ const Brands = () => {
     const fetchBrands = async () => {
       try {
         const response = await fetch(
-          "https://keneta.laratest-app.com/api/v2/attributes?sort=id"
+          "https://admin.keneta-ks.com/api/v2/attributes?sort=id"
         );
         const data = await response.json();
 
@@ -32,9 +32,7 @@ const Brands = () => {
 
   // Adjust according to where your files are stored
   const getImageUrl = (swatchValue) =>
-    swatchValue
-      ? `https://keneta.laratest-app.com/storage/${swatchValue}`
-      : null;
+    swatchValue ? `https://admin.keneta-ks.com/storage/${swatchValue}` : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

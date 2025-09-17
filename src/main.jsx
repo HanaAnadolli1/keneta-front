@@ -31,7 +31,7 @@ persistQueryClient({
 async function applyThemeColors() {
   try {
     const res = await fetch(
-      "https://keneta.laratest-app.com/api/custom-settings/colors",
+      "https://admin.keneta-ks.com/api/custom-settings/colors",
       { headers: { Accept: "application/json" }, cache: "no-store" }
     );
     const json = await res.json();

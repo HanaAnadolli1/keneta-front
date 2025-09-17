@@ -25,7 +25,7 @@ const Categories = () => {
     const fetchCategories = async () => {
       try {
         const themeRes = await fetch(
-          "https://keneta.laratest-app.com/api/v2/theme/customizations",
+          "https://admin.keneta-ks.com/api/v2/theme/customizations",
           { headers: { Accept: "application/json" } }
         );
 
@@ -38,7 +38,7 @@ const Categories = () => {
         const limit = block?.options?.filters?.limit || "25";
 
         const categoriesRes = await fetch(
-          `https://keneta.laratest-app.com/api/v2/categories?sort=id&order=${sort}&limit=${limit}`,
+          `https://admin.keneta-ks.com/api/v2/categories?sort=id&order=${sort}&limit=${limit}`,
           { headers: { Accept: "application/json" } }
         );
 

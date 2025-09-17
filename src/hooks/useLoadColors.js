@@ -6,10 +6,13 @@ export default function useLoadColors() {
 
     (async () => {
       try {
-        const res = await fetch("https://keneta.laratest-app.com/api/custom-settings/colors", {
-          headers: { "Accept": "application/json" },
-          cache: "no-store",
-        });
+        const res = await fetch(
+          "https://admin.keneta-ks.com/api/custom-settings/colors",
+          {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          }
+        );
         const json = await res.json();
 
         if (!abort && json?.status && json?.data) {
@@ -23,6 +26,8 @@ export default function useLoadColors() {
       }
     })();
 
-    return () => { abort = true; };
+    return () => {
+      abort = true;
+    };
   }, []);
 }

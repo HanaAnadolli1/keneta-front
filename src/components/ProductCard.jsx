@@ -26,7 +26,7 @@ function ProductCard({
   // sale flag uses PDP dates (frontend-only)
   const { saleActive, pct, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
     product,
-    { apiBase: "https://keneta.laratest-app.com/api/v2" }
+    { apiBase: "https://admin.keneta-ks.com/api/v2" }
   );
 
   return (

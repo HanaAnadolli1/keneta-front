@@ -11,7 +11,7 @@ const DealsCarousel = () => {
     const fetchDeals = async () => {
       try {
         const res = await fetch(
-          "https://keneta.laratest-app.com/api/v2/theme/customizations"
+          "https://admin.keneta-ks.com/api/v2/theme/customizations"
         );
         const json = await res.json();
 
@@ -25,7 +25,7 @@ const DealsCarousel = () => {
         // You’ll likely want to fetch actual product data based on filters
         // But since this config only contains filter info, you must query the products manually.
         const productRes = await fetch(
-          `https://keneta.laratest-app.com/api/v2/products?sort=name-asc&limit=12`
+          `https://admin.keneta-ks.com/api/v2/products?sort=name-asc&limit=12`
         );
         const productData = await productRes.json();
         setProducts(productData.data || []);

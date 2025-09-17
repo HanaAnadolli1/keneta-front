@@ -25,7 +25,7 @@ function ProductListItem({
 
   const { saleActive, pct, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
     product,
-    { apiBase: "https://keneta.laratest-app.com/api/v2" }
+    { apiBase: "https://admin.keneta-ks.com/api/v2" }
   );
 
   const imgSrc =

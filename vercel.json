@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://keneta.laratest-app.com/api/:path*"
+      "destination": "https://admin.keneta-ks.com/api/:path*"
     },
     {
       "source": "/:path*",
