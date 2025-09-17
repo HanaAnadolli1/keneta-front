@@ -138,7 +138,7 @@ keneta/
    Create a `.env` file in the root directory:
 
    ```env
-   VITE_API_BASE_URL=https://keneta.laratest-app.com/api
+   VITE_API_BASE_URL=https://admin.keneta-ks.com/api
    VITE_INVOICE_PDF_PATH_TEMPLATE=/customer/invoices/{id}/pdf
    ```
 
@@ -166,7 +166,7 @@ The built files will be in the `dist` directory.
 The app connects to a Bagisto backend API. Update the API endpoints in `src/api/config.js`:
 
 ```javascript
-export const API_ROOT = DEV ? "" : "https://keneta.laratest-app.com/api";
+export const API_ROOT = DEV ? "" : "https://admin.keneta-ks.com/api";
 export const API_V1 = `${API_ROOT}/v2`;
 export const API_CART = `${API_ROOT}`;
 ```

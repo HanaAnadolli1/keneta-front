@@ -28,7 +28,7 @@ export default function Footer() {
     try {
       setSubmitting(true);
       const res = await fetch(
-        "https://keneta.laratest-app.com/api/v2/customer/subscription",
+        "https://admin.keneta-ks.com/api/v2/customer/subscription",
         {
           method: "POST",
           headers: {

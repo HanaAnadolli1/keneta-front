@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const BASE_URL = "https://keneta.laratest-app.com/";
+const BASE_URL = "https://admin.keneta-ks.com/";
 
 /**
  * Simple image carousel with CTA button.

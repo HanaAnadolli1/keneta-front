@@ -8,13 +8,13 @@ export default defineConfig({
   server: {
     proxy: {
       "/v2": {
-        target: "https://keneta.laratest-app.com/api",
+        target: "https://admin.keneta-ks.com/api",
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/v2/, "/v2"),
       },
       "/checkout": {
-        target: "https://keneta.laratest-app.com/api",
+        target: "https://admin.keneta-ks.com/api",
         changeOrigin: true,
         secure: true,
       },

@@ -24,7 +24,7 @@ import ProductReviews from "../components/ProductReviews";
 import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 
-const API_PUBLIC_V1 = "https://keneta.laratest-app.com/api/v2";
+const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
 
 /* ---------------- small helpers ---------------- */
 const chunkPairs = (rows, size = 2) => {
@@ -286,7 +286,7 @@ export default function ProductDetails() {
       try {
         setRelatedError(null);
         setRelatedLoading(true);
-        const endpoint = `https://keneta.laratest-app.com/api/products/${product.id}/related`;
+        const endpoint = `https://admin.keneta-ks.com/api/products/${product.id}/related`;
         const res = await fetch(endpoint, { signal: controller.signal });
         if (!res.ok) throw new Error(`Related: status ${res.status}`);
         const json = await res.json();
