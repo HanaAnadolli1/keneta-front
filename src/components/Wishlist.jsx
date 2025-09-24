@@ -135,12 +135,12 @@ async function fetchBareByIds(ids, token) {
   try {
     // ids[]=1&ids[]=2
     const qs1 = unique.map((id) => `ids[]=${encodeURIComponent(id)}`).join("&");
-    let res = await fetch(`${API_V1}/products/bare?${qs1}`, { headers });
+    let res = await fetch(`${API_V1}/v2/products?${qs1}`, { headers });
 
     // ids=1,2
     if (!res.ok) {
       const qs2 = `ids=${unique.join(",")}`;
-      res = await fetch(`${API_V1}/products/bare?${qs2}`, { headers });
+      res = await fetch(`${API_V1}/v2/products?${qs2}`, { headers });
     }
 
     if (res.ok) {
@@ -419,7 +419,7 @@ export default function Wishlist() {
           }
         }
 
-        // 2) Hydrate via /products/bare or per-id for any missing ones
+        // 2) Hydrate via /v2/products or per-id for any missing ones
         const toFetch = ids.filter((id) => !prefilled.has(id));
         const bare = await fetchBareByIds(toFetch, token);
         const byId = new Map(bare.map((p) => [Number(p.id), p]));

@@ -8,7 +8,7 @@ const PER_PAGE = 12;
 const SESSION_COOKIE = "bagisto_session";
 const SESSION_LENGTH = 40;
 // add near the top (below other consts)
-const API_PRODUCTS_BARE = "https://admin.keneta-ks.com/api/products/bare";
+const API_PRODUCTS_BARE = "https://admin.keneta-ks.com/api/v2/products";
 
 function generateSessionValue(len = SESSION_LENGTH) {
   const chars =
@@ -60,7 +60,7 @@ export function useProducts(search, options = {}) {
     queryKey: ["products", queryString],
     queryFn: async ({ signal }) => {
       const res = await fetch(
-        `https://admin.keneta-ks.com/api/products/bare?${queryString}`,
+        `https://admin.keneta-ks.com/api/v2/products?${queryString}`,
         {
           signal,
           headers: { Accept: "application/json" },
