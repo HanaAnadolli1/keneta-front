@@ -171,66 +171,80 @@ export function useCartMutations() {
         });
       }
       
-      // Simple guest cart request with session-based CSRF
-      const requestBody = { product_id: productId, quantity };
-      const requestUrl = `${API_CART}/checkout/cart`;
+      // Try different guest cart request formats
+      const requestFormats = [
+        // Format 1: Basic format
+        { url: `${API_CART}/checkout/cart`, body: { product_id: productId, quantity } },
+        // Format 2: With is_buy_now like customer cart
+        { url: `${API_CART}/checkout/cart`, body: { product_id: productId, quantity, is_buy_now: 0 } },
+        // Format 3: Different endpoint
+        { url: `${API_CART}/cart`, body: { product_id: productId, quantity } },
+        // Format 4: Form data format
+        { url: `${API_CART}/checkout/cart`, body: `product_id=${productId}&quantity=${quantity}`, contentType: "application/x-www-form-urlencoded" }
+      ];
       
-      console.log("🛒 Making cart request:", {
-        url: requestUrl,
-        method: "POST",
-        body: requestBody,
-        hasSessionCookie: document.cookie.includes('bagisto_session'),
-        allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
-      });
+      let lastError;
       
-      const res = await fetch(requestUrl, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
-      
-      console.log("🛒 Cart response received:", {
-        status: res.status,
-        statusText: res.statusText,
-        ok: res.ok,
-        headers: Object.fromEntries(res.headers.entries())
-      });
-      
-      if (!res.ok) {
-        let errorMessage;
+      for (const { url: requestUrl, body: requestBody, contentType } of requestFormats) {
         try {
-          const err = await res.json();
-          console.error("🛒 Cart error response:", err);
-          errorMessage = err?.message || err?.title || `Add failed: ${res.status}`;
-        } catch (parseError) {
-          console.error("🛒 Failed to parse error response:", parseError);
-          errorMessage = `Add failed: ${res.status} ${res.statusText}`;
-        }
-        
-        // If it's a 500 error, try to provide more helpful information
-        if (res.status === 500) {
-          console.error("🛒 Server Error Details:", {
-            productId,
-            quantity,
-            requestUrl,
-            requestBody,
-            responseStatus: res.status,
-            responseHeaders: Object.fromEntries(res.headers.entries()),
+          console.log("🛒 Trying cart request format:", {
+            url: requestUrl,
+            method: "POST",
+            body: requestBody,
+            contentType: contentType || "application/json",
             hasSessionCookie: document.cookie.includes('bagisto_session'),
-            userAgent: navigator.userAgent
+            allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
           });
+          
+          const headers = {
+            Accept: "application/json",
+          };
+          
+          if (contentType === "application/x-www-form-urlencoded") {
+            headers["Content-Type"] = "application/x-www-form-urlencoded";
+          } else {
+            headers["Content-Type"] = "application/json";
+          }
+          
+          const res = await fetch(requestUrl, {
+            method: "POST",
+            credentials: "include",
+            headers,
+            body: contentType === "application/x-www-form-urlencoded" ? requestBody : JSON.stringify(requestBody),
+          });
+          
+          console.log("🛒 Cart response received:", {
+            url: requestUrl,
+            status: res.status,
+            statusText: res.statusText,
+            ok: res.ok,
+            headers: Object.fromEntries(res.headers.entries())
+          });
+          
+          if (res.ok) {
+            const result = await res.json();
+            console.log("🛒 Cart success response:", result);
+            return result;
+          } else {
+            const err = await res.json().catch(() => null);
+            console.log(`🛒 Request format failed:`, {
+              url: requestUrl,
+              status: res.status,
+              error: err?.message || err?.title || res.statusText
+            });
+            lastError = new Error(err?.message || err?.title || `Add failed: ${res.status}`);
+          }
+        } catch (error) {
+          console.log(`🛒 Request format error:`, {
+            url: requestUrl,
+            error: error.message
+          });
+          lastError = error;
         }
-        
-        throw new Error(errorMessage);
       }
       
-      const result = await res.json();
-      console.log("🛒 Cart success response:", result);
-      return result;
+      // If all formats failed, throw the last error
+      throw lastError || new Error("All guest cart request formats failed");
     },
     onSettled: () => qc.invalidateQueries(["cart"]),
   });
