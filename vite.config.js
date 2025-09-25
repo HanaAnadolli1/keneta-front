@@ -7,8 +7,8 @@ export default defineConfig({
   base: "/", // base URL for your app
   plugins: [react(), tailwindcss(), flowbiteReact()],
   build: {
-    outDir: ".",       // output build files in the current folder (public_html)
-    emptyOutDir: false // don't empty the folder completely (careful with this)
+    outDir: "dist",       // output build files in a separate folder
+    emptyOutDir: true     // clean out the dist folder before build
   },
   server: {
     proxy: {
