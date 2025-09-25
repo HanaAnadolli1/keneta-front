@@ -974,21 +974,54 @@ export default function Products() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       
-      // Debug logging for API response
-      if (selectedBrandIds.length > 0 || brandSlugParam) {
-        console.log("🏷️ API Response Debug:", {
-          url,
-          brandFilter: selectedBrandIds.length > 0 ? selectedBrandIds.join(",") : brandSlugParam,
-          responseStatus: res.status,
-          responseData: json,
-          totalItems: json?.data?.items?.length || json?.items?.length || 0,
-          sampleItems: (json?.data?.items || json?.items || []).slice(0, 3).map(item => ({
-            id: item.id,
-            name: item.name,
-            brand: item.brand || item.attributes?.brand || 'No brand info'
-          }))
-        });
-      }
+       // Debug logging for API response
+       if (selectedBrandIds.length > 0 || brandSlugParam) {
+         console.log("🏷️ API Response Debug:", {
+           url,
+           brandFilter: selectedBrandIds.length > 0 ? selectedBrandIds.join(",") : brandSlugParam,
+           responseStatus: res.status,
+           responseData: json,
+           totalItems: json?.data?.items?.length || json?.items?.length || 0,
+           sampleItems: (json?.data?.items || json?.items || []).slice(0, 3).map(item => ({
+             id: item.id,
+             name: item.name,
+             brand: item.brand || item.attributes?.brand || 'No brand info'
+           })),
+           // Additional debugging for brand filtering
+           apiResponseStructure: {
+             hasData: !!json?.data,
+             hasItems: !!json?.data?.items,
+             hasDirectItems: !!json?.items,
+             hasProducts: !!json?.products,
+             totalInResponse: json?.meta?.total || json?.total || 0,
+             currentPage: json?.meta?.current_page || json?.current_page || 1,
+             lastPage: json?.meta?.last_page || json?.last_page || 1
+           }
+         });
+         
+         // If no products found, let's check what brands exist in the first few products
+         if ((json?.data?.items?.length || json?.items?.length || 0) === 0) {
+           console.log("🏷️ No products found for brand filter. Let's check if there are any products without brand filter:");
+           try {
+             const testUrl = `${API_V1}/products?per_page=5&page=1`;
+             const testRes = await fetch(testUrl);
+             const testJson = await testRes.json();
+             const testItems = testJson?.data?.items || testJson?.items || [];
+             console.log("🏷️ Sample products without brand filter:", {
+               totalProducts: testJson?.meta?.total || testJson?.total || 0,
+               sampleBrands: testItems.slice(0, 3).map(item => ({
+                 id: item.id,
+                 name: item.name,
+                 brand: item.brand,
+                 attributes: item.attributes,
+                 brandAttribute: item.attributes?.brand
+               }))
+             });
+           } catch (e) {
+             console.log("🏷️ Failed to fetch sample products:", e);
+           }
+         }
+       }
       
       const { items: newItems, hasNext } = extractProductsPayload(json);
       
@@ -1117,32 +1150,14 @@ export default function Products() {
     (id) => {
       setBusyId(id);
       const tid = toast.info("Adding to cart…", { duration: 0 });
-      
-      // Enhanced error logging for production debugging
-      console.log("🛒 Add to Cart Debug:", {
-        productId: id,
-        isLoggedIn: !!localStorage.getItem("token"),
-        apiRoot: import.meta.env.DEV ? "localhost" : "production",
-        timestamp: new Date().toISOString()
-      });
-      
       addItem.mutate(
         { productId: id, quantity: 1 },
         {
-          onSuccess: (data) => {
-            console.log("✅ Add to Cart Success:", data);
+          onSuccess: () => {
             toast.remove(tid);
             toast.success("Item added to cart.");
           },
           onError: (e) => {
-            console.error("❌ Add to Cart Error:", {
-              error: e,
-              message: e?.message,
-              stack: e?.stack,
-              productId: id,
-              isLoggedIn: !!localStorage.getItem("token"),
-              apiRoot: import.meta.env.DEV ? "localhost" : "production"
-            });
             toast.remove(tid);
             toast.error(e?.message || "Failed to add to cart.");
           },
