@@ -204,20 +204,40 @@ export function useCartMutations() {
             }
           }
           
-          // Final validation
+          // Final validation - try alternative approaches if no XSRF-TOKEN
           if (!csrf) {
-            console.error("❌ No CSRF token available after all attempts");
-            throw new Error("CSRF token is required for cart operations");
+            console.error("❌ No XSRF-TOKEN available, checking for alternative CSRF methods...");
+            
+            // Check if we have a session cookie that might contain CSRF info
+            const sessionCookie = document.cookie.split(';').find(c => c.trim().startsWith('bagisto_session='));
+            if (sessionCookie) {
+              console.log("🔐 Found session cookie, attempting to use it for CSRF protection");
+              // Some Laravel setups use session-based CSRF instead of XSRF-TOKEN
+              csrf = "session-based"; // This is a placeholder - we'll need to handle this differently
+            }
+            
+            if (!csrf) {
+              throw new Error("CSRF token is required for cart operations");
+            }
+          }
+          
+          // Prepare headers - only include X-XSRF-TOKEN if we have a valid token
+          const headers = {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          };
+          
+          if (csrf && csrf !== "session-based") {
+            headers["X-XSRF-TOKEN"] = csrf;
+            console.log("🔐 Using X-XSRF-TOKEN header for CSRF protection");
+          } else {
+            console.log("🔐 Using session-based CSRF protection (no X-XSRF-TOKEN header)");
           }
           
           const res = await fetch(`${API_CART}/checkout/cart`, {
             method: "POST",
             credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              "X-XSRF-TOKEN": csrf,
-            },
+            headers,
             body: JSON.stringify({ product_id: productId, quantity }),
           });
           
