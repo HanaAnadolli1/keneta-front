@@ -34,7 +34,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 
 const PER_PAGE = 12;
 const MIN_SEARCH_LEN = 3;
-const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
+const API_PUBLIC_V1 = API_V1;
 
 // If your real root differs, this still works once we load full list (uses many roots)
 const FALLBACK_ROOT_ID = 1;
@@ -217,7 +217,10 @@ async function buildHierarchyFromDescendants(
 
     return [];
   } catch (error) {
-    console.warn("Failed to build hierarchy from descendants:", error);
+    // Only log non-abort errors (abort errors are expected when component unmounts)
+    if (error.name !== 'AbortError') {
+      console.warn("Failed to build hierarchy from descendants:", error);
+    }
     return [];
   }
 }
@@ -247,7 +250,10 @@ async function findCategoryInDescendants(
       // Cache the children
       ssSet(childrenCacheKey, children);
     } catch (error) {
-      console.warn(`Failed to search descendants of ${parentId}:`, error);
+      // Only log non-abort errors (abort errors are expected when component unmounts)
+      if (error.name !== 'AbortError') {
+        console.warn(`Failed to search descendants of ${parentId}:`, error);
+      }
       return [];
     }
   }
@@ -497,7 +503,12 @@ export default function Products() {
       try {
         const cached = sessionStorage.getItem("brandOptions");
         if (cached) {
-          setBrandOptions(JSON.parse(cached));
+          const cachedOptions = JSON.parse(cached);
+          console.log("🏷️ Brand Options Loaded from Cache:", {
+            totalOptions: cachedOptions.length,
+            sampleOptions: cachedOptions.slice(0, 5).map(opt => ({ id: opt.id, label: opt.label }))
+          });
+          setBrandOptions(cachedOptions);
           return;
         }
         const res = await fetch(`${API_PUBLIC_V1}/attributes?sort=id`, {
@@ -506,6 +517,10 @@ export default function Products() {
         const json = await res.json();
         const options =
           json?.data?.find?.((a) => a.code === "brand")?.options ?? [];
+        console.log("🏷️ Brand Options Loaded:", {
+          totalOptions: options.length,
+          sampleOptions: options.slice(0, 5).map(opt => ({ id: opt.id, label: opt.label }))
+        });
         sessionStorage.setItem("brandOptions", JSON.stringify(options));
         setBrandOptions(options);
       } catch (e) {
@@ -604,7 +619,10 @@ export default function Products() {
                 }
               }
             } catch (e) {
-              console.warn("Failed to load full categories:", e);
+              // Only log non-abort errors (abort errors are expected when component unmounts)
+              if (e.name !== 'AbortError') {
+                console.warn("Failed to load full categories:", e);
+              }
             }
           }
 
@@ -646,8 +664,8 @@ export default function Products() {
           }
 
           // --- 2) If no trail, check local cache
+          let all = ssGet(SS_ALL_CATEGORIES, []);
           if (!trail.length) {
-            let all = ssGet(SS_ALL_CATEGORIES, []);
             let byId = mapById(all);
             let bySlug = buildSlugIndex(all);
             let hit =
@@ -672,9 +690,9 @@ export default function Products() {
               if (fresh.length) {
                 ssSet(SS_ALL_CATEGORIES, fresh);
                 all = fresh;
-                byId = mapById(all);
-                bySlug = buildSlugIndex(all);
-                hit =
+                let byId = mapById(all);
+                let bySlug = buildSlugIndex(all);
+                let hit =
                   bySlug.get(decoded.toLowerCase()) ||
                   bySlug.get(categorySlugParam) ||
                   bySlug.get(slugNorm);
@@ -790,27 +808,48 @@ export default function Products() {
   }, [computedTrail]);
 
   /* -------- brand helpers -------- */
-  // Parse brand names from URL parameter
-  const selectedBrandNames = useMemo(() => {
-    if (!brandParam) return [];
-    return brandParam
+  // Parse brand names from URL parameter and convert to IDs
+  const selectedBrandIds = useMemo(() => {
+    console.log("🏷️ Brand Parameter Debug:", {
+      brandParam,
+      brandSlugParam,
+      rawBrandParam: params.get("brand"),
+      rawBrandSlugParam: params.get("brand_slug")
+    });
+    
+    if (!brandParam || !brandOptions.length) return [];
+    
+    const brandNames = brandParam
       .split(",")
       .map((name) => decodeURIComponent(name.trim()))
       .filter(Boolean);
-  }, [brandParam]);
-
-  // Map brand names to IDs for API calls
-  const mappedBrandIds = useMemo(() => {
-    if (!selectedBrandNames.length || !brandOptions.length) return [];
-    return selectedBrandNames
-      .map((name) => brandOptions.find((b) => b.label === name)?.id)
+      
+    const ids = brandNames
+      .map(name => {
+        const brand = brandOptions.find(b => b.label === name);
+        return brand?.id;
+      })
       .filter(Boolean);
-  }, [selectedBrandNames, brandOptions]);
+      
+    console.log("🏷️ Brand Names to IDs:", {
+      brandNames,
+      ids,
+      brandOptions: brandOptions.slice(0, 3).map(b => ({ id: b.id, label: b.label }))
+    });
+    
+    return ids;
+  }, [brandParam, brandSlugParam, params, brandOptions]);
 
+  // Get brand labels for display (using brand IDs)
   const activeBrandLabel = useMemo(() => {
-    if (!selectedBrandNames.length) return null;
-    return selectedBrandNames.join(", ");
-  }, [selectedBrandNames]);
+    if (!selectedBrandIds.length || !brandOptions.length) return null;
+    
+    const labels = selectedBrandIds
+      .map(id => brandOptions.find(b => b.id === id)?.label)
+      .filter(Boolean);
+      
+    return labels.join(", ");
+  }, [selectedBrandIds, brandOptions]);
 
   const activeCategoryLabel = useMemo(
     () =>
@@ -860,11 +899,18 @@ export default function Products() {
     if (order) qs.set("order", order);
     if (searchTerm.length >= MIN_SEARCH_LEN) qs.set("query", searchTerm);
 
-    // brand - use mapped IDs for API calls
-    if (mappedBrandIds.length > 0) {
-      qs.set("brand", mappedBrandIds.join(","));
+    // brand - use brand IDs for API calls
+    if (selectedBrandIds.length > 0) {
+      qs.set("brand", selectedBrandIds.join(","));
+      console.log("🏷️ API Brand Filter:", {
+        selectedBrandIds,
+        brandQueryString: selectedBrandIds.join(",")
+      });
     } else if (brandSlugParam) {
       qs.set("brand_slug", brandSlugParam);
+      console.log("🏷️ API Brand Slug Filter:", {
+        brandSlugParam
+      });
     }
 
     // category — always prefer numeric category_id when known, else use slug
@@ -888,7 +934,7 @@ export default function Products() {
     sort,
     order,
     searchTerm,
-    mappedBrandIds,
+    selectedBrandIds,
     brandSlugParam,
     computedTrail,
     categorySlugParam,
@@ -903,13 +949,100 @@ export default function Products() {
       qs.set("page", String(pageToFetch));
 
       const url = `${API_V1}/products?${qs.toString()}`;
+      
+      // Debug logging for search issues
+      if (searchTerm) {
+        console.log("🔍 Search Debug:", {
+          searchTerm,
+          url,
+          queryString: qs.toString(),
+          baseFiltersQS
+        });
+      }
+      
+      // Debug logging for brand filtering
+      if (selectedBrandIds.length > 0 || brandSlugParam) {
+        console.log("🏷️ Final API URL Debug:", {
+          url,
+          queryString: qs.toString(),
+          brandFilter: selectedBrandIds.length > 0 ? selectedBrandIds.join(",") : brandSlugParam,
+          allParams: Object.fromEntries(qs.entries())
+        });
+      }
+      
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+      
+      // Debug logging for API response
+      if (selectedBrandIds.length > 0 || brandSlugParam) {
+        console.log("🏷️ API Response Debug:", {
+          url,
+          brandFilter: selectedBrandIds.length > 0 ? selectedBrandIds.join(",") : brandSlugParam,
+          responseStatus: res.status,
+          responseData: json,
+          totalItems: json?.data?.items?.length || json?.items?.length || 0,
+          sampleItems: (json?.data?.items || json?.items || []).slice(0, 3).map(item => ({
+            id: item.id,
+            name: item.name,
+            brand: item.brand || item.attributes?.brand || 'No brand info'
+          }))
+        });
+      }
+      
       const { items: newItems, hasNext } = extractProductsPayload(json);
+      
+      // Debug logging for search results
+      if (searchTerm) {
+        console.log("🔍 Search Results:", {
+          searchTerm,
+          itemsCount: newItems.length,
+          items: newItems.map(item => ({ id: item.id, name: item.name }))
+        });
+      }
+      
+      // Client-side filtering for search results to ensure relevance
+      let filteredItems = newItems;
+      if (searchTerm && searchTerm.length >= MIN_SEARCH_LEN) {
+        filteredItems = newItems.filter(item => {
+          const name = (item.name || '').toLowerCase();
+          const sku = (item.sku || '').toLowerCase();
+          const searchTermLower = searchTerm.toLowerCase();
+          
+          // Check if search term appears in name or SKU
+          const nameMatches = name.includes(searchTermLower);
+          const skuMatches = sku.includes(searchTermLower);
+          
+          // Also check for word boundary matches (more precise)
+          const nameWordMatch = name.split(/\s+/).some(word => 
+            word.startsWith(searchTermLower) || word.includes(searchTermLower)
+          );
+          
+          const matches = nameMatches || skuMatches || nameWordMatch;
+          
+          if (!matches) {
+            console.log("🔍 Filtered out irrelevant product:", {
+              name: item.name,
+              sku: item.sku,
+              searchTerm: searchTerm,
+              nameMatches,
+              skuMatches,
+              nameWordMatch
+            });
+          }
+          
+          return matches;
+        });
+        
+        console.log("🔍 After client-side filtering:", {
+          originalCount: newItems.length,
+          filteredCount: filteredItems.length,
+          filteredResults: filteredItems.map(item => ({ id: item.id, name: item.name }))
+        });
+      }
 
       setItems((prev) => {
-        const merged = append ? [...prev, ...newItems] : newItems;
+        const merged = append ? [...prev, ...filteredItems] : filteredItems;
         const seen = new Set();
         const deduped = [];
         for (const it of merged) {
@@ -927,7 +1060,7 @@ export default function Products() {
     [baseFiltersQS]
   );
 
-  // initial load
+  // initial load - wait for brand options if needed
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -940,6 +1073,16 @@ export default function Products() {
           }
           return;
         }
+        
+        // If we have brand names but no brand options loaded, don't make API call yet
+        if (brandParam && !brandSlugParam && brandOptions.length === 0) {
+          console.log("🏷️ Waiting for brand options to load before making API call...");
+          if (!cancelled) {
+            setInitialLoading(false);
+          }
+          return;
+        }
+        
         await fetchPage(1, { append: false });
       } catch (e) {
         if (!cancelled) setError(e);
@@ -950,7 +1093,7 @@ export default function Products() {
     return () => {
       cancelled = true;
     };
-  }, [fetchPage, isShortSearchOnly]);
+  }, [fetchPage, isShortSearchOnly, brandParam, brandSlugParam, brandOptions]);
 
   // load more button handler
   const handleLoadMore = useCallback(async () => {
@@ -974,14 +1117,32 @@ export default function Products() {
     (id) => {
       setBusyId(id);
       const tid = toast.info("Adding to cart…", { duration: 0 });
+      
+      // Enhanced error logging for production debugging
+      console.log("🛒 Add to Cart Debug:", {
+        productId: id,
+        isLoggedIn: !!localStorage.getItem("token"),
+        apiRoot: import.meta.env.DEV ? "localhost" : "production",
+        timestamp: new Date().toISOString()
+      });
+      
       addItem.mutate(
         { productId: id, quantity: 1 },
         {
-          onSuccess: () => {
+          onSuccess: (data) => {
+            console.log("✅ Add to Cart Success:", data);
             toast.remove(tid);
             toast.success("Item added to cart.");
           },
           onError: (e) => {
+            console.error("❌ Add to Cart Error:", {
+              error: e,
+              message: e?.message,
+              stack: e?.stack,
+              productId: id,
+              isLoggedIn: !!localStorage.getItem("token"),
+              apiRoot: import.meta.env.DEV ? "localhost" : "production"
+            });
             toast.remove(tid);
             toast.error(e?.message || "Failed to add to cart.");
           },
@@ -1057,7 +1218,7 @@ export default function Products() {
         <FilterSidebar />
 
         <section className="flex-1 min-w-0">
-          {hasCategoryFilter && <CategoryNavigator />}
+          {hasCategoryFilter && <CategoryNavigator activeCategoryName={activeCategoryLabel} />}
 
           <div className="mb-4 flex items-center justify-between">
             {activeBrandLabel || activeCategoryLabel ? (

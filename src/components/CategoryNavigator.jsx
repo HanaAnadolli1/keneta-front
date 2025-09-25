@@ -118,7 +118,7 @@ function useChildrenFetcher() {
   }, []);
 }
 
-export default function CategoryNavigator() {
+export default function CategoryNavigator({ activeCategoryName }) {
   const [params] = useSearchParams();
   const categorySlugParam =
     params.get("category") || params.get("category_slug") || "";
@@ -166,7 +166,13 @@ export default function CategoryNavigator() {
           return;
         }
         const rows = await getChildren(parentId);
-        if (!cancelled) setChildren(rows);
+        if (!cancelled) {
+          // Filter out children that have the same name as the active category
+          const filteredRows = activeCategoryName 
+            ? rows.filter(cat => cat.name !== activeCategoryName)
+            : rows;
+          setChildren(filteredRows);
+        }
       } catch {
         if (!cancelled) setChildren([]);
       } finally {
@@ -176,7 +182,7 @@ export default function CategoryNavigator() {
     return () => {
       cancelled = true;
     };
-  }, [parentId, getChildren]);
+  }, [parentId, getChildren, activeCategoryName]);
 
   const isCarousel = children.length >= MIN_FOR_CAROUSEL;
 

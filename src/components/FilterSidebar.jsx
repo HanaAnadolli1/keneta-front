@@ -84,7 +84,11 @@ function parseSelected(searchParams, code) {
   return new Set(
     raw
       .split(",")
-      .map((v) => v.trim())
+      .map((v) => {
+        const trimmed = v.trim();
+        // For brand filtering, decode the URL-encoded names
+        return code === "brand" ? decodeURIComponent(trimmed) : trimmed;
+      })
       .filter(Boolean)
   );
 }
