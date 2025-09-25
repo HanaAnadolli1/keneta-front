@@ -2,13 +2,13 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import flowbiteReact from "flowbite-react/plugin/vite";
- 
 export default defineConfig({
   base: "/", // base URL for your app
   plugins: [react(), tailwindcss(), flowbiteReact()],
   build: {
-    outDir: "dist",       // output build files in a separate folder
-    emptyOutDir: true     // clean out the dist folder before build
+    outDir: "dist",
+    assetsDir: "assets",
+    sourcemap: false,
   },
   server: {
     proxy: {
