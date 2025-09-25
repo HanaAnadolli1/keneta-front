@@ -171,138 +171,23 @@ export function useCartMutations() {
         });
       }
       
-      // For guest cart, ensure CSRF cookie is available
-      try {
-        await ensureCsrfCookie();
-      } catch (error) {
-        console.error("❌ Failed to ensure CSRF cookie:", error);
-        throw new Error("Failed to establish secure session for cart operations");
+      // Simple guest cart request with session-based CSRF
+      const res = await fetch(`${API_CART}/checkout/cart`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ product_id: productId, quantity }),
+      });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || `Add failed: ${res.status}`);
       }
       
-      // Retry logic for guest cart (max 2 retries for 500 errors)
-      let lastError;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          let csrf = getCsrfToken();
-          
-          // Fetch CSRF token if missing or on retry attempts
-          if (!csrf || attempt > 1) {
-            console.log(`🔄 ${!csrf ? 'Fetching' : 'Refreshing'} CSRF token (attempt ${attempt}/3)...`);
-            try {
-              await ensureCsrfCookie();
-              const newCsrf = getCsrfToken();
-              if (newCsrf) {
-                csrf = newCsrf;
-                console.log("✅ CSRF token obtained successfully");
-              } else {
-                console.error("❌ CSRF token still missing after fetch attempt");
-                throw new Error("Unable to obtain CSRF token");
-              }
-            } catch (csrfError) {
-              console.error("❌ Failed to fetch CSRF token:", csrfError);
-              throw new Error("CSRF token is required for cart operations");
-            }
-          }
-          
-          // Final validation - try alternative approaches if no XSRF-TOKEN
-          if (!csrf) {
-            console.error("❌ No XSRF-TOKEN available, checking for alternative CSRF methods...");
-            
-            // Check if we have a session cookie that might contain CSRF info
-            const sessionCookie = document.cookie.split(';').find(c => c.trim().startsWith('bagisto_session='));
-            if (sessionCookie) {
-              console.log("🔐 Found session cookie, attempting to use it for CSRF protection");
-              // Some Laravel setups use session-based CSRF instead of XSRF-TOKEN
-              csrf = "session-based"; // This is a placeholder - we'll need to handle this differently
-            }
-            
-            if (!csrf) {
-              throw new Error("CSRF token is required for cart operations");
-            }
-          }
-          
-          // Prepare headers - only include X-XSRF-TOKEN if we have a valid token
-          const headers = {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          };
-          
-          if (csrf && csrf !== "session-based") {
-            headers["X-XSRF-TOKEN"] = csrf;
-            console.log("🔐 Using X-XSRF-TOKEN header for CSRF protection");
-          } else {
-            console.log("🔐 Using session-based CSRF protection (no X-XSRF-TOKEN header)");
-          }
-          
-          const res = await fetch(`${API_CART}/checkout/cart`, {
-            method: "POST",
-            credentials: "include",
-            headers,
-            body: JSON.stringify({ product_id: productId, quantity }),
-          });
-          
-          console.log("🛒 Guest Cart API Response:", {
-            status: res.status,
-            statusText: res.statusText,
-            url: `${API_CART}/checkout/cart`,
-            headers: Object.fromEntries(res.headers.entries()),
-            productId,
-            quantity,
-            attempt
-          });
-          
-          if (!res.ok) {
-            const err = await res.json().catch(() => null);
-            console.error("❌ Guest Cart API Error:", {
-              status: res.status,
-              statusText: res.statusText,
-              error: err,
-              productId,
-              quantity,
-              attempt,
-              csrfToken: csrf ? "Present" : "Missing",
-              sessionCookie: document.cookie.includes('bagisto_session') ? "Present" : "Missing"
-            });
-            
-            // If it's a 500 error and we have retries left, continue the loop
-            if (res.status === 500 && attempt < 3) {
-              lastError = new Error(`Server error (attempt ${attempt}/3)`);
-              // Wait 1 second before retry
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              continue;
-            }
-            
-            // Provide more specific error messages based on status code
-            let errorMessage = err?.message || `Add failed: ${res.status}`;
-            if (res.status === 500) {
-              errorMessage = "Server error occurred while adding item to cart. Please try again later.";
-            } else if (res.status === 404) {
-              errorMessage = "Product not found or no longer available.";
-            } else if (res.status === 422) {
-              errorMessage = "Invalid product data. Please refresh and try again.";
-            } else if (res.status === 401 || res.status === 403) {
-              errorMessage = "Session expired. Please refresh the page and try again.";
-            }
-            
-            throw new Error(errorMessage);
-          }
-          
-          // Success! Return the response
-          return res.json();
-          
-        } catch (error) {
-          lastError = error;
-          // If it's not a 500 error or we've exhausted retries, throw immediately
-          if (!error.message.includes('500') || attempt >= 3) {
-            throw error;
-          }
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      // If we get here, all retries failed
-      throw lastError || new Error("Failed to add item to cart after multiple attempts");
+      return res.json();
     },
     onSettled: () => qc.invalidateQueries(["cart"]),
   });
