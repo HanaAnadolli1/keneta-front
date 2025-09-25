@@ -172,22 +172,65 @@ export function useCartMutations() {
       }
       
       // Simple guest cart request with session-based CSRF
-      const res = await fetch(`${API_CART}/checkout/cart`, {
+      const requestBody = { product_id: productId, quantity };
+      const requestUrl = `${API_CART}/checkout/cart`;
+      
+      console.log("🛒 Making cart request:", {
+        url: requestUrl,
+        method: "POST",
+        body: requestBody,
+        hasSessionCookie: document.cookie.includes('bagisto_session'),
+        allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
+      });
+      
+      const res = await fetch(requestUrl, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ product_id: productId, quantity }),
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log("🛒 Cart response received:", {
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.ok,
+        headers: Object.fromEntries(res.headers.entries())
       });
       
       if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.message || `Add failed: ${res.status}`);
+        let errorMessage;
+        try {
+          const err = await res.json();
+          console.error("🛒 Cart error response:", err);
+          errorMessage = err?.message || err?.title || `Add failed: ${res.status}`;
+        } catch (parseError) {
+          console.error("🛒 Failed to parse error response:", parseError);
+          errorMessage = `Add failed: ${res.status} ${res.statusText}`;
+        }
+        
+        // If it's a 500 error, try to provide more helpful information
+        if (res.status === 500) {
+          console.error("🛒 Server Error Details:", {
+            productId,
+            quantity,
+            requestUrl,
+            requestBody,
+            responseStatus: res.status,
+            responseHeaders: Object.fromEntries(res.headers.entries()),
+            hasSessionCookie: document.cookie.includes('bagisto_session'),
+            userAgent: navigator.userAgent
+          });
+        }
+        
+        throw new Error(errorMessage);
       }
       
-      return res.json();
+      const result = await res.json();
+      console.log("🛒 Cart success response:", result);
+      return result;
     },
     onSettled: () => qc.invalidateQueries(["cart"]),
   });
