@@ -161,6 +161,12 @@ export function useCartMutations() {
       ensureSession();
       await ensureCsrfCookie();
       if (token) {
+        console.log("🛒 Authenticated Cart API Call:", {
+          productId,
+          quantity,
+          token: token.substring(0, 10) + "...",
+          url: `/customer/cart/add/${productId}`
+        });
         return axios.post(`/customer/cart/add/${productId}`, {
           is_buy_now: 0,
           product_id: productId,
@@ -179,9 +185,24 @@ export function useCartMutations() {
         },
         body: JSON.stringify({ product_id: productId, quantity }),
       });
+      
+      console.log("🛒 Guest Cart API Response:", {
+        status: res.status,
+        statusText: res.statusText,
+        url: res.url,
+        headers: Object.fromEntries(res.headers.entries())
+      });
+      
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.message || `Add failed: ${res.status}`);
+        console.error("❌ Guest Cart API Error:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: err,
+          productId,
+          quantity
+        });
+        throw new Error(err?.message || `Add failed: ${res.status} ${res.statusText}`);
       }
       return res.json();
     },

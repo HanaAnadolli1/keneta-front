@@ -89,6 +89,14 @@ export default function Search({ className = "" }) {
         const url = `${API_V1}/products?query=${encodeURIComponent(
           trimmed
         )}&limit=${LIMIT}`;
+        
+        // Debug logging for search suggestions
+        console.log("🔍 Search Suggestions Debug:", {
+          query: trimmed,
+          url,
+          encodedQuery: encodeURIComponent(trimmed)
+        });
+        
         const res = await fetch(url, {
           credentials: "include",
           headers: { Accept: "application/json" },
@@ -99,7 +107,52 @@ export default function Search({ className = "" }) {
         const arr = Array.isArray(json?.data)
           ? json.data
           : json?.data?.items || [];
-        setSuggestions(arr);
+          
+        // Debug logging for search suggestions results
+        console.log("🔍 Search Suggestions Results:", {
+          query: trimmed,
+          suggestionsCount: arr.length,
+          suggestions: arr.map(item => ({ id: item.id, name: item.name }))
+        });
+        
+        // Client-side filtering to ensure results contain the search term
+        const filteredArr = arr.filter(item => {
+          const name = (item.name || '').toLowerCase();
+          const sku = (item.sku || '').toLowerCase();
+          const searchTerm = trimmed.toLowerCase();
+          
+          // Check if search term appears in name or SKU
+          const nameMatches = name.includes(searchTerm);
+          const skuMatches = sku.includes(searchTerm);
+          
+          // Also check for word boundary matches (more precise)
+          const nameWordMatch = name.split(/\s+/).some(word => 
+            word.startsWith(searchTerm) || word.includes(searchTerm)
+          );
+          
+          const matches = nameMatches || skuMatches || nameWordMatch;
+          
+          if (!matches) {
+            console.log("🔍 Filtered out irrelevant result:", {
+              name: item.name,
+              sku: item.sku,
+              searchTerm: trimmed,
+              nameMatches,
+              skuMatches,
+              nameWordMatch
+            });
+          }
+          
+          return matches;
+        });
+        
+        console.log("🔍 After client-side filtering:", {
+          originalCount: arr.length,
+          filteredCount: filteredArr.length,
+          filteredResults: filteredArr.map(item => ({ id: item.id, name: item.name }))
+        });
+        
+        setSuggestions(filteredArr);
         setActive(arr.length ? 0 : -1);
       } catch (err) {
         if (err.name !== "AbortError") {

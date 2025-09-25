@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { API_V1 } from "../api/config";
 
 const Brands = () => {
   const [brands, setBrands] = useState([]);
@@ -9,14 +10,16 @@ const Brands = () => {
   useEffect(() => {
     const fetchBrands = async () => {
       try {
-        const response = await fetch(
-          "https://admin.keneta-ks.com/api/v2/attributes?sort=id"
-        );
+        const response = await fetch(`${API_V1}/attributes?sort=id`);
         const data = await response.json();
 
         const brandAttribute = data.data.find((attr) => attr.code === "brand");
 
         if (brandAttribute && brandAttribute.options) {
+          console.log("🏷️ Brands Loaded:", {
+            totalBrands: brandAttribute.options.length,
+            sampleBrands: brandAttribute.options.slice(0, 5).map(b => ({ id: b.id, label: b.label }))
+          });
           setBrands(brandAttribute.options);
         }
       } catch (error) {
@@ -26,9 +29,6 @@ const Brands = () => {
 
     fetchBrands();
   }, []);
-
-  const slugify = (label) =>
-    encodeURIComponent(label.toLowerCase().replace(/\s+/g, "-"));
 
   // Adjust according to where your files are stored
   const getImageUrl = (swatchValue) =>
@@ -44,7 +44,15 @@ const Brands = () => {
         {brands.map((brand) => (
           <div
             key={brand.id}
-            onClick={() => navigate(`/products?brand=${slugify(brand.label)}`)}
+            onClick={() => {
+              const url = `/products?brand=${encodeURIComponent(brand.label)}`;
+              console.log("🏷️ Brand Click Debug:", {
+                brandId: brand.id,
+                brandLabel: brand.label,
+                navigationUrl: url
+              });
+              navigate(url);
+            }}
             className="cursor-pointer bg-gray-100 h-24 flex items-center justify-center text-center rounded shadow-sm text-lg font-semibold text-gray-700 hover:bg-indigo-100 transition p-2"
           >
             {brand.swatch_value ? (
