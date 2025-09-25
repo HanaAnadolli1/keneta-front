@@ -6,9 +6,9 @@ export default defineConfig({
   base: "/", // base URL for your app
   plugins: [react(), tailwindcss(), flowbiteReact()],
   build: {
-    outDir: "dist",
-    assetsDir: "assets",
-    sourcemap: false,
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false
   },
   server: {
     proxy: {
