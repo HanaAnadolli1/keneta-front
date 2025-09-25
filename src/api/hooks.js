@@ -158,8 +158,10 @@ export function useCartMutations() {
   // Add item with retry logic for server errors
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1, ...rest }) => {
+      // Ensure session is established first
       ensureSession();
-      await ensureCsrfCookie();
+      console.log("🔐 Session established, ensuring CSRF cookie...");
+      
       if (token) {
         return axios.post(`/customer/cart/add/${productId}`, {
           is_buy_now: 0,
@@ -169,24 +171,43 @@ export function useCartMutations() {
         });
       }
       
+      // For guest cart, ensure CSRF cookie is available
+      try {
+        await ensureCsrfCookie();
+      } catch (error) {
+        console.error("❌ Failed to ensure CSRF cookie:", error);
+        throw new Error("Failed to establish secure session for cart operations");
+      }
+      
       // Retry logic for guest cart (max 2 retries for 500 errors)
       let lastError;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          const csrf = getCsrfToken();
+          let csrf = getCsrfToken();
           
-          // Validate CSRF token before making request
-          if (!csrf) {
-            console.error("❌ No CSRF token available");
-            throw new Error("CSRF token is required for cart operations");
+          // Fetch CSRF token if missing or on retry attempts
+          if (!csrf || attempt > 1) {
+            console.log(`🔄 ${!csrf ? 'Fetching' : 'Refreshing'} CSRF token (attempt ${attempt}/3)...`);
+            try {
+              await ensureCsrfCookie();
+              const newCsrf = getCsrfToken();
+              if (newCsrf) {
+                csrf = newCsrf;
+                console.log("✅ CSRF token obtained successfully");
+              } else {
+                console.error("❌ CSRF token still missing after fetch attempt");
+                throw new Error("Unable to obtain CSRF token");
+              }
+            } catch (csrfError) {
+              console.error("❌ Failed to fetch CSRF token:", csrfError);
+              throw new Error("CSRF token is required for cart operations");
+            }
           }
           
-          // Refresh CSRF token on retry attempts
-          if (attempt > 1) {
-            console.log(`🔄 Retrying cart request (attempt ${attempt}/3)...`);
-            await ensureCsrfCookie();
-            const newCsrf = getCsrfToken();
-            if (newCsrf) csrf = newCsrf;
+          // Final validation
+          if (!csrf) {
+            console.error("❌ No CSRF token available after all attempts");
+            throw new Error("CSRF token is required for cart operations");
           }
           
           const res = await fetch(`${API_CART}/checkout/cart`, {
