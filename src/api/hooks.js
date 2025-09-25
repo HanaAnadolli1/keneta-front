@@ -155,13 +155,11 @@ export function useCartMutations() {
   const qc = useQueryClient();
   const token = localStorage.getItem("token");
 
-  // Add item with retry logic for server errors
+  // Add item
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1, ...rest }) => {
-      // Ensure session is established first
       ensureSession();
-      console.log("🔐 Session established, ensuring CSRF cookie...");
-      
+      await ensureCsrfCookie();
       if (token) {
         return axios.post(`/customer/cart/add/${productId}`, {
           is_buy_now: 0,
@@ -170,81 +168,22 @@ export function useCartMutations() {
           ...rest,
         });
       }
-      
-      // Try different guest cart request formats
-      const requestFormats = [
-        // Format 1: Basic format
-        { url: `${API_CART}/checkout/cart`, body: { product_id: productId, quantity } },
-        // Format 2: With is_buy_now like customer cart
-        { url: `${API_CART}/checkout/cart`, body: { product_id: productId, quantity, is_buy_now: 0 } },
-        // Format 3: Different endpoint
-        { url: `${API_CART}/cart`, body: { product_id: productId, quantity } },
-        // Format 4: Form data format
-        { url: `${API_CART}/checkout/cart`, body: `product_id=${productId}&quantity=${quantity}`, contentType: "application/x-www-form-urlencoded" }
-      ];
-      
-      let lastError;
-      
-      for (const { url: requestUrl, body: requestBody, contentType } of requestFormats) {
-        try {
-          console.log("🛒 Trying cart request format:", {
-            url: requestUrl,
-            method: "POST",
-            body: requestBody,
-            contentType: contentType || "application/json",
-            hasSessionCookie: document.cookie.includes('bagisto_session'),
-            allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
-          });
-          
-          const headers = {
-            Accept: "application/json",
-          };
-          
-          if (contentType === "application/x-www-form-urlencoded") {
-            headers["Content-Type"] = "application/x-www-form-urlencoded";
-          } else {
-            headers["Content-Type"] = "application/json";
-          }
-          
-          const res = await fetch(requestUrl, {
-            method: "POST",
-            credentials: "include",
-            headers,
-            body: contentType === "application/x-www-form-urlencoded" ? requestBody : JSON.stringify(requestBody),
-          });
-          
-          console.log("🛒 Cart response received:", {
-            url: requestUrl,
-            status: res.status,
-            statusText: res.statusText,
-            ok: res.ok,
-            headers: Object.fromEntries(res.headers.entries())
-          });
-          
-          if (res.ok) {
-            const result = await res.json();
-            console.log("🛒 Cart success response:", result);
-            return result;
-          } else {
-            const err = await res.json().catch(() => null);
-            console.log(`🛒 Request format failed:`, {
-              url: requestUrl,
-              status: res.status,
-              error: err?.message || err?.title || res.statusText
-            });
-            lastError = new Error(err?.message || err?.title || `Add failed: ${res.status}`);
-          }
-        } catch (error) {
-          console.log(`🛒 Request format error:`, {
-            url: requestUrl,
-            error: error.message
-          });
-          lastError = error;
-        }
+      const csrf = getCsrfToken();
+      const res = await fetch(`${API_CART}/checkout/cart`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-XSRF-TOKEN": csrf,
+        },
+        body: JSON.stringify({ product_id: productId, quantity }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || `Add failed: ${res.status}`);
       }
-      
-      // If all formats failed, throw the last error
-      throw lastError || new Error("All guest cart request formats failed");
+      return res.json();
     },
     onSettled: () => qc.invalidateQueries(["cart"]),
   });
