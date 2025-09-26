@@ -153,7 +153,9 @@ export default function CategoryNavigator({ activeCategoryName }) {
         if (last?.id) return Number(last.id);
       }
     }
-    return null;
+    
+    // If no specific category is selected, show root categories (parent_id = 1)
+    return 1;
   }, [categoryIdParam, categorySlugParam]);
 
   useEffect(() => {
@@ -161,10 +163,6 @@ export default function CategoryNavigator({ activeCategoryName }) {
     (async () => {
       setLoading(true);
       try {
-        if (!parentId) {
-          setChildren([]);
-          return;
-        }
         const rows = await getChildren(parentId);
         if (!cancelled) {
           // Filter out children that have the same name as the active category

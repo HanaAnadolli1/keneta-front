@@ -19,6 +19,7 @@ import { usePrefetchProduct, useCartMutations } from "../api/hooks";
 import { API_V1 } from "../api/config";
 import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { useProductSearch } from "../hooks/useProductSearch";
 
 /* ================================
  * Dynamic Category Breadcrumbs System
@@ -219,7 +220,7 @@ async function buildHierarchyFromDescendants(
   } catch (error) {
     // Only log non-abort errors (abort errors are expected when component unmounts)
     if (error.name !== 'AbortError') {
-      console.warn("Failed to build hierarchy from descendants:", error);
+    console.warn("Failed to build hierarchy from descendants:", error);
     }
     return [];
   }
@@ -252,7 +253,7 @@ async function findCategoryInDescendants(
     } catch (error) {
       // Only log non-abort errors (abort errors are expected when component unmounts)
       if (error.name !== 'AbortError') {
-        console.warn(`Failed to search descendants of ${parentId}:`, error);
+      console.warn(`Failed to search descendants of ${parentId}:`, error);
       }
       return [];
     }
@@ -495,6 +496,7 @@ export default function Products() {
   const toast = useToast();
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
+  const { searchProducts } = useProductSearch();
 
   /* -------- Load brands -------- */
   useEffect(() => {
@@ -621,7 +623,7 @@ export default function Products() {
             } catch (e) {
               // Only log non-abort errors (abort errors are expected when component unmounts)
               if (e.name !== 'AbortError') {
-                console.warn("Failed to load full categories:", e);
+              console.warn("Failed to load full categories:", e);
               }
             }
           }
@@ -664,7 +666,7 @@ export default function Products() {
           }
 
           // --- 2) If no trail, check local cache
-          let all = ssGet(SS_ALL_CATEGORIES, []);
+            let all = ssGet(SS_ALL_CATEGORIES, []);
           if (!trail.length) {
             let byId = mapById(all);
             let bySlug = buildSlugIndex(all);
@@ -944,21 +946,80 @@ export default function Products() {
   /* -------- Fetch one page -------- */
   const fetchPage = useCallback(
     async (pageToFetch, { append }) => {
+      // If we have a search term, use client-side search instead of API
+      if (searchTerm && searchTerm.length >= MIN_SEARCH_LEN) {
+        console.log("🔍 Using API search for:", searchTerm);
+        
+        try {
+          const searchResults = await searchProducts(searchTerm, {
+            limit: PER_PAGE * pageToFetch // Get enough results for pagination
+          });
+
+          // Apply additional filters (brand, category) to search results
+          let filteredResults = searchResults;
+          
+          // Apply brand filter if present
+          if (selectedBrandIds.length > 0) {
+            filteredResults = filteredResults.filter(item => {
+              const itemBrandId = item.brand_id || item.attributes?.brand_id;
+              return selectedBrandIds.includes(itemBrandId);
+            });
+          }
+          
+          // Apply category filter if present
+          if (categoryIdParam || computedTrail.length) {
+            const categoryId = categoryIdParam || computedTrail[computedTrail.length - 1]?.id;
+            if (categoryId) {
+              filteredResults = filteredResults.filter(item => {
+                const itemCategoryId = item.category_id || item.categories?.[0]?.id;
+                return itemCategoryId === Number(categoryId);
+              });
+            }
+          }
+
+          // Paginate results
+          const startIndex = (pageToFetch - 1) * PER_PAGE;
+          const endIndex = startIndex + PER_PAGE;
+          const paginatedResults = filteredResults.slice(startIndex, endIndex);
+          const hasNext = endIndex < filteredResults.length;
+
+          console.log("🔍 API search results:", {
+            searchTerm,
+            totalResults: filteredResults.length,
+            pageResults: paginatedResults.length,
+            hasNext,
+            sampleResults: paginatedResults.slice(0, 3).map(item => ({ id: item.id, name: item.name }))
+          });
+
+          setItems((prev) => {
+            const merged = append ? [...prev, ...paginatedResults] : paginatedResults;
+            const seen = new Set();
+            const deduped = [];
+            for (const it of merged) {
+              const key = it?.id ?? it?.sku ?? Math.random();
+              if (seen.has(key)) continue;
+              seen.add(key);
+              deduped.push(it);
+            }
+            return deduped;
+          });
+
+          setHasMore(hasNext);
+          setPage(pageToFetch);
+          return;
+        } catch (error) {
+          console.error('Search error:', error);
+          setError(error);
+          return;
+        }
+      }
+
+      // Regular API fetch for non-search queries
       const qs = new URLSearchParams(baseFiltersQS);
       qs.set("per_page", String(PER_PAGE));
       qs.set("page", String(pageToFetch));
 
       const url = `${API_V1}/products?${qs.toString()}`;
-      
-      // Debug logging for search issues
-      if (searchTerm) {
-        console.log("🔍 Search Debug:", {
-          searchTerm,
-          url,
-          queryString: qs.toString(),
-          baseFiltersQS
-        });
-      }
       
       // Debug logging for brand filtering
       if (selectedBrandIds.length > 0 || brandSlugParam) {
@@ -974,75 +1035,26 @@ export default function Products() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       
-      // Debug logging for API response
-      if (selectedBrandIds.length > 0 || brandSlugParam) {
-        console.log("🏷️ API Response Debug:", {
-          url,
-          brandFilter: selectedBrandIds.length > 0 ? selectedBrandIds.join(",") : brandSlugParam,
-          responseStatus: res.status,
-          responseData: json,
-          totalItems: json?.data?.items?.length || json?.items?.length || 0,
-          sampleItems: (json?.data?.items || json?.items || []).slice(0, 3).map(item => ({
-            id: item.id,
-            name: item.name,
-            brand: item.brand || item.attributes?.brand || 'No brand info'
-          }))
-        });
-      }
+       // Debug logging for API response
+       if (selectedBrandIds.length > 0 || brandSlugParam) {
+         console.log("🏷️ API Response Debug:", {
+           url,
+           brandFilter: selectedBrandIds.length > 0 ? selectedBrandIds.join(",") : brandSlugParam,
+           responseStatus: res.status,
+           responseData: json,
+           totalItems: json?.data?.items?.length || json?.items?.length || 0,
+           sampleItems: (json?.data?.items || json?.items || []).slice(0, 3).map(item => ({
+             id: item.id,
+             name: item.name,
+             brand: item.brand || item.attributes?.brand || 'No brand info'
+           }))
+         });
+       }
       
       const { items: newItems, hasNext } = extractProductsPayload(json);
-      
-      // Debug logging for search results
-      if (searchTerm) {
-        console.log("🔍 Search Results:", {
-          searchTerm,
-          itemsCount: newItems.length,
-          items: newItems.map(item => ({ id: item.id, name: item.name }))
-        });
-      }
-      
-      // Client-side filtering for search results to ensure relevance
-      let filteredItems = newItems;
-      if (searchTerm && searchTerm.length >= MIN_SEARCH_LEN) {
-        filteredItems = newItems.filter(item => {
-          const name = (item.name || '').toLowerCase();
-          const sku = (item.sku || '').toLowerCase();
-          const searchTermLower = searchTerm.toLowerCase();
-          
-          // Check if search term appears in name or SKU
-          const nameMatches = name.includes(searchTermLower);
-          const skuMatches = sku.includes(searchTermLower);
-          
-          // Also check for word boundary matches (more precise)
-          const nameWordMatch = name.split(/\s+/).some(word => 
-            word.startsWith(searchTermLower) || word.includes(searchTermLower)
-          );
-          
-          const matches = nameMatches || skuMatches || nameWordMatch;
-          
-          if (!matches) {
-            console.log("🔍 Filtered out irrelevant product:", {
-              name: item.name,
-              sku: item.sku,
-              searchTerm: searchTerm,
-              nameMatches,
-              skuMatches,
-              nameWordMatch
-            });
-          }
-          
-          return matches;
-        });
-        
-        console.log("🔍 After client-side filtering:", {
-          originalCount: newItems.length,
-          filteredCount: filteredItems.length,
-          filteredResults: filteredItems.map(item => ({ id: item.id, name: item.name }))
-        });
-      }
 
       setItems((prev) => {
-        const merged = append ? [...prev, ...filteredItems] : filteredItems;
+        const merged = append ? [...prev, ...newItems] : newItems;
         const seen = new Set();
         const deduped = [];
         for (const it of merged) {
@@ -1057,7 +1069,7 @@ export default function Products() {
       setHasMore(hasNext);
       setPage(pageToFetch);
     },
-    [baseFiltersQS]
+    [baseFiltersQS, searchTerm, searchProducts, selectedBrandIds, categoryIdParam, computedTrail]
   );
 
   // initial load - wait for brand options if needed
@@ -1200,7 +1212,7 @@ export default function Products() {
         <FilterSidebar />
 
         <section className="flex-1 min-w-0">
-          {hasCategoryFilter && <CategoryNavigator activeCategoryName={activeCategoryLabel} />}
+          <CategoryNavigator activeCategoryName={activeCategoryLabel} />
 
           <div className="mb-4 flex items-center justify-between">
             {activeBrandLabel || activeCategoryLabel ? (
