@@ -219,7 +219,7 @@ async function buildHierarchyFromDescendants(
   } catch (error) {
     // Only log non-abort errors (abort errors are expected when component unmounts)
     if (error.name !== 'AbortError') {
-      console.warn("Failed to build hierarchy from descendants:", error);
+    console.warn("Failed to build hierarchy from descendants:", error);
     }
     return [];
   }
@@ -252,7 +252,7 @@ async function findCategoryInDescendants(
     } catch (error) {
       // Only log non-abort errors (abort errors are expected when component unmounts)
       if (error.name !== 'AbortError') {
-        console.warn(`Failed to search descendants of ${parentId}:`, error);
+      console.warn(`Failed to search descendants of ${parentId}:`, error);
       }
       return [];
     }
@@ -621,7 +621,7 @@ export default function Products() {
             } catch (e) {
               // Only log non-abort errors (abort errors are expected when component unmounts)
               if (e.name !== 'AbortError') {
-                console.warn("Failed to load full categories:", e);
+              console.warn("Failed to load full categories:", e);
               }
             }
           }
@@ -664,7 +664,7 @@ export default function Products() {
           }
 
           // --- 2) If no trail, check local cache
-          let all = ssGet(SS_ALL_CATEGORIES, []);
+            let all = ssGet(SS_ALL_CATEGORIES, []);
           if (!trail.length) {
             let byId = mapById(all);
             let bySlug = buildSlugIndex(all);
@@ -1200,7 +1200,7 @@ export default function Products() {
         <FilterSidebar />
 
         <section className="flex-1 min-w-0">
-          {hasCategoryFilter && <CategoryNavigator activeCategoryName={activeCategoryLabel} />}
+          <CategoryNavigator activeCategoryName={activeCategoryLabel} />
 
           <div className="mb-4 flex items-center justify-between">
             {activeBrandLabel || activeCategoryLabel ? (
