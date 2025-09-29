@@ -40,3 +40,4 @@ const ExampleTopCollections = () => {
 };
 
 export default ExampleTopCollections;
+
