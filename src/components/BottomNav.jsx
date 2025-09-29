@@ -1,5 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Menu as MenuIcon, ShoppingCart, User2, Heart } from "lucide-react";
+import {
+  Home,
+  Menu as MenuIcon,
+  ShoppingCart,
+  User2,
+  Heart,
+} from "lucide-react";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
@@ -35,7 +41,11 @@ export default function BottomNav() {
     >
       <div className="grid grid-cols-5 h-16">
         {/* Ballina */}
-        <Link to="/" className="flex items-center justify-center" aria-label="Ballina">
+        <Link
+          to="/"
+          className="flex items-center justify-center"
+          aria-label="Ballina"
+        >
           <Item active={pathname === "/"}>
             <Home size={22} />
             <span>Home</span>
@@ -50,7 +60,7 @@ export default function BottomNav() {
         >
           <Item active={false}>
             <MenuIcon size={22} />
-            <span>Categories</span>
+            <span>Menu</span>
           </Item>
         </button>
 
@@ -67,7 +77,11 @@ export default function BottomNav() {
         </button>
 
         {/* Favoritet (Wishlist) */}
-        <Link to="/wishlist" className="flex items-center justify-center" aria-label="Favoritet">
+        <Link
+          to="/wishlist"
+          className="flex items-center justify-center"
+          aria-label="Favoritet"
+        >
           <Item active={pathname.startsWith("/wishlist")}>
             <div className="relative">
               <Heart size={22} />
@@ -87,7 +101,11 @@ export default function BottomNav() {
           className="flex items-center justify-center"
           aria-label={currentUser ? "Llogaria" : "Kyçu"}
         >
-          <Item active={pathname.startsWith("/account") || pathname.startsWith("/login")}>
+          <Item
+            active={
+              pathname.startsWith("/account") || pathname.startsWith("/login")
+            }
+          >
             <User2 size={22} />
             <span>{currentUser ? "Llogaria" : "Kyçu"}</span>
           </Item>

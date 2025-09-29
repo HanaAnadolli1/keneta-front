@@ -494,10 +494,58 @@ export default function Products() {
     sessionStorage.setItem("products.viewMode", viewMode);
   }, [viewMode]);
 
+  // Sorting and filtering states
+  const [sortBy, setSortBy] = useState(
+    () => sessionStorage.getItem("products.sortBy") || "name-asc"
+  );
+  const [hideOutOfStock, setHideOutOfStock] = useState(
+    () => sessionStorage.getItem("products.hideOutOfStock") === "true" || false
+  );
+
+  useEffect(() => {
+    sessionStorage.setItem("products.sortBy", sortBy);
+  }, [sortBy]);
+
+  useEffect(() => {
+    sessionStorage.setItem("products.hideOutOfStock", hideOutOfStock.toString());
+  }, [hideOutOfStock]);
+
   const loadingLock = useRef(false);
 
   const { isWishlisted, toggleWishlist } = useWishlist();
   const toast = useToast();
+
+  // Sort and filter products
+  const sortedAndFilteredItems = useMemo(() => {
+    let filtered = [...items];
+
+    // Filter out of stock products if toggle is enabled
+    if (hideOutOfStock) {
+      filtered = filtered.filter(product => product.in_stock);
+    }
+
+    // Sort products based on selected option
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "price-asc":
+          return (a.price || 0) - (b.price || 0);
+        case "price-desc":
+          return (b.price || 0) - (a.price || 0);
+        case "newest":
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        case "oldest":
+          return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [items, sortBy, hideOutOfStock]);
   const { addItem } = useCartMutations();
   const prefetch = usePrefetchProduct();
   const { searchProducts } = useProductSearch();
@@ -1271,58 +1319,80 @@ export default function Products() {
 
           {!isSearchActive && <CategoryNavigator activeCategoryName={activeCategoryLabel} />}
 
-          <div className="mb-4 flex items-center justify-between">
-            {activeBrandLabel || activeCategoryLabel ? (
-              <p className="text-lg text-gray-700">
-                Showing products for{" "}
-                {activeCategoryLabel && (
-                  <>
-                    category:{" "}
-                    <span className="font-semibold text-indigo-600">
-                      {activeCategoryLabel}
-                    </span>
-                  </>
-                )}
-                {activeBrandLabel && (
-                  <>
-                    {activeCategoryLabel && " and "}brand:{" "}
-                    <span className="font-semibold text-indigo-600">
-                      {activeBrandLabel}
-                    </span>
-                  </>
-                )}
-              </p>
-            ) : (
-              <span />
-            )}
+          <div className="mb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              {/* Sorting Dropdown */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="sort-select" className="text-sm font-medium text-gray-700">
+                  Sort by:
+                </label>
+                <select
+                  id="sort-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                >
+                  <option value="name-asc">A-Z</option>
+                  <option value="name-desc">Z-A</option>
+                  <option value="price-asc">Price: Low to High</option>
+                  <option value="price-desc">Price: High to Low</option>
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                </select>
+              </div>
 
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={`p-2 rounded transition ${
-                  viewMode === "list"
-                    ? "text-[#132232] border border-[#132232]"
-                    : "text-gray-500 hover:text-[#132232] border border-transparent"
-                }`}
-                aria-label="List view"
-                title="List view"
-              >
-                <ListIcon size={18} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`p-2 rounded transition ${
-                  viewMode === "grid"
-                    ? "text-[#132232] border border-[#132232]"
-                    : "text-gray-500 hover:text-[#132232] border border-transparent"
-                }`}
-                aria-label="Grid view"
-                title="Grid view"
-              >
-                <GridIcon size={18} />
-              </button>
+              {/* Out of Stock Toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Largo te shiturat
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHideOutOfStock(!hideOutOfStock)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 ${
+                    hideOutOfStock ? 'bg-[var(--primary)]' : 'bg-gray-200'
+                  }`}
+                  role="switch"
+                  aria-checked={hideOutOfStock}
+                  aria-label="Hide out of stock products"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      hideOutOfStock ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* View Mode Buttons */}
+              <div className="hidden md:flex items-center gap-2 sm:ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={`p-2 rounded transition ${
+                    viewMode === "list"
+                      ? "text-[#132232] border border-[#132232]"
+                      : "text-gray-500 hover:text-[#132232] border border-transparent"
+                  }`}
+                  aria-label="List view"
+                  title="List view"
+                >
+                  <ListIcon size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`p-2 rounded transition ${
+                    viewMode === "grid"
+                      ? "text-[#132232] border border-[#132232]"
+                      : "text-gray-500 hover:text-[#132232] border border-transparent"
+                  }`}
+                  aria-label="Grid view"
+                  title="Grid view"
+                >
+                  <GridIcon size={18} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1351,7 +1421,7 @@ export default function Products() {
             <>
               {viewMode === "grid" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {items.map((product) => (
+                  {sortedAndFilteredItems.map((product) => (
                     <ProductCard
                       key={product.id}
                       product={product}
@@ -1367,7 +1437,7 @@ export default function Products() {
 
               {viewMode === "list" && (
                 <ul className="space-y-5">
-                  {items.map((product) => (
+                  {sortedAndFilteredItems.map((product) => (
                     <li key={product.id}>
                       <ProductListItem
                         product={product}
@@ -1382,12 +1452,12 @@ export default function Products() {
                 </ul>
               )}
 
-              {hasMore && (
+              {hasMore && sortedAndFilteredItems.length > 0 && (
                 <div className="my-6 flex justify-center">
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-6 py-3 bg-[var(--primary)] text-white rounded-lg hover:bg-white hover:text-[var(--primary)] hover:border-[var(--primary)] border border-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {loadingMore ? (
                       <>
@@ -1400,9 +1470,12 @@ export default function Products() {
                   </button>
                 </div>
               )}
-              {!hasMore && items.length > 0 && (
+              {!hasMore && sortedAndFilteredItems.length > 0 && (
                 <div className="my-6 text-center text-sm text-gray-500">
-                  No more products
+                  {hideOutOfStock 
+                    ? `Showing ${sortedAndFilteredItems.length} in-stock products`
+                    : `Showing ${sortedAndFilteredItems.length} products`
+                  }
                 </div>
               )}
             </>

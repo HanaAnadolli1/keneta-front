@@ -9,7 +9,7 @@ const ROWS = [
     label: "Name",
     render: (p) => (
       <Link
-        className="text-indigo-600 hover:underline"
+        className="text-[var(--primary)] hover:underline"
         to={`/products/${p.url_key}`}
       >
         {p.name}
@@ -55,13 +55,13 @@ export default function ComparePage() {
       <div className="max-w-7xl mx-auto px-4 py-12">
         <Breadcrumbs items={breadcrumbs} />
         <div className="text-center">
-          <h1 className="text-2xl font-semibold mb-2">Compare products</h1>
+          <h1 className="text-2xl font-semibold mb-2 text-[var(--primary)]">Compare products</h1>
           <p className="text-gray-600 mb-6">
             You haven’t selected any products to compare.
           </p>
           <Link
             to="/products"
-            className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-sm"
+            className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white font-semibold hover:bg-[var(--secondary)] shadow-sm"
           >
             Browse products
           </Link>
@@ -76,7 +76,7 @@ export default function ComparePage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="text-2xl font-semibold text-[var(--primary)]">
             Compare products
           </h1>
           <p className="text-sm text-gray-600">
@@ -90,7 +90,7 @@ export default function ComparePage() {
             <span className="text-sm text-gray-700">Differences only</span>
             <span
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition
-                ${showDiffsOnly ? "bg-indigo-600" : "bg-gray-200"}`}
+                ${showDiffsOnly ? "bg-[var(--primary)]" : "bg-gray-200"}`}
               onClick={() => setShowDiffsOnly((v) => !v)}
               role="switch"
               aria-checked={showDiffsOnly}
@@ -110,7 +110,7 @@ export default function ComparePage() {
           </button>
           <Link
             to="/products"
-            className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm"
+            className="rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--secondary)] shadow-sm"
           >
             + Add more
           </Link>
@@ -135,7 +135,7 @@ export default function ComparePage() {
             >
               {p.name}
             </Link>
-            <div className="mt-1 text-indigo-600 font-bold">
+            <div className="mt-1 text-[var(--primary)] font-bold">
               {p.formatted_price ?? "—"}
             </div>
             <button

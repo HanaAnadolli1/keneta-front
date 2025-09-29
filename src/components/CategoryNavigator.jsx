@@ -55,7 +55,34 @@ function normCat(c) {
 }
 
 function CategoryCard({ cat }) {
-  const imgSrc = cat.logo_url || cat.image_url || noImage;
+  // Fix image URLs - convert relative paths to full URLs
+  const getImageSrc = () => {
+    const logoUrl = cat.logo_url;
+    const imageUrl = cat.image_url;
+    
+    // Check logo_url first
+    if (logoUrl) {
+      if (logoUrl.startsWith('http')) {
+        return logoUrl;
+      } else if (logoUrl.startsWith('storage/')) {
+        return `https://admin.keneta-ks.com/${logoUrl}`;
+      }
+    }
+    
+    // Check image_url
+    if (imageUrl) {
+      if (imageUrl.startsWith('http')) {
+        return imageUrl;
+      } else if (imageUrl.startsWith('storage/')) {
+        return `https://admin.keneta-ks.com/${imageUrl}`;
+      }
+    }
+    
+    return noImage;
+  };
+  
+  const imgSrc = getImageSrc();
+  
   return (
     <Link
       to={`/products?category=${encodeURIComponent(cat.slug)}`}
@@ -68,6 +95,9 @@ function CategoryCard({ cat }) {
           alt={cat.name}
           className="w-8 h-8 object-contain"
           loading="lazy"
+          onError={(e) => {
+            e.target.src = noImage;
+          }}
         />
       </div>
       <span className="text-xs md:text-sm font-medium text-gray-800 leading-tight text-center whitespace-normal break-words">
@@ -95,27 +125,61 @@ function useChildrenFetcher() {
     if (inflight.current.has(key)) return inflight.current.get(key);
 
     const p = (async () => {
-      const r = await fetch(
-        `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
-          parentId
-        )}`
-      );
-      const j = await r.json();
-      const rows = (j?.data || [])
-        .map(normCat)
-        .filter((c) => c && c.status === "1");
-      mem.current.set(key, rows);
-      ssSet(SS_CHILDREN_CACHE, {
-        ...ssGet(SS_CHILDREN_CACHE, {}),
-        [key]: rows,
-      });
-      inflight.current.delete(key);
-      return rows;
+      try {
+        const r = await fetch(
+          `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
+            parentId
+          )}`
+        );
+        const j = await r.json();
+        const rows = (j?.data || [])
+          .map(normCat)
+          .filter((c) => c && c.status === "1");
+        mem.current.set(key, rows);
+        ssSet(SS_CHILDREN_CACHE, {
+          ...ssGet(SS_CHILDREN_CACHE, {}),
+          [key]: rows,
+        });
+        inflight.current.delete(key);
+        return rows;
+      } catch (error) {
+        console.warn(`Failed to fetch children for parent ${parentId}:`, error);
+        inflight.current.delete(key);
+        return [];
+      }
     })();
 
     inflight.current.set(key, p);
     return p;
   }, []);
+}
+
+// Helper function to find category ID by slug
+async function findCategoryIdBySlug(slug) {
+  try {
+    const response = await fetch(`${API_PUBLIC_V1}/categories`);
+    const data = await response.json();
+    const categories = data?.data || [];
+    
+    // Look for exact match first
+    let category = categories.find(cat => 
+      normSlug(cat.slug) === normSlug(slug) || 
+      normSlug(cat.name) === normSlug(slug)
+    );
+    
+    if (!category) {
+      // Look for partial match
+      category = categories.find(cat => 
+        normSlug(cat.slug).includes(normSlug(slug)) || 
+        normSlug(cat.name).includes(normSlug(slug))
+      );
+    }
+    
+    return category ? Number(category.id) : null;
+  } catch (error) {
+    console.warn('Failed to find category by slug:', error);
+    return null;
+  }
 }
 
 export default function CategoryNavigator({ activeCategoryName }) {
@@ -125,45 +189,76 @@ export default function CategoryNavigator({ activeCategoryName }) {
   const categoryIdParam = params.get("category_id") || "";
 
   const getChildren = useChildrenFetcher();
+  
+  // Debug logging
+  console.log('CategoryNavigator: categorySlugParam:', categorySlugParam);
+  console.log('CategoryNavigator: categoryIdParam:', categoryIdParam);
 
   const prevRef = useRef(null);
   const nextRef = useRef(null);
 
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [resolvedParentId, setResolvedParentId] = useState(null);
 
-  // derive parentId from recent trail or normalized trail cache
-  const parentId = useMemo(() => {
-    if (categoryIdParam) return Number(categoryIdParam);
-
-    const recent = ssGet(SS_RECENT_TRAIL, []);
-    if (Array.isArray(recent) && recent.length) {
-      const last = recent[recent.length - 1];
-      if (last?.id) return Number(last.id);
-    }
-
-    if (categorySlugParam) {
-      const decoded = decodeURIComponent(categorySlugParam);
-      const key = normSlug(decoded);
-      const tc = ssGet(SS_TRAIL_CACHE, {});
-      const trail =
-        tc[key] || tc[decoded.toLowerCase()] || tc[categorySlugParam] || null;
-      if (Array.isArray(trail) && trail.length) {
-        const last = trail[trail.length - 1];
-        if (last?.id) return Number(last.id);
+  // Resolve parentId from URL parameters
+  useEffect(() => {
+    const resolveParentId = async () => {
+      console.log('CategoryNavigator: Resolving parent ID...');
+      if (categoryIdParam) {
+        console.log('CategoryNavigator: Using categoryIdParam:', categoryIdParam);
+        setResolvedParentId(Number(categoryIdParam));
+        return;
       }
-    }
-    
-    // If no specific category is selected, show root categories (parent_id = 1)
-    return 1;
+
+      if (categorySlugParam) {
+        const decoded = decodeURIComponent(categorySlugParam);
+        
+        // First try cache
+        const key = normSlug(decoded);
+        const tc = ssGet(SS_TRAIL_CACHE, {});
+        const trail =
+          tc[key] || tc[decoded.toLowerCase()] || tc[categorySlugParam] || null;
+        if (Array.isArray(trail) && trail.length) {
+          const last = trail[trail.length - 1];
+          if (last?.id) {
+            setResolvedParentId(Number(last.id));
+            return;
+          }
+        }
+
+        // If not in cache, try to find by slug
+        const foundId = await findCategoryIdBySlug(decoded);
+        if (foundId) {
+          setResolvedParentId(foundId);
+          return;
+        }
+      }
+
+      const recent = ssGet(SS_RECENT_TRAIL, []);
+      if (Array.isArray(recent) && recent.length) {
+        const last = recent[recent.length - 1];
+        if (last?.id) {
+          setResolvedParentId(Number(last.id));
+          return;
+        }
+      }
+      
+      // Default to root categories
+      setResolvedParentId(1);
+    };
+
+    resolveParentId();
   }, [categoryIdParam, categorySlugParam]);
 
   useEffect(() => {
+    if (resolvedParentId === null) return; // Wait for parent ID to be resolved
+    
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const rows = await getChildren(parentId);
+        const rows = await getChildren(resolvedParentId);
         if (!cancelled) {
           // Filter out children that have the same name as the active category
           const filteredRows = activeCategoryName 
@@ -180,7 +275,7 @@ export default function CategoryNavigator({ activeCategoryName }) {
     return () => {
       cancelled = true;
     };
-  }, [parentId, getChildren, activeCategoryName]);
+  }, [resolvedParentId, getChildren, activeCategoryName]);
 
   const isCarousel = children.length >= MIN_FOR_CAROUSEL;
 

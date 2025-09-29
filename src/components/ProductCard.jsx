@@ -50,7 +50,7 @@ function ProductCard({
           {isWishlisted ? (
             <FaHeart className="text-xl text-red-500" />
           ) : (
-            <FiHeart className="text-xl text-gray-500 group-hover:text-red-500" />
+            <FiHeart className="text-xl text-gray-500 hover:text-red-500" />
           )}
         </button>
 
@@ -97,7 +97,7 @@ function ProductCard({
         className="flex-1 flex flex-col"
       >
         {/* Fixed-height image area */}
-        <div className="relative bg-gray-50">
+        <div className="relative">
           {saleActive && pct ? (
             <span className="absolute left-3 top-3 z-10 inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow">
               −{pct}%
