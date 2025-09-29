@@ -72,25 +72,18 @@ export default function Search({ className = "" }) {
     }
 
     debounceRef.current = setTimeout(async () => {
-      console.log(`🔍 Searching for: "${trimmed}"`);
-      
       try {
         const results = await searchProducts(trimmed, {
           limit: LIMIT
         });
 
-        console.log(`🔍 Found ${results.length} suggestions:`, 
-          results.map(p => ({ id: p.id, name: p.name, sku: p.sku }))
-        );
-
         setSuggestions(results);
         setActive(-1);
       } catch (error) {
-        console.error('Search error:', error);
         setSuggestions([]);
         setActive(-1);
       }
-    }, 300);
+    }, 150);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
