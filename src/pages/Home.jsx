@@ -5,10 +5,11 @@ import Carousel from "../components/Home/Carousel";
 import Offers from "../components/Home/Offers";
 import Categories from "../components/Home/Categories";
 import DealsCarousel from "../components/Home/DealsCarousel";
+import ThemeRenderer from "../components/Home/ThemeRenderer";
 
-function useHeroCarousels() {
+function useThemeCustomizations() {
   return useQuery({
-    queryKey: ["home", "heroCarousels"],
+    queryKey: ["home", "themeCustomizations"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await fetch(
@@ -19,8 +20,14 @@ function useHeroCarousels() {
 
       const items = Array.isArray(json?.data) ? json.data : [];
 
-      const imageCarousels = items
-        .filter((x) => x?.type === "image_carousel" && Number(x?.status) === 1)
+      // Filter active customizations and sort by sort_order
+      const activeCustomizations = items
+        .filter((x) => Number(x?.status) === 1)
+        .sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
+
+      // Extract image carousels for hero section
+      const imageCarousels = activeCustomizations
+        .filter((x) => x?.type === "image_carousel")
         .map((x) => {
           const translated =
             x?.translations?.[0]?.options?.images ?? x?.options?.images ?? [];
@@ -39,6 +46,7 @@ function useHeroCarousels() {
         imageCarousels.find((c) => c.sort_order === n)?.images ?? [];
 
       return {
+        customizations: activeCustomizations,
         leftSlides: byOrder(1), // 2/3 width
         rightSlides: byOrder(2), // 1/3 width
       };
@@ -47,45 +55,50 @@ function useHeroCarousels() {
 }
 
 export default function Home() {
-  const { data, isLoading, error } = useHeroCarousels();
+  const { data, isLoading, error } = useThemeCustomizations();
   const leftSlides = data?.leftSlides ?? [];
   const rightSlides = data?.rightSlides ?? [];
+  const customizations = data?.customizations ?? [];
 
   return (
     <div>
       {error ? (
-        <div className="p-8 text-red-600">Failed to load hero images.</div>
+        <div className="p-8 text-red-600">Failed to load theme customizations.</div>
       ) : (
-        <section className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Left (2/3) */}
-            {(leftSlides.length > 0 || isLoading) && (
-              <div className="md:col-span-2">
-                <Carousel
-                  slides={isLoading ? [] : leftSlides}
-                  className="h-[420px] md:h-[560px]"
-                  buttonAlign="left"
-                />
-              </div>
-            )}
+        <>
+          {/* Hero Carousel Section */}
+          <section className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Left (2/3) */}
+              {(leftSlides.length > 0 || isLoading) && (
+                <div className="md:col-span-2">
+                  <Carousel
+                    slides={isLoading ? [] : leftSlides}
+                    className="h-[420px] md:h-[560px]"
+                    buttonAlign="left"
+                  />
+                </div>
+              )}
 
-            {/* Right (1/3) */}
-            {(rightSlides.length > 0 || isLoading) && (
-              <div className="md:col-span-1">
-                <Carousel
-                  slides={isLoading ? [] : rightSlides}
-                  className="h-[420px] md:h-[560px]"
-                  buttonAlign="center"
-                />
-              </div>
-            )}
-          </div>
-        </section>
+              {/* Right (1/3) */}
+              {(rightSlides.length > 0 || isLoading) && (
+                <div className="md:col-span-1">
+                  <Carousel
+                    slides={isLoading ? [] : rightSlides}
+                    className="h-[420px] md:h-[560px]"
+                    buttonAlign="center"
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Render all theme customizations in order */}
+          {customizations.map((customization) => (
+            <ThemeRenderer key={customization.id} customization={customization} />
+          ))}
+        </>
       )}
-
-      <Offers />
-      <Categories />
-      <DealsCarousel />
     </div>
   );
 }
