@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation } from "swiper/modules";
 import "swiper/css";
@@ -41,12 +42,12 @@ const DealsCarousel = () => {
     <div className="max-w-7xl mx-auto px-4 py-10">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold">Deals</h2>
-        <a
-          href="/products?filter=discounts"
-          className="text-sky-600 text-sm font-medium"
+        <Link
+          to="/deals"
+          className="text-sky-600 text-sm font-medium hover:text-sky-700 transition-colors"
         >
           më shumë
-        </a>
+        </Link>
       </div>
 
       <Swiper

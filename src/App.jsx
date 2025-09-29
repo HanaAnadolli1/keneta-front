@@ -8,6 +8,8 @@ import Home from "./pages/Home";
 import Products from "./pages/Products";
 import ProductDetails from "./pages/ProductDetails";
 import Brands from "./pages/Brands";
+import Deals from "./pages/Deals";
+import DealDetails from "./pages/DealDetails";
 import Checkout from "./pages/Checkout";
 import Wishlist from "./components/Wishlist";
 import ComparePage from "./pages/ComparePage";
@@ -55,6 +57,8 @@ export default function App() {
         <Route path="/products" element={<Products />} />
         <Route path="/products/:url_key" element={<ProductDetails />} />
         <Route path="/brands" element={<Brands />} />
+        <Route path="/deals" element={<Deals />} />
+        <Route path="/deals/:id" element={<DealDetails />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/compare" element={<ComparePage />} />

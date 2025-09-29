@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 import { List as ListIcon, LayoutGrid as GridIcon } from "lucide-react";
+import { FaCalendarAlt } from "react-icons/fa";
 
 import FilterSidebar from "../components/FilterSidebar";
 import ProductCard from "../components/ProductCard";
@@ -463,16 +464,19 @@ export default function Products() {
   const brandParam = params.get("brand") || "";
   // Brand parameter now contains brand names (comma-separated) instead of IDs
   const brandSlugParam = params.get("brand_slug") || "";
+  const promotionIdParam = params.get("promotion_id") || "";
 
   const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
   const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
   const hasBrandFilter = Boolean(brandParam || brandSlugParam);
+  const hasPromotionFilter = Boolean(promotionIdParam);
   const isShortSearchOnly =
-    !!searchTerm && !isSearchActive && !hasCategoryFilter && !hasBrandFilter;
+    !!searchTerm && !isSearchActive && !hasCategoryFilter && !hasBrandFilter && !hasPromotionFilter;
 
   // meta
   const [brandOptions, setBrandOptions] = useState([]);
   const [metaNotice, setMetaNotice] = useState(null);
+  const [promotionData, setPromotionData] = useState(null);
 
   // list state
   const [items, setItems] = useState([]);
@@ -893,6 +897,30 @@ export default function Products() {
     setError(null);
   }, [resetKey]);
 
+  // Fetch promotion data when promotion filter is active
+  useEffect(() => {
+    const fetchPromotionData = async () => {
+      if (!promotionIdParam) {
+        setPromotionData(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://admin.keneta-ks.com/api/custom-promotions`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        const promotion = data.data?.find(p => p.id === parseInt(promotionIdParam));
+        setPromotionData(promotion || null);
+      } catch (err) {
+        console.error('Failed to fetch promotion data:', err);
+        setPromotionData(null);
+      }
+    };
+
+    fetchPromotionData();
+  }, [promotionIdParam]);
+
   /* -------- Build filter QS -------- */
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
@@ -931,6 +959,11 @@ export default function Products() {
       qs.set("category_slug", dec);
     }
 
+    // promotion filter
+    if (promotionIdParam) {
+      qs.set("promotion_id", promotionIdParam);
+    }
+
     return qs.toString();
   }, [
     sort,
@@ -941,6 +974,7 @@ export default function Products() {
     computedTrail,
     categorySlugParam,
     categoryIdParam,
+    promotionIdParam,
   ]);
 
   /* -------- Fetch one page -------- */
@@ -948,8 +982,6 @@ export default function Products() {
     async (pageToFetch, { append }) => {
       // If we have a search term, use client-side search instead of API
       if (searchTerm && searchTerm.length >= MIN_SEARCH_LEN) {
-        console.log("🔍 Using API search for:", searchTerm);
-        
         try {
           const searchResults = await searchProducts(searchTerm, {
             limit: PER_PAGE * pageToFetch // Get enough results for pagination
@@ -983,14 +1015,6 @@ export default function Products() {
           const paginatedResults = filteredResults.slice(startIndex, endIndex);
           const hasNext = endIndex < filteredResults.length;
 
-          console.log("🔍 API search results:", {
-            searchTerm,
-            totalResults: filteredResults.length,
-            pageResults: paginatedResults.length,
-            hasNext,
-            sampleResults: paginatedResults.slice(0, 3).map(item => ({ id: item.id, name: item.name }))
-          });
-
           setItems((prev) => {
             const merged = append ? [...prev, ...paginatedResults] : paginatedResults;
             const seen = new Set();
@@ -1008,7 +1032,6 @@ export default function Products() {
           setPage(pageToFetch);
           return;
         } catch (error) {
-          console.error('Search error:', error);
           setError(error);
           return;
         }
@@ -1212,7 +1235,41 @@ export default function Products() {
         <FilterSidebar />
 
         <section className="flex-1 min-w-0">
-          <CategoryNavigator activeCategoryName={activeCategoryLabel} />
+          {/* Promotion Header */}
+          {promotionData && (
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-[var(--primary)] mb-3">{promotionData.name}</h1>
+                  <div className="flex items-center text-[var(--third)]">
+                    <FaCalendarAlt className="w-4 h-4 mr-2" />
+                    <span>
+                      {new Date(promotionData.from).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })} - {new Date(promotionData.to).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+                {promotionData.logo_url && (
+                  <div className="mt-4 md:mt-0">
+                    <img
+                      src={promotionData.logo_url}
+                      alt={`${promotionData.name} logo`}
+                      className="h-12 w-auto"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!isSearchActive && <CategoryNavigator activeCategoryName={activeCategoryLabel} />}
 
           <div className="mb-4 flex items-center justify-between">
             {activeBrandLabel || activeCategoryLabel ? (
