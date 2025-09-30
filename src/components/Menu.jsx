@@ -224,7 +224,7 @@ export default function Menu() {
               }}
             >
               <MenuIcon className="mr-2" size={20} />
-              Kategoritë
+              Menu
               <ChevronDown
                 size={18}
                 className={`ml-1 transition-transform duration-200 ${

@@ -56,6 +56,49 @@ const renderRichText = (raw = "") => {
   if (!raw) return <p className="text-gray-500">No description.</p>;
   if (looksLikeHtml(raw))
     return <div dangerouslySetInnerHTML={{ __html: raw }} />;
+
+  // Check for various bullet point formats and convert to checkmarks
+  const bulletPatterns = [
+    /•/g, // Standard bullet
+    /·/g, // Middle dot
+    /▪/g, // Black small square
+    /▫/g, // White small square
+    /‣/g, // Triangular bullet
+    /⁃/g, // Hyphen bullet
+  ];
+
+  let hasBullets = false;
+  let processedText = raw;
+
+  // Replace all bullet patterns with a marker
+  bulletPatterns.forEach((pattern) => {
+    if (pattern.test(processedText)) {
+      hasBullets = true;
+      processedText = processedText.replace(pattern, "|||BULLET|||");
+    }
+  });
+
+  if (hasBullets) {
+    const features = processedText
+      .split("|||BULLET|||")
+      .filter((item) => item.trim())
+      .map((item) => item.trim());
+    if (features.length > 1) {
+      return (
+        <div className="space-y-2">
+          {features.map((feature, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-[var(--primary)] font-semibold mt-0.5">
+                ✓
+              </span>
+              <span className="text-sm text-gray-700">{feature}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+  }
+
   const bullets = renderBulletList(raw);
   if (bullets) return bullets;
   const lines = raw
@@ -652,7 +695,7 @@ export default function ProductDetails() {
           )}
 
           <div className="flex-1">
-            <div className="bg-gray-50 rounded-2xl ring-1 ring-black/5 overflow-hidden">
+            <div className="rounded-2xl ring-1 ring-black/5 overflow-hidden">
               <ImageGallery
                 ref={galleryRef}
                 items={galleryImages}
@@ -669,11 +712,159 @@ export default function ProductDetails() {
         </div>
 
         {/* RIGHT */}
-        <div className="flex flex-col gap-5">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-3xl font-semibold leading-tight text-gray-900">
-              {product.name}
-            </h1>
+        <div className="flex flex-col gap-6">
+          {/* Brand Badge */}
+          {product.brand && (
+            <div className="inline-flex">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                {product.brand}
+              </span>
+            </div>
+          )}
+
+          {/* Product Title */}
+          <h1 className="text-3xl font-bold leading-tight text-[var(--primary)]">
+            {product.name}
+          </h1>
+
+          {/* SKU and EAN */}
+          <div className="space-y-1">
+            {product.sku && (
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">SKU:</span> {product.sku}
+              </div>
+            )}
+            {product.ean && (
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">EAN:</span> {product.ean}
+              </div>
+            )}
+          </div>
+
+          {/* Features Section - Convert bullet points to checkmarks */}
+          {product.short_description && (
+            <div className="space-y-2">
+              {(() => {
+                const raw = product.short_description || "";
+                if (!raw) return null;
+
+                // Decode HTML entities and remove HTML tags
+                let processedText = raw;
+
+                // Decode common HTML entities
+                processedText = processedText
+                  .replace(/&bull;/g, "•")
+                  .replace(/&euml;/g, "ë")
+                  .replace(/&ccedil;/g, "ç")
+                  .replace(/&auml;/g, "ä")
+                  .replace(/&ouml;/g, "ö")
+                  .replace(/&uuml;/g, "ü")
+                  .replace(/&Auml;/g, "Ä")
+                  .replace(/&Ouml;/g, "Ö")
+                  .replace(/&Uuml;/g, "Ü")
+                  .replace(/&amp;/g, "&")
+                  .replace(/&lt;/g, "<")
+                  .replace(/&gt;/g, ">")
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#39;/g, "'");
+
+                // Remove HTML tags
+                processedText = processedText.replace(/<[^>]*>/g, "");
+
+                // Check if it contains bullet points
+                if (processedText.includes("•")) {
+                  const features = processedText
+                    .split("•")
+                    .filter((item) => item.trim())
+                    .map((item) => item.trim());
+                  return (
+                    <>
+                      {features.map((feature, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-[var(--secondary)] font-semibold mt-0.5">
+                            ✓
+                          </span>
+                          <span className="text-sm text-gray-700">
+                            {feature}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  );
+                }
+
+                // If no bullet points, show as regular text
+                return <p className="text-sm text-gray-700">{processedText}</p>;
+              })()}
+            </div>
+          )}
+
+          {/* Price */}
+          <div className="text-3xl font-bold text-[var(--secondary)]">
+            {unitPriceLabel}
+          </div>
+
+          {/* Availability */}
+          <div className="inline-flex">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+              In stock
+            </span>
+          </div>
+
+          {/* Quantity Selector */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                className="px-3 py-2 text-[var(--secondary)] hover:bg-gray-300 font-medium"
+                aria-label="Decrease quantity"
+              >
+                −
+              </button>
+              <div className="px-4 py-2 w-12 text-center font-medium bg-white border-x border-gray-300">
+                {qty}
+              </div>
+              <button
+                onClick={() => setQty((q) => q + 1)}
+                className="px-3 py-2 text-[var(--secondary)] hover:bg-gray-300 font-medium"
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
+            </div>
+            {/* Add to Cart Button */}
+            <button
+              onClick={handleAdd}
+              disabled={addItem.isPending}
+              className={`px-6 py-3 rounded-lg font-semibold text-white transition ${
+                addItem.isPending
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[var(--primary)] hover:bg-[var(--secondary)]"
+              }`}
+            >
+              {addItem.isPending ? "Adding…" : "Add to Cart"}
+            </button>
+          </div>
+
+          {/* Compare and Wishlist */}
+          <div className="flex items-center gap-6 text-sm text-gray-600">
+            <button
+              type="button"
+              onClick={handleCompare}
+              disabled={!canAddMoreCompare && !compared}
+              className="flex items-center gap-2 hover:text-[var(--primary)] disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                compared
+                  ? "Remove from compare"
+                  : count >= max
+                  ? `Limit ${max}`
+                  : "Add to compare"
+              }
+            >
+              <MdCompareArrows className="text-lg" />
+              <span className="font-medium">Compare</span>
+            </button>
+
             <button
               type="button"
               title={wished ? "Remove from wishlist" : "Add to wishlist"}
@@ -683,94 +874,16 @@ export default function ProductDetails() {
                   wished ? "Removed from wishlist." : "Added to wishlist."
                 );
               }}
-              className="h-10 w-10 grid place-items-center ring-1 ring-black/0"
+              className="flex items-center gap-2 hover:text-[var(--primary)]"
             >
               {wished ? (
                 <FaHeart className="text-lg text-red-500" />
               ) : (
-                <FiHeart className="text-lg text-gray-600" />
+                <FiHeart className="text-lg" />
               )}
+              <span className="font-medium">Add to wishlist</span>
             </button>
           </div>
-
-          <div className="text-2xl font-bold text-black">{unitPriceLabel}</div>
-
-          {/* Short description */}
-          <div className="text-gray-500">
-            {(() => {
-              const raw = product?.short_description || "";
-              if (!raw) return null;
-              if (looksLikeHtml(raw))
-                return <div dangerouslySetInnerHTML={{ __html: raw }} />;
-              return renderBulletList(raw) || <p>{raw}</p>;
-            })()}
-          </div>
-
-          <div className="flex items-center justify-between text-sm text-gray-700">
-            <span className="font-semibold">Total Amount</span>
-            <span className="font-semibold">{totalLabel}</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center rounded-xl ring-1 ring-gray-300 overflow-hidden">
-              <button
-                onClick={() => setQty((q) => Math.max(1, q - 1))}
-                className="px-3 py-2 text-lg hover:bg-gray-50"
-                aria-label="Decrease quantity"
-              >
-                −
-              </button>
-              <div className="px-5 py-2 w-12 text-center font-medium">
-                {qty}
-              </div>
-              <button
-                onClick={() => setQty((q) => q + 1)}
-                className="px-3 py-2 text-lg hover:bg-gray-50"
-                aria-label="Increase quantity"
-              >
-                +
-              </button>
-            </div>
-
-            <button
-              onClick={handleAdd}
-              disabled={addItem.isPending}
-              className={`h-11 px-6 rounded-xl text-sm font-semibold transition ring-1 ${
-                addItem.isPending
-                  ? "bg-gray-100 text-gray-500 ring-gray-200 cursor-not-allowed"
-                  : "bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-700"
-              }`}
-            >
-              {addItem.isPending ? "Adding…" : "Add To Cart"}
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleCompare}
-            disabled={!canAddMoreCompare && !compared}
-            className="group inline-flex items-center gap-2 text-sm text-gray-800 hover:text-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={
-              compared
-                ? "Remove from compare"
-                : count >= max
-                ? `Limit ${max}`
-                : "Add to compare"
-            }
-          >
-            <span
-              className={`h-8 w-8 rounded-full grid place-items-center ring-1 shadow-sm ${
-                compared
-                  ? "bg-emerald-50 ring-emerald-200 text-emerald-700"
-                  : "bg-white ring-black/10 text-gray-700 group-hover:text-emerald-700"
-              }`}
-            >
-              <MdCompareArrows className="text-base" />
-            </span>
-            <span className="font-medium">
-              {compared ? "Compared" : "Compare"}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -788,8 +901,8 @@ export default function ProductDetails() {
             onClick={() => setActiveTab("description")}
             className={`py-3 -mb-px text-sm font-medium transition ${
               activeTab === "description"
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
+                ? "border-b-2 border-[var(--primary)] text-[var(--primary)]"
+                : "text-gray-500 hover:text-[var(--primary)]"
             }`}
           >
             Description
@@ -801,8 +914,8 @@ export default function ProductDetails() {
             onClick={() => setActiveTab("additional")}
             className={`py-3 -mb-px text-sm font-medium transition ${
               activeTab === "additional"
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
+                ? "border-b-2 border-[var(--primary)] text-[var(--primary)]"
+                : "text-gray-500 hover:text-[var(--primary)]"
             }`}
           >
             Additional Information
@@ -814,8 +927,8 @@ export default function ProductDetails() {
             onClick={() => setActiveTab("reviews")}
             className={`py-3 -mb-px text-sm font-medium transition ${
               activeTab === "reviews"
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-500 hover:text-gray-800"
+                ? "border-b-2 border-[var(--primary)] text-[var(--primary)]"
+                : "text-gray-500 hover:text-[var(--primary)]"
             }`}
           >
             Reviews
@@ -834,35 +947,29 @@ export default function ProductDetails() {
           {activeTab === "additional" && (
             <div id="tab-panel-additional" role="tabpanel">
               {pairs.length === 0 ? (
-                <p className="text-gray-500">No additional information.</p>
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-4">📋</div>
+                  <p className="text-gray-500 text-lg">
+                    No additional information available.
+                  </p>
+                </div>
               ) : (
-                <div className="w-full">
-                  {pairs.map((row, idx) => (
-                    <div
-                      key={idx}
-                      className={`grid grid-cols-[max-content,1fr] lg:grid-cols-[max-content,1fr,max-content,1fr]
-                        gap-x-6 gap-y-2 px-4 py-3 ${
-                          idx % 2 === 0 ? "bg-gray-50" : "bg-white"
-                        }`}
-                    >
-                      {row.map((pair) => (
-                        <React.Fragment key={pair.label}>
-                          <div className="text-sm text-gray-500">
-                            {pair.label}
-                          </div>
-                          <div className="text-sm text-gray-800">
-                            {pair.value ?? "—"}
-                          </div>
-                        </React.Fragment>
-                      ))}
-                      {row.length === 1 && (
-                        <>
-                          <div className="hidden lg:block" />
-                          <div className="hidden lg:block" />
-                        </>
-                      )}
-                    </div>
-                  ))}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="grid grid-cols-2 gap-6 p-8">
+                    {pairs.flat().map((pair, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between py-3 px-4 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="text-sm font-bold text-[var(--primary)] uppercase tracking-wide flex-shrink-0">
+                          {pair.label}
+                        </div>
+                        <div className="text-sm text-gray-800 font-semibold text-right flex-shrink-0">
+                          {pair.value ?? "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -887,7 +994,7 @@ export default function ProductDetails() {
       {/* Related Products */}
       <div className="mt-14">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl lg:text-2xl font-semibold text-gray-900">
+          <h2 className="text-xl lg:text-2xl font-semibold text-[var(--primary)]">
             Related products
           </h2>
           {related?.length > 0 && (

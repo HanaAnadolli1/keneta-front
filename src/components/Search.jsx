@@ -115,21 +115,21 @@ export default function Search({ className = "" }) {
 
     switch (e.key) {
       case "ArrowDown":
-        e.preventDefault();
+      e.preventDefault();
         setActive((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
         break;
       case "ArrowUp":
-        e.preventDefault();
+      e.preventDefault();
         setActive((prev) => (prev > 0 ? prev - 1 : -1));
         break;
       case "Enter":
-        e.preventDefault();
+      e.preventDefault();
         submitSearch();
         break;
       case "Escape":
-        setShow(false);
-        setActive(-1);
-        inputRef.current?.blur();
+      setShow(false);
+      setActive(-1);
+      inputRef.current?.blur();
         break;
     }
   };
@@ -209,8 +209,8 @@ export default function Search({ className = "" }) {
                     setShow(false);
                     setActive(-1);
                   }}
-                >
-                  <img
+                  >
+                    <img
                     src={getThumb(product)}
                     alt={product.name}
                     className="w-12 h-12 object-cover rounded mr-3 flex-shrink-0"
@@ -259,9 +259,9 @@ export default function Search({ className = "" }) {
               >
                 Search anyway
               </button>
-            </div>
-          ) : null}
-        </div>
+                      </div>
+                      ) : null}
+                    </div>
       )}
     </div>
   );

@@ -1,14 +1,24 @@
 /* Full image control */
+.custom-gallery {
+  height: 450px; /* Fixed container height */
+}
+
 .custom-gallery .image-gallery-slide {
   display: flex;
   justify-content: center;
   align-items: center;
+  height: 450px; /* Fixed height for consistency */
 }
 
 .custom-gallery .image-gallery-image {
   max-height: 100%;
   max-width: 100%;
   object-fit: contain;
+  height: 450px; /* Ensure consistent height */
+}
+
+.custom-gallery .image-gallery-content {
+  height: 450px; /* Ensure content area has consistent height */
 }
 
 /* Style the dots */

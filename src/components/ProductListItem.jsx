@@ -40,7 +40,7 @@ function ProductListItem({
         <Link
           to={`/products/${product?.url_key}`}
           onMouseEnter={() => prefetch && prefetch(idNum)}
-          className="relative shrink-0 bg-gray-50 w-[260px] max-w-[45%] flex items-center justify-center"
+          className="relative shrink-0 w-[260px] max-w-[45%] flex items-center justify-center"
         >
           {saleActive && pct ? (
             <span className="absolute left-3 top-3 z-10 inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white shadow">
@@ -94,7 +94,7 @@ function ProductListItem({
                 {isWishlisted ? (
                   <FaHeart className="text-xl text-red-500" />
                 ) : (
-                  <FiHeart className="text-xl text-gray-500 group-hover:text-red-500" />
+                  <FiHeart className="text-xl text-gray-500 hover:text-red-500" />
                 )}
               </button>
 

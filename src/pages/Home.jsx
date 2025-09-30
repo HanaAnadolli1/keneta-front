@@ -88,9 +88,9 @@ export default function Home() {
                     className="h-[420px] md:h-[560px]"
                     buttonAlign="center"
                   />
-                </div>
+          </div>
               )}
-            </div>
+        </div>
           </section>
 
           {/* Render all theme customizations in order */}
