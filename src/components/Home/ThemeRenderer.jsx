@@ -3,6 +3,7 @@ import TopCollections from "./TopCollections";
 import BoldCollections from "./BoldCollections";
 import GameContainer from "./GameContainer";
 import ProductCarousel from "./ProductCarousel";
+import CategoryCarousel from "./CategoryCarousel";
 import FooterLinks from "./FooterLinks";
 import ServicesContent from "./ServicesContent";
 import { fixThemeImageUrls, fixThemeCss, initializeLazyLoading } from "../../utils/imageUrlFixer";
@@ -45,6 +46,9 @@ const ThemeRenderer = ({ customization }) => {
     case "product_carousel":
       return <ProductCarousel customization={customization} />;
 
+    case "category_carousel":
+      return <CategoryCarousel customization={customization} />;
+
     case "footer_links":
       return <FooterLinks customization={customization} />;
 
@@ -52,8 +56,7 @@ const ThemeRenderer = ({ customization }) => {
       return <ServicesContent customization={customization} />;
 
     case "image_carousel":
-    case "category_carousel":
-      // These are handled by existing components
+      // Handle image carousel (existing component)
       return null;
 
     default:

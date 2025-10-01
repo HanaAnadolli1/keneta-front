@@ -1,7 +1,7 @@
 // src/components/Footer.jsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo_footer.svg";
 
 export default function Footer() {
   const year = new Date().getFullYear();

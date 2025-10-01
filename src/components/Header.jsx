@@ -8,7 +8,7 @@ import { useCompare } from "../context/CompareContext";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import BottomNav from "./BottomNav";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo.svg";
 import Search from "./Search";
 
 export default function Header() {
@@ -46,7 +46,7 @@ export default function Header() {
   return (
     <>
       {/* Sticky header */}
-      <header className="sticky top-0 z-50 flex flex-col w-full bg-white border-b border-gray-100">
+      <header className="sticky top-0 z-50 flex flex-col w-full bg-white">
         {/* Top Bar */}
         <div className="bg-[var(--primary)] text-white text-xs md:text-sm flex justify-center">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-2 gap-2">
@@ -79,7 +79,10 @@ export default function Header() {
             <div className="hidden md:flex items-center gap-4 md:gap-6">
               {/* Compare with badge */}
               <div className="relative group">
-                <Link to="/compare" className="relative text-[var(--secondary)] text-2xl">
+                <Link
+                  to="/compare"
+                  className="relative text-[var(--secondary)] text-2xl"
+                >
                   <MdCompareArrows />
                   {compareCount > 0 && (
                     <span className="absolute -top-1 -right-2 bg-[var(--primary)] text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-semibold">
@@ -96,7 +99,10 @@ export default function Header() {
 
               {/* Wishlist with badge */}
               <div className="relative group">
-                <Link to="/wishlist" className="relative text-[var(--secondary)] text-2xl">
+                <Link
+                  to="/wishlist"
+                  className="relative text-[var(--secondary)] text-2xl"
+                >
                   <FiHeart />
                   {wishlistCount > 0 && (
                     <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-semibold">
@@ -117,7 +123,9 @@ export default function Header() {
                   onClick={() => setIsDropdownOpen((o) => !o)}
                   className="flex items-center text-[var(--secondary)] text-sm md:text-lg font-medium focus:outline-none"
                 >
-                  {currentUser?.first_name || currentUser?.name || "Llogaria ime"}
+                  {currentUser?.first_name ||
+                    currentUser?.name ||
+                    "Llogaria ime"}
                   <FiChevronDown className="ml-1" />
                 </button>
                 {isDropdownOpen && currentUser && (

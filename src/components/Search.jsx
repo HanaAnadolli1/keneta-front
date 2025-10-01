@@ -1,5 +1,11 @@
 // src/components/Search.jsx
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+} from "react";
 import { FiSearch } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { useProductSearch } from "../hooks/useProductSearch";
@@ -18,12 +24,15 @@ function getThumb(p) {
     p?.images?.[0]?.medium_image_url,
     p?.images?.[0]?.original_image_url,
   ].filter(Boolean);
-  return cands[0] || `data:image/svg+xml;base64,${btoa(`
+  return (
+    cands[0] ||
+    `data:image/svg+xml;base64,${btoa(`
       <svg width='40' height='40' xmlns='http://www.w3.org/2000/svg'>
         <rect width='40' height='40' fill='#f3f4f6'/>
         <text x='20' y='25' text-anchor='middle' font-family='Arial' 
               font-size='10' fill='#9ca3af'>no image</text>
-      </svg>`)}`;
+      </svg>`)}`
+  );
 }
 
 function priceLabel(p) {
@@ -73,13 +82,21 @@ export default function Search({ className = "" }) {
 
     debounceRef.current = setTimeout(async () => {
       try {
-        const results = await searchProducts(trimmed, {
-          limit: LIMIT
+        const { products, redirect_url } = await searchProducts(trimmed, {
+          limit: LIMIT,
+          page: 1,
         });
 
-        setSuggestions(results);
+        if (redirect_url) {
+          navigate(redirect_url);
+          setShow(false);
+          setActive(-1);
+          return;
+        }
+
+        setSuggestions(products || []);
         setActive(-1);
-      } catch (error) {
+      } catch {
         setSuggestions([]);
         setActive(-1);
       }
@@ -88,7 +105,7 @@ export default function Search({ className = "" }) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [trimmed, searchProducts]);
+  }, [trimmed, searchProducts, navigate]);
 
   // Navigate to product or search results
   const submitSearch = useCallback(() => {
@@ -96,17 +113,18 @@ export default function Search({ className = "" }) {
 
     if (active >= 0 && suggestions[active]) {
       const product = suggestions[active];
-      const slug = product.slug || `${product.name?.toLowerCase().replace(/\s+/g, '-')}-${product.id}`;
+      const slug =
+        product.slug ||
+        `${product.name?.toLowerCase().replace(/\s+/g, "-")}-${product.id}`;
       navigate(`/products/${slug}`);
     } else {
       navigate(`/products?query=${encodeURIComponent(trimmed)}`);
     }
-    
+
     setShow(false);
     setActive(-1);
   }, [trimmed, active, suggestions, navigate]);
 
-  // Keyboard navigation
   const onKeyDown = (e) => {
     if (!show || suggestions.length === 0) {
       if (e.key === "Enter") submitSearch();
@@ -115,21 +133,23 @@ export default function Search({ className = "" }) {
 
     switch (e.key) {
       case "ArrowDown":
-      e.preventDefault();
+        e.preventDefault();
         setActive((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
         break;
       case "ArrowUp":
-      e.preventDefault();
+        e.preventDefault();
         setActive((prev) => (prev > 0 ? prev - 1 : -1));
         break;
       case "Enter":
-      e.preventDefault();
+        e.preventDefault();
         submitSearch();
         break;
       case "Escape":
-      setShow(false);
-      setActive(-1);
-      inputRef.current?.blur();
+        setShow(false);
+        setActive(-1);
+        inputRef.current?.blur();
+        break;
+      default:
         break;
     }
   };
@@ -202,15 +222,23 @@ export default function Search({ className = "" }) {
                   key={product.id}
                   id={`sugg-${product.id}`}
                   className={`flex items-center p-3 cursor-pointer border-b border-gray-100 last:border-b-0
-                    ${active === index ? 'bg-[var(--primary)]/10' : 'hover:bg-gray-50'}`}
+                    ${
+                      active === index
+                        ? "bg-[var(--primary)]/10"
+                        : "hover:bg-gray-50"
+                    }`}
                   onClick={() => {
-                    const slug = product.slug || `${product.name?.toLowerCase().replace(/\s+/g, '-')}-${product.id}`;
+                    const slug =
+                      product.slug ||
+                      `${product.name?.toLowerCase().replace(/\s+/g, "-")}-${
+                        product.id
+                      }`;
                     navigate(`/products/${slug}`);
                     setShow(false);
                     setActive(-1);
                   }}
-                  >
-                    <img
+                >
+                  <img
                     src={getThumb(product)}
                     alt={product.name}
                     className="w-12 h-12 object-cover rounded mr-3 flex-shrink-0"
@@ -233,7 +261,7 @@ export default function Search({ className = "" }) {
                   </div>
                 </div>
               ))}
-              
+
               <div className="p-3 border-t border-gray-100">
                 <button
                   onClick={() => {
@@ -259,9 +287,9 @@ export default function Search({ className = "" }) {
               >
                 Search anyway
               </button>
-                      </div>
-                      ) : null}
-                    </div>
+            </div>
+          ) : null}
+        </div>
       )}
     </div>
   );

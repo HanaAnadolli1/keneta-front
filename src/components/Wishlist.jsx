@@ -14,7 +14,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { AuthContext } from "../context/AuthContext";
 import useSaleFlag from "../hooks/useSaleFlag";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo.svg";
 
 const GUEST_KEY = "guest_wishlist";
 

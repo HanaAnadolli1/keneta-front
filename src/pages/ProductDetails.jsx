@@ -23,6 +23,7 @@ import { useToast } from "../context/ToastContext";
 import ProductReviews from "../components/ProductReviews";
 import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { useProductBreadcrumbs } from "../hooks/useBreadcrumbs";
 
 const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
 
@@ -126,112 +127,6 @@ const normalizeSlug = (s = "") =>
     .replace(/[^a-z0-9-_/]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-const makeSlugCandidates = (s = "") => {
-  const raw = String(s || "");
-  const dec = decodeURIComponent(raw);
-  const enc = encodeURIComponent(dec);
-  const n1 = normalizeSlug(raw);
-  const n2 = normalizeSlug(dec);
-  return new Set([raw, dec, enc, raw.toLowerCase(), dec.toLowerCase(), n1, n2]);
-};
-
-const normCat = (c) => {
-  if (!c) return null;
-  return {
-    id: Number(c.id ?? c.category_id ?? c?.pivot?.category_id ?? 0) || 0,
-    parent_id:
-      c.parent_id != null
-        ? Number(c.parent_id)
-        : c.parent?.id != null
-        ? Number(c.parent.id)
-        : null,
-    slug: normalizeSlug(c.slug ?? c.code ?? c.value ?? c.name ?? ""),
-    name: String(c.name ?? c.label ?? c.title ?? c.slug ?? "Category"),
-    level:
-      c.level != null
-        ? Number(c.level)
-        : c.depth != null
-        ? Number(c.depth)
-        : undefined,
-    translations: Array.isArray(c.translations) ? c.translations : [],
-    status: String(c.status ?? "1"),
-  };
-};
-
-const mapById = (categories) => {
-  const m = new Map();
-  (categories || []).forEach((c) => {
-    const n = normCat(c);
-    if (n?.id) m.set(n.id, n);
-  });
-  return m;
-};
-
-const buildTrailFromFlatList = (target, flatMap) => {
-  const trail = [];
-  let cur = target ? normCat(target) : null;
-  let guard = 0;
-  while (cur && guard < 20) {
-    trail.push(cur);
-    const pid = cur.parent_id;
-    if (!pid || pid === 0 || !flatMap.has(pid)) break;
-    cur = flatMap.get(pid);
-    guard++;
-  }
-  return trail.reverse();
-};
-
-// DFS across /descendant-categories; matches by id or robust slug; try multiple roots
-const createTrailFinder = (getChildren, rootIds = [1]) => {
-  return async (target) => {
-    if (!target) return [];
-    const wantId = Number(target.id || 0) || null;
-    const wantCandidates = new Set([
-      ...makeSlugCandidates(target.slug),
-      ...(target.translations || [])
-        .map((t) => t?.slug)
-        .filter(Boolean)
-        .flatMap((s) => [...makeSlugCandidates(s)]),
-    ]);
-
-    const MAX_DEPTH = 10;
-
-    for (const rootId of rootIds) {
-      const stack = [{ parentId: rootId, path: [] }];
-
-      while (stack.length) {
-        const { parentId, path } = stack.pop();
-        const children = await getChildren(parentId);
-        for (const raw of children) {
-          const child = normCat(raw);
-          const nextPath = [...path, child];
-
-          const childCandidates = new Set([
-            ...makeSlugCandidates(child.slug),
-            ...(child.translations || [])
-              .map((t) => t?.slug)
-              .filter(Boolean)
-              .flatMap((s) => [...makeSlugCandidates(s)]),
-          ]);
-
-          const slugMatches =
-            wantCandidates.size > 0 &&
-            [...childCandidates].some((c) => wantCandidates.has(c));
-
-          if ((wantId && child.id === wantId) || slugMatches) {
-            return nextPath;
-          }
-
-          if (nextPath.length < MAX_DEPTH) {
-            stack.push({ parentId: child.id, path: nextPath });
-          }
-        }
-      }
-    }
-
-    return [];
-  };
-};
 
 /* ---------------- component ---------------- */
 export default function ProductDetails() {
@@ -258,12 +153,8 @@ export default function ProductDetails() {
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState(null);
 
-  // breadcrumbs
-  const [categoryTrail, setCategoryTrail] = useState([]);
-  const [allCategories, setAllCategories] = useState([]);
-  const childrenCacheRef = useRef(new Map()); // parentId -> children[]
-
-  const breadcrumbsBase = [{ label: "Home", path: "/" }];
+  // breadcrumbs - using API
+  const { breadcrumbs: apiBreadcrumbs, loading: breadcrumbsLoading, error: breadcrumbsError } = useProductBreadcrumbs(url_key);
 
   const accessToken =
     localStorage.getItem("access_token") ||
@@ -301,24 +192,6 @@ export default function ProductDetails() {
     };
   }, [url_key]);
 
-  /* --------- all categories list (id↔slug/name map) --------- */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `${API_V1}/categories?sort=id&order=asc&limit=10000`
-        );
-        const j = await res.json();
-        if (!cancelled) setAllCategories(Array.isArray(j?.data) ? j.data : []);
-      } catch {
-        if (!cancelled) setAllCategories([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   /* --------- related --------- */
   useEffect(() => {
@@ -347,191 +220,6 @@ export default function ProductDetails() {
     };
   }, [product?.id]);
 
-  /* --------- breadcrumbs: menu-style traversal --------- */
-  const getChildren = useCallback(async (parentId) => {
-    const key = String(parentId);
-    if (childrenCacheRef.current.has(key)) {
-      return childrenCacheRef.current.get(key);
-    }
-    const res = await fetch(
-      `${API_PUBLIC_V1}/descendant-categories?parent_id=${encodeURIComponent(
-        parentId
-      )}`
-    );
-    if (!res.ok) throw new Error(`cats ${res.status}`);
-    const j = await res.json();
-    const rows = (j?.data || []).filter((c) => String(c.status ?? "1") === "1");
-    childrenCacheRef.current.set(key, rows);
-    return rows;
-  }, []);
-
-  // Infer roots from local list; add 1 as a safe fallback
-  const rootIds = useMemo(() => {
-    const roots = (allCategories || [])
-      .map(normCat)
-      .filter((c) => c && (!c.parent_id || c.parent_id === 0))
-      .map((c) => c.id);
-    return Array.from(new Set([...(roots || []), 1]));
-  }, [allCategories]);
-
-  const findTrailRemote = useMemo(
-    () => createTrailFinder(getChildren, rootIds),
-    [getChildren, rootIds]
-  );
-
-  const byId = useMemo(() => mapById(allCategories), [allCategories]);
-
-  const pickPrimaryCategory = (cats) => {
-    if (!Array.isArray(cats) || cats.length === 0) return null;
-    const withLevel = cats.filter((c) => c.level != null);
-    if (withLevel.length) {
-      return withLevel
-        .slice()
-        .sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
-    }
-    return cats[cats.length - 1];
-  };
-
-  // Build the category trail (with robust fallbacks)
-  useEffect(() => {
-    if (!product) return;
-
-    (async () => {
-      // 0) Instant UI using persisted trail from Products page (authoritative until replaced)
-      try {
-        const cachedTrail = JSON.parse(
-          sessionStorage.getItem("recent.trail.json") || "null"
-        );
-        if (Array.isArray(cachedTrail) && cachedTrail.length) {
-          const items = cachedTrail.map((n, i) =>
-            i === cachedTrail.length - 1
-              ? { label: n.name || n.slug || "Category" }
-              : {
-                  label: n.name || n.slug || "Category",
-                  path: `/products?category=${encodeURIComponent(
-                    n.slug || ""
-                  )}`,
-                }
-          );
-          setCategoryTrail(items);
-        }
-      } catch {}
-
-      // Build/verify with data
-      let productCats = [];
-
-      // A) from payload
-      if (Array.isArray(product?.categories) && product.categories.length) {
-        productCats = product.categories
-          .map(normCat)
-          .filter((n) => n?.id || n?.slug);
-      } else if (Array.isArray(product?.category_ids)) {
-        productCats = product.category_ids
-          .map((id) => byId.get(Number(id)))
-          .filter(Boolean);
-      } else if (product?.category_id) {
-        const c = byId.get(Number(product.category_id));
-        if (c) productCats = [c];
-      } else if (product?.category && typeof product.category === "object") {
-        const n = normCat(product.category);
-        if (n?.id || n?.slug) productCats = [n];
-      }
-
-      // B) richer endpoints
-      if (!productCats.length) {
-        try {
-          const r1 = await fetch(`${API_V1}/products/${product.id}`);
-          if (r1.ok) {
-            const j1 = await r1.json();
-            const p1 = j1?.data || j1;
-            if (Array.isArray(p1?.categories)) {
-              productCats = p1.categories
-                .map(normCat)
-                .filter((n) => n?.id || n?.slug);
-            }
-            if (!productCats.length && Array.isArray(p1?.category_ids)) {
-              productCats = p1.category_ids
-                .map((id) => byId.get(Number(id)))
-                .filter(Boolean);
-            }
-          }
-        } catch {}
-      }
-      if (!productCats.length) {
-        try {
-          const r2 = await fetch(`${API_V1}/products/${product.id}/categories`);
-          if (r2.ok) {
-            const j2 = await r2.json();
-            const rows = Array.isArray(j2?.data) ? j2.data : [];
-            productCats = rows.map(normCat).filter((n) => n?.id || n?.slug);
-          }
-        } catch {}
-      }
-
-      // C) hints
-      if (!productCats.length && Array.isArray(product?.breadcrumbs)) {
-        const last = product.breadcrumbs.slice().pop();
-        const n = normCat(last);
-        if (n?.id || n?.slug) productCats = [n];
-      }
-      if (!productCats.length && Array.isArray(product?.category_tree)) {
-        const last = product.category_tree.slice().pop();
-        const n = normCat(last);
-        if (n?.id || n?.slug) productCats = [n];
-      }
-
-      // D) URL / persisted single slug
-      if (!productCats.length) {
-        const params = new URLSearchParams(location.search);
-        const urlCategory =
-          params.get("category") || params.get("category_slug");
-        const hinted =
-          urlCategory || sessionStorage.getItem("recent.category.slug");
-        if (hinted) {
-          const target = normalizeSlug(hinted);
-          const found =
-            [...byId.values()].find(
-              (x) =>
-                normalizeSlug(x.slug) === target ||
-                (Array.isArray(x.translations) &&
-                  x.translations.some((t) => normalizeSlug(t?.slug) === target))
-            ) || null;
-          if (found) productCats = [found];
-        }
-      }
-
-      const primary = productCats.length
-        ? pickPrimaryCategory(productCats)
-        : null;
-      if (!primary) return;
-
-      // LOCAL + REMOTE, prefer longer
-      const localTrail = byId.size ? buildTrailFromFlatList(primary, byId) : [];
-      let remoteTrail = [];
-      try {
-        remoteTrail = await findTrailRemote(primary);
-      } catch {}
-
-      const best =
-        remoteTrail.length > localTrail.length ? remoteTrail : localTrail;
-
-      if (best.length) {
-        setCategoryTrail(
-          best.map((n, i) =>
-            i === best.length - 1
-              ? { label: n.name }
-              : {
-                  label: n.name,
-                  path: `/products?category=${encodeURIComponent(n.slug)}`,
-                }
-          )
-        );
-      } else if (categoryTrail.length === 0) {
-        setCategoryTrail([{ label: primary.name || primary.slug }]);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product, allCategories, byId, location.search]);
 
   /* --------- auto-open reviews tab --------- */
   useEffect(() => {
@@ -573,16 +261,38 @@ export default function ProductDetails() {
   const pairs = chunkPairs(extraRows, 2);
 
   /* --------- loading/error gates --------- */
-  const pageCrumbs = [
-    ...breadcrumbsBase,
-    ...categoryTrail,
-    { label: product?.name || "Product" },
-  ];
+  // Use API breadcrumbs if available, fallback to smart breadcrumbs from product data
+  const pageCrumbs = useMemo(() => {
+    if (apiBreadcrumbs.length > 0) {
+      // Add Home at the beginning and product name at the end
+      return [
+        { label: "Home", path: "/" },
+        ...apiBreadcrumbs,
+        { label: product?.name || "Product" }
+      ];
+    }
+    
+    // Fallback: build breadcrumbs from product data
+    const base = [{ label: "Home", path: "/" }];
+    
+    // Try to get category info from product
+    if (product?.categories && Array.isArray(product.categories) && product.categories.length > 0) {
+      const category = product.categories[0]; // Use first category
+      const categoryBreadcrumb = {
+        label: category.name || category.label || "Category",
+        path: `/products?category=${encodeURIComponent(category.slug || category.name || "")}`
+      };
+      return [...base, categoryBreadcrumb, { label: product?.name || "Product" }];
+    }
+    
+    // Fallback: simple breadcrumbs
+    return [...base, { label: "Products", path: "/products" }, { label: product?.name || "Product" }];
+  }, [apiBreadcrumbs, product]);
 
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-10">
-        <Breadcrumbs items={[...breadcrumbsBase, { label: "Product" }]} />
+        <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Product" }]} />
         <div className="text-red-600">{error}</div>
       </div>
     );
@@ -590,7 +300,7 @@ export default function ProductDetails() {
   if (!product) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-10">
-        <Breadcrumbs items={[...breadcrumbsBase, { label: "Product" }]} />
+        <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Product" }]} />
         Loading…
       </div>
     );

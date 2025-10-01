@@ -1,167 +1,118 @@
 // src/hooks/useProductSearch.js
-import { useState, useCallback, useRef } from 'react';
-import { API_V1 } from '../api/config';
+import { useCallback, useRef, useState } from "react";
 
-// Cache for search results
-const searchCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Hardcode the API host as requested.
+// (You can still override via VITE_API_BASE_URL if you want later.)
+const API_BASE = (
+  import.meta?.env?.VITE_API_BASE_URL || "https://admin.keneta-ks.com"
+)
+  .trim()
+  .replace(/\/+$/, "");
+
+function normalizeProduct(p) {
+  return {
+    id: p.id ?? p.product_id ?? p.sku ?? Math.random().toString(36).slice(2),
+    name: p.name ?? p.product_name ?? "",
+    slug: p.slug ?? p.url_key ?? null,
+    sku: p.sku ?? null,
+    base_image: p.base_image ?? {
+      small_image_url: p?.images?.[0]?.small_image_url,
+      medium_image_url: p?.images?.[0]?.medium_image_url,
+      original_image_url: p?.images?.[0]?.original_image_url,
+    },
+    thumbnail_url: p.thumbnail_url,
+    image_url: p.image_url,
+    images: Array.isArray(p.images) ? p.images : [],
+    formatted_final_price: p.formatted_final_price,
+    formatted_price: p.formatted_price,
+    final_price: p.final_price,
+    price: p.price,
+    brand_id: p.brand_id ?? p?.attributes?.brand_id,
+    category_id:
+      p.category_id ??
+      (Array.isArray(p.categories) && p.categories[0]?.id) ??
+      (Array.isArray(p.category_ids) && p.category_ids[0]) ??
+      null,
+    in_stock: p.in_stock,
+    created_at: p.created_at,
+  };
+}
 
 export function useProductSearch() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const abortControllerRef = useRef(null);
+  const controllerRef = useRef(null);
 
-  // Search function that uses the API directly
-  const searchProducts = useCallback(async (query, options = {}) => {
-    if (!query || query.trim().length < 2) return [];
+  /** GET https://admin.keneta-ks.com/api/v2/search?q=&per_page=&page= */
+  const searchProducts = useCallback(async (q, opts = {}) => {
+    const { limit = 12, page = 1, extraParams = {} } = opts;
 
-    const {
-      limit = 10
-    } = options;
+    if (controllerRef.current) controllerRef.current.abort();
+    const ctrl = new AbortController();
+    controllerRef.current = ctrl;
 
-    const searchTerm = query.trim();
-    const cacheKey = `${searchTerm}-${limit}`;
-    
-    // Check cache first
-    const cached = searchCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      return cached.results;
+    const params = new URLSearchParams({
+      q: q ?? "",
+      per_page: String(limit),
+      page: String(page),
+    });
+    for (const [k, v] of Object.entries(extraParams)) {
+      if (v != null && v !== "") params.set(k, String(v));
     }
-
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
 
     setLoading(true);
-    setError(null);
-
     try {
-      // Try different search parameters in order until we get results
-      const searchParams = [
-        `query=${encodeURIComponent(searchTerm)}`,
-        `search=${encodeURIComponent(searchTerm)}`,
-        `q=${encodeURIComponent(searchTerm)}`,
-        `name=${encodeURIComponent(searchTerm)}`
-      ];
-      
-      let response = null;
-      let data = null;
-      let relevantResults = [];
-      
-      // Try each parameter until we get relevant results
-      for (const param of searchParams) {
-        const url = `${API_V1}/products?${param}&per_page=${limit}&page=1`;
-        
-        response = await fetch(url, { signal });
-        
-        if (!response.ok) {
-          console.log(`❌ Parameter ${param} failed with status ${response.status}`);
-          continue;
-        }
-        
-        data = await response.json();
-        const items = data?.data?.items || data?.items || (Array.isArray(data?.data) ? data.data : []) || data?.products || [];
-        
-        console.log(`🔍 Parameter ${param} returned ${items.length} total products`);
-        
-        // Filter relevant results
-        relevantResults = items.filter(item => {
-          const name = (item.name || '').toLowerCase();
-          const sku = (item.sku || '').toLowerCase();
-          const searchLower = searchTerm.toLowerCase();
-          return name.includes(searchLower) || sku.includes(searchLower);
-        });
-        
-        console.log(`🔍 Parameter ${param} has ${relevantResults.length} relevant results`);
-        
-        // If we found relevant results, use this parameter
-        if (relevantResults.length > 0) {
-          console.log(`✅ Using parameter ${param} for "${searchTerm}"`);
-          break;
-        }
+      const url = `${API_BASE}/api/v2/search?${params.toString()}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: ctrl.signal,
+        credentials: "omit",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      if (json?.meta?.redirect_url) {
+        return {
+          redirect_url: json.meta.redirect_url,
+          products: [],
+          meta: json.meta,
+          total: 0,
+          last_page: 1,
+          current_page: 1,
+          hasNext: false,
+        };
       }
-      
-      if (!response || !response.ok) {
-        throw new Error(`All search parameters failed`);
-      }
-      
-      // Return only relevant results, sorted by relevance
-      if (relevantResults.length > 0) {
-        // Sort by relevance: exact matches first, then name matches, then SKU matches
-        const sortedResults = relevantResults.sort((a, b) => {
-          const aName = (a.name || '').toLowerCase();
-          const bName = (b.name || '').toLowerCase();
-          const aSku = (a.sku || '').toLowerCase();
-          const bSku = (b.sku || '').toLowerCase();
-          const searchLower = searchTerm.toLowerCase();
-          
-          // Exact name match gets highest priority
-          const aExactName = aName === searchLower;
-          const bExactName = bName === searchLower;
-          if (aExactName && !bExactName) return -1;
-          if (!aExactName && bExactName) return 1;
-          
-          // Name starts with search term
-          const aNameStarts = aName.startsWith(searchLower);
-          const bNameStarts = bName.startsWith(searchLower);
-          if (aNameStarts && !bNameStarts) return -1;
-          if (!aNameStarts && bNameStarts) return 1;
-          
-          // SKU exact match
-          const aExactSku = aSku === searchLower;
-          const bExactSku = bSku === searchLower;
-          if (aExactSku && !bExactSku) return -1;
-          if (!aExactSku && bExactSku) return 1;
-          
-          // Name contains search term
-          const aNameContains = aName.includes(searchLower);
-          const bNameContains = bName.includes(searchLower);
-          if (aNameContains && !bNameContains) return -1;
-          if (!aNameContains && bNameContains) return 1;
-          
-          // SKU contains search term
-          const aSkuContains = aSku.includes(searchLower);
-          const bSkuContains = bSku.includes(searchLower);
-          if (aSkuContains && !bSkuContains) return -1;
-          if (!aSkuContains && bSkuContains) return 1;
-          
-          return 0;
-        });
-        
-        // Cache the results
-        searchCache.set(cacheKey, {
-          results: sortedResults,
-          timestamp: Date.now()
-        });
-        
-        // Clean old cache entries (keep only last 100)
-        if (searchCache.size > 100) {
-          const oldestKey = searchCache.keys().next().value;
-          searchCache.delete(oldestKey);
-        }
-        
-        return sortedResults;
-      } else {
-        return [];
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setError(err);
-      }
-      return [];
+
+      const dataArray = Array.isArray(json?.data) ? json.data : [];
+      const products = dataArray.map(normalizeProduct);
+
+      const total =
+        json?.meta?.total ??
+        (typeof dataArray.length === "number" ? dataArray.length : 0);
+
+      const last_page =
+        json?.meta?.last_page ?? json?.pagination?.last_page ?? undefined;
+
+      const current_page =
+        json?.meta?.current_page ?? json?.pagination?.current_page ?? page;
+
+      const hasNext =
+        typeof last_page === "number"
+          ? current_page < last_page
+          : Boolean(json?.next_page_url);
+
+      return {
+        products,
+        meta: json?.meta || {},
+        total,
+        last_page: last_page ?? (hasNext ? current_page + 1 : current_page),
+        current_page,
+        hasNext,
+      };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  return {
-    loading,
-    error,
-    searchProducts
-  };
+  return { searchProducts, loading };
 }
