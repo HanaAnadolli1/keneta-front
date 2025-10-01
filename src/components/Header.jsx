@@ -46,7 +46,7 @@ export default function Header() {
   return (
     <>
       {/* Sticky header */}
-      <header className="sticky top-0 z-50 flex flex-col w-full bg-white border-b border-gray-100">
+      <header className="sticky top-0 z-50 flex flex-col w-full bg-white">
         {/* Top Bar */}
         <div className="bg-[var(--primary)] text-white text-xs md:text-sm flex justify-center">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-2 gap-2">

@@ -201,8 +201,8 @@ export default function Menu() {
 
   return (
     // 👇 No white strip on mobile: styles only apply from md: and up
-    <nav className="md:bg-white md:py-4 md:shadow" ref={wrapRef}>
-      <div className="hidden md:flex items-center justify-between max-w-7xl mx-auto px-4">
+    <nav className="md:bg-white md:py-4" ref={wrapRef}>
+      <div className="hidden md:flex items-center justify-between max-w-7xl mx-auto py-2 px-4">
         {/* Desktop Menu */}
         <div className="flex items-center space-x-8">
           {/* Dropdown Root */}
@@ -224,7 +224,7 @@ export default function Menu() {
               }}
             >
               <MenuIcon className="mr-2" size={20} />
-              Menu
+              Kategoritë
               <ChevronDown
                 size={18}
                 className={`ml-1 transition-transform duration-200 ${
