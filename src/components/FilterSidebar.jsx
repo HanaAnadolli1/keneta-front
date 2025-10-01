@@ -27,6 +27,43 @@ async function fetchAllAttributes() {
 }
 
 /* ---------------------------------------------
+   Fetch category-specific filter options
+---------------------------------------------- */
+async function fetchCategoryFilterOptions(categorySlug) {
+  if (!categorySlug) {
+    throw new Error("Category slug is required");
+  }
+
+  try {
+    const res = await fetch(`${API_V1}/filters?category=${encodeURIComponent(categorySlug)}`);
+    if (!res.ok) throw new Error(`Failed to load category filters: ${res.status} ${res.statusText}`);
+    const json = await res.json();
+
+    // The category filters API should return available filter options for this category
+    const responseData = json?.data;
+    if (!responseData) {
+      return null;
+    }
+
+    // Check if it's an array of filter options
+    if (Array.isArray(responseData)) {
+      return responseData;
+    }
+
+    // Check if it has filter options in a nested structure
+    if (responseData.filters || responseData.attributes) {
+      const filters = responseData.filters || responseData.attributes;
+      return filters;
+    }
+
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+
+/* ---------------------------------------------
    De-duplicate options by label
    (case/diacritics/spacing-insensitive)
 ---------------------------------------------- */
@@ -54,23 +91,58 @@ function dedupeOptionsByLabel(options = []) {
    Query hook: only filterable attributes w/ options
    and de-duplicated options
 ---------------------------------------------- */
-function useFilterAttributes() {
+function useFilterAttributes(categorySlug = null) {
   return useQuery({
-    queryKey: ["filterAttributes"],
+    queryKey: ["filterAttributes", categorySlug],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
+      // First, get all available attributes to know the structure
       const all = await fetchAllAttributes();
-      return all
-        .filter(
-          (a) =>
-            a?.is_filterable &&
-            Array.isArray(a?.options) &&
-            a.options.length > 0
-        )
-        .map((a) => ({
-          ...a,
-          options: dedupeOptionsByLabel(a.options),
-        }));
+      
+      const filterable = all.filter(
+        (a) =>
+          a?.is_filterable &&
+          Array.isArray(a?.options) &&
+          a.options.length > 0
+      );
+      
+      let processed = filterable.map((a) => ({
+        ...a,
+        options: dedupeOptionsByLabel(a.options),
+      }));
+      
+      // If we have a category, try to get category-specific filter options
+      if (categorySlug) {
+        const categoryOptions = await fetchCategoryFilterOptions(categorySlug);
+        
+        if (categoryOptions && Array.isArray(categoryOptions)) {
+          // Filter the processed attributes to only include options that exist in the category
+          processed = processed.map(attr => {
+            const categoryAttrOptions = categoryOptions.find(catOpt => 
+              catOpt.code === attr.code || catOpt.attribute_code === attr.code
+            );
+            
+            if (categoryAttrOptions && categoryAttrOptions.options) {
+              // Filter the attribute options to only include those available in this category
+              const availableOptionIds = new Set(categoryAttrOptions.options.map(opt => String(opt.id || opt.value)));
+              const filteredOptions = attr.options.filter(opt => 
+                availableOptionIds.has(String(opt.id)) || 
+                availableOptionIds.has(String(opt.value)) ||
+                availableOptionIds.has(String(opt.label))
+              );
+              
+              return {
+                ...attr,
+                options: filteredOptions
+              };
+            }
+            
+            return attr;
+          });
+        }
+      }
+      
+      return processed;
     },
   });
 }
@@ -78,10 +150,20 @@ function useFilterAttributes() {
 /* ---------------------------------------------
    URL utils
 ---------------------------------------------- */
-function parseSelected(searchParams, code) {
+function parseSelected(searchParams, code, categorySlug = null) {
+  const selectedValues = new Set();
+  
+  // Check both formats - category-specific and general
+  if (categorySlug) {
+    // Category-specific format: attributes[code][]
+    const attributeParam = `attributes[${code}][]`;
+    const categoryValues = searchParams.getAll(attributeParam);
+    categoryValues.filter(Boolean).forEach(value => selectedValues.add(value));
+  }
+  
+  // General format: code=value1,value2
   const raw = searchParams.get(code);
-  if (!raw) return new Set();
-  return new Set(
+  if (raw) {
     raw
       .split(",")
       .map((v) => {
@@ -90,28 +172,44 @@ function parseSelected(searchParams, code) {
         return code === "brand" ? decodeURIComponent(trimmed) : trimmed;
       })
       .filter(Boolean)
-  );
+      .forEach(value => selectedValues.add(value));
+  }
+  
+  return selectedValues;
 }
 
-function toggleValue(searchParams, setSearchParams, code, id, label) {
-  const set = parseSelected(searchParams, code);
+function toggleValue(searchParams, setSearchParams, code, id, label, categorySlug = null) {
+  const set = parseSelected(searchParams, code, categorySlug);
   // For brand filtering, use the label (name) instead of ID
   const key = code === "brand" ? String(label) : String(id);
   if (set.has(key)) set.delete(key);
   else set.add(key);
 
   const qs = new URLSearchParams(searchParams);
-  // For brand filtering, encode the names properly for URL
-  const csv = code === "brand" 
-    ? [...set].map(name => encodeURIComponent(name)).join(",")
-    : [...set].join(",");
+  
+  // Always clean up both formats to avoid conflicts
+  qs.delete(code); // Remove general format
+  const attributeParam = `attributes[${code}][]`;
+  qs.delete(attributeParam); // Remove category-specific format
+  
+  // If we're in a category context, use category-specific filter format
+  if (categorySlug) {
+    // Use attributes[code][] format for category filters
+    [...set].forEach(value => {
+      qs.append(attributeParam, value);
+    });
+  } else {
+    // Use original format for general filters
+    const csv = code === "brand" 
+      ? [...set].map(name => encodeURIComponent(name)).join(",")
+      : [...set].join(",");
 
-  if (csv) qs.set(code, csv);
-  else qs.delete(code);
+    if (csv) qs.set(code, csv);
 
-  // Avoid conflicts with slug-based deep links
-  if (code === "brand") {
-    qs.delete("brand_slug");
+    // Avoid conflicts with slug-based deep links
+    if (code === "brand") {
+      qs.delete("brand_slug");
+    }
   }
 
   // Reset pagination on any filter change
@@ -122,13 +220,13 @@ function toggleValue(searchParams, setSearchParams, code, id, label) {
 /* ---------------------------------------------
    Section (searchable multi-select like select2)
 ---------------------------------------------- */
-function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
+function Section({ attr, searchParams, setSearchParams, open, onToggleOpen, categorySlug = null }) {
   const [q, setQ] = React.useState("");
   const [focused, setFocused] = React.useState(false);
 
   const selectedSet = React.useMemo(
-    () => parseSelected(searchParams, attr.code),
-    [searchParams, attr.code]
+    () => parseSelected(searchParams, attr.code, categorySlug),
+    [searchParams, attr.code, categorySlug]
   );
 
   const filtered = React.useMemo(() => {
@@ -143,23 +241,45 @@ function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
 
   const clearSection = () => {
     const qs = new URLSearchParams(searchParams);
-    qs.delete(attr.code);
+    
+    // Always clean up both formats to avoid conflicts
+    qs.delete(attr.code); // Remove general format
+    const attributeParam = `attributes[${attr.code}][]`;
+    qs.delete(attributeParam); // Remove category-specific format
+    
     if (attr.code === "brand") qs.delete("brand_slug");
+    
     qs.delete("page");
     setSearchParams(qs);
   };
 
   const selectAllFiltered = () => {
     if (!filtered.length) return;
-    // For brand filtering, use labels instead of IDs
-    const values = filtered.map((o) => attr.code === "brand" ? String(o.label) : String(o.id));
+    
     const qs = new URLSearchParams(searchParams);
-    // For brand filtering, encode the names properly for URL
-    const csv = attr.code === "brand" 
-      ? values.map(name => encodeURIComponent(name)).join(",")
-      : values.join(",");
-    qs.set(attr.code, csv);
-    if (attr.code === "brand") qs.delete("brand_slug");
+    
+    // Always clean up both formats to avoid conflicts
+    qs.delete(attr.code); // Remove general format
+    const attributeParam = `attributes[${attr.code}][]`;
+    qs.delete(attributeParam); // Remove category-specific format
+    
+    // If we're in a category context, use category-specific filter format
+    if (categorySlug) {
+      // Add each filtered value as a separate parameter
+      filtered.forEach(opt => {
+        const value = attr.code === "brand" ? String(opt.label) : String(opt.id);
+        qs.append(attributeParam, value);
+      });
+    } else {
+      // Use original format for general filters
+      const values = filtered.map((o) => attr.code === "brand" ? String(o.label) : String(o.id));
+      const csv = attr.code === "brand" 
+        ? values.map(name => encodeURIComponent(name)).join(",")
+        : values.join(",");
+      qs.set(attr.code, csv);
+      if (attr.code === "brand") qs.delete("brand_slug");
+    }
+    
     qs.delete("page");
     setSearchParams(qs);
   };
@@ -270,7 +390,8 @@ function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
                           setSearchParams,
                           attr.code,
                           opt.id,
-                          opt.label
+                          opt.label,
+                          categorySlug
                         )
                       }
                       className="rounded border-[#1d3d62] text-[#1d3d62] focus:ring-[#1d3d62]"
@@ -291,10 +412,15 @@ function Section({ attr, searchParams, setSearchParams, open, onToggleOpen }) {
    FilterSidebar (desktop + mobile)
 ---------------------------------------------- */
 export default function FilterSidebar() {
-  const { data: attributes = [], isLoading, error } = useFilterAttributes();
   const [searchParams, setSearchParams] = useSearchParams();
   const [open, setOpen] = React.useState({});
   const [mobileVisible, setMobileVisible] = React.useState(false);
+  
+  // Get category slug from URL params
+  const categorySlug = searchParams.get("category") || searchParams.get("category_slug") || null;
+  
+  const { data: attributes = [], isLoading, error } = useFilterAttributes(categorySlug);
+  
 
   // Open all filters initially
   React.useEffect(() => {
@@ -336,6 +462,7 @@ export default function FilterSidebar() {
           setSearchParams={setSearchParams}
           open={!!open[attr.code]}
           onToggleOpen={toggleSectionOpen}
+          categorySlug={categorySlug}
         />
       ))}
     </div>

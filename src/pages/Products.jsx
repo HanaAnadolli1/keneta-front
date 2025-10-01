@@ -48,10 +48,15 @@ export default function Products() {
   const brandParam = params.get("brand") || ""; // can be names in your app
   const brandSlugParam = params.get("brand_slug") || ""; // optional
   const promotionIdParam = params.get("promotion_id") || "";
+  
+  // Category-specific filter format: attributes[brand][], attributes[color][], etc.
+  const categoryBrandParam = params.getAll("attributes[brand][]") || [];
+  const categoryColorParam = params.getAll("attributes[color][]") || [];
+  const categorySizeParam = params.getAll("attributes[size][]") || [];
 
   const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
   const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
-  const hasBrandFilter = Boolean(brandParam || brandSlugParam);
+  const hasBrandFilter = Boolean(brandParam || brandSlugParam || categoryBrandParam.length > 0);
   const hasPromotionFilter = Boolean(promotionIdParam);
   const isShortSearchOnly =
     !!searchTerm &&
@@ -134,16 +139,29 @@ export default function Products() {
   /* -------- Brand helpers -------- */
   // brandParam comes as comma-separated brand names in your app; map to IDs for API
   const selectedBrandIds = useMemo(() => {
-    if (!brandParam || !brandOptions.length) return [];
-    const brandNames = brandParam
-      .split(",")
-      .map((name) => decodeURIComponent(name.trim()))
-      .filter(Boolean);
-    const ids = brandNames
+    const allBrandNames = [];
+    
+    // Handle general format: brand=3M,AKFIX
+    if (brandParam && brandOptions.length) {
+      const brandNames = brandParam
+        .split(",")
+        .map((name) => decodeURIComponent(name.trim()))
+        .filter(Boolean);
+      allBrandNames.push(...brandNames);
+    }
+    
+    // Handle category-specific format: attributes[brand][]=3M&attributes[brand][]=AKFIX
+    if (categoryBrandParam.length > 0) {
+      allBrandNames.push(...categoryBrandParam);
+    }
+    
+    // Map all brand names to IDs
+    const ids = allBrandNames
       .map((name) => brandOptions.find((b) => b.label === name)?.id)
       .filter(Boolean);
+    
     return ids;
-  }, [brandParam, brandOptions]);
+  }, [brandParam, categoryBrandParam, brandOptions]);
 
   const activeBrandLabel = useMemo(() => {
     if (!selectedBrandIds.length || !brandOptions.length) return null;
@@ -168,6 +186,9 @@ export default function Products() {
         category: categorySlugParam,
         categoryId: categoryIdParam,
         promotionId: promotionIdParam,
+        categoryBrand: categoryBrandParam,
+        categoryColor: categoryColorParam,
+        categorySize: categorySizeParam,
       }),
     [
       sort,
@@ -178,6 +199,9 @@ export default function Products() {
       categorySlugParam,
       categoryIdParam,
       promotionIdParam,
+      categoryBrandParam,
+      categoryColorParam,
+      categorySizeParam,
     ]
   );
 
@@ -223,11 +247,32 @@ export default function Products() {
     if (sort) qs.set("sort", sort);
     if (order) qs.set("order", order);
 
-    // brand — use IDs when available; else try brand_slug passthrough
+    // brand — use category-specific format when on category page, else general format
     if (selectedBrandIds.length > 0) {
-      qs.set("brand", selectedBrandIds.join(","));
+      if (categorySlugParam) {
+        // Category page: use attributes[brand][] format
+        selectedBrandIds.forEach(brandId => {
+          qs.append("attributes[brand][]", String(brandId));
+        });
+      } else {
+        // General page: use brand=id1,id2 format
+        qs.set("brand", selectedBrandIds.join(","));
+      }
     } else if (brandSlugParam) {
       qs.set("brand_slug", brandSlugParam);
+    }
+    
+    // Handle other category-specific filters
+    if (categoryColorParam.length > 0) {
+      categoryColorParam.forEach(color => {
+        qs.append("attributes[color][]", color);
+      });
+    }
+    
+    if (categorySizeParam.length > 0) {
+      categorySizeParam.forEach(size => {
+        qs.append("attributes[size][]", size);
+      });
     }
 
     // category — prefer numeric category_id when known, else slug
@@ -273,9 +318,24 @@ export default function Products() {
 
           // brand
           if (selectedBrandIds.length > 0) {
-            extra.brand = selectedBrandIds.join(",");
+            if (categorySlugParam) {
+              // Category search: use attributes[brand][] format
+              extra["attributes[brand][]"] = selectedBrandIds.map(String);
+            } else {
+              // General search: use brand=id1,id2 format
+              extra.brand = selectedBrandIds.join(",");
+            }
           } else if (brandSlugParam) {
             extra.brand_slug = brandSlugParam;
+          }
+          
+          // Handle other category-specific filters in search
+          if (categoryColorParam.length > 0) {
+            extra["attributes[color][]"] = categoryColorParam;
+          }
+          
+          if (categorySizeParam.length > 0) {
+            extra["attributes[size][]"] = categorySizeParam;
           }
 
           // sort/order passthrough
