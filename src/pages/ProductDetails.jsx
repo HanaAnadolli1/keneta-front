@@ -329,7 +329,7 @@ export default function ProductDetails() {
       try {
         setRelatedError(null);
         setRelatedLoading(true);
-        const endpoint = `https://admin.keneta-ks.com/api/products/${product.id}/related`;
+        const endpoint = `https://admin.keneta-ks.com/api/v2/products/${product.id}/related`;
         const res = await fetch(endpoint, { signal: controller.signal });
         if (!res.ok) throw new Error(`Related: status ${res.status}`);
         const json = await res.json();
