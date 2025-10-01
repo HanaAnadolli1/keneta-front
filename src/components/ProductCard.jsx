@@ -118,7 +118,7 @@ function ProductCard({
 
         {/* Text area with fixed row heights */}
         <div className="p-4 flex flex-col flex-1">
-          <h2 className="text-sm sm:text-base font-semibold leading-snug text-gray-900 truncate">
+          <h2 className="text-sm sm:text-base font-semibold leading-snug text-gray-900 line-clamp-2">
             {product?.name}
           </h2>
 
