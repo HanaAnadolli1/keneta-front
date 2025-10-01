@@ -157,27 +157,51 @@ function useChildrenFetcher() {
 // Helper function to find category ID by slug
 async function findCategoryIdBySlug(slug) {
   try {
-    const response = await fetch(`${API_PUBLIC_V1}/categories`);
-    const data = await response.json();
-    const categories = data?.data || [];
+    // Try multiple API endpoints to get all categories
+    const endpoints = [
+      `${API_PUBLIC_V1}/categories?limit=1000`, // Get more categories
+      `${API_PUBLIC_V1}/categories?sort=id&order=asc&limit=1000`, // Sorted
+      `${API_PUBLIC_V1}/categories?include=parent,children&limit=1000`, // Include relationships
+    ];
+    
+    let categories = [];
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint);
+        const data = await response.json();
+        const cats = data?.data || [];
+        
+        if (cats.length > categories.length) {
+          categories = cats;
+          break; // Use the first endpoint that returns more categories
+        }
+      } catch (err) {
+        // Continue to next endpoint
+      }
+    }
     
     // Look for exact match first
-    let category = categories.find(cat => 
-      normSlug(cat.slug) === normSlug(slug) || 
-      normSlug(cat.name) === normSlug(slug)
-    );
+    let category = categories.find(cat => {
+      const catSlugNorm = normSlug(cat.slug);
+      const catNameNorm = normSlug(cat.name);
+      const searchSlugNorm = normSlug(slug);
+      
+      return catSlugNorm === searchSlugNorm || catNameNorm === searchSlugNorm;
+    });
     
     if (!category) {
       // Look for partial match
-      category = categories.find(cat => 
-        normSlug(cat.slug).includes(normSlug(slug)) || 
-        normSlug(cat.name).includes(normSlug(slug))
-      );
+      category = categories.find(cat => {
+        const catSlugNorm = normSlug(cat.slug);
+        const catNameNorm = normSlug(cat.name);
+        const searchSlugNorm = normSlug(slug);
+        
+        return catSlugNorm.includes(searchSlugNorm) || catNameNorm.includes(searchSlugNorm);
+      });
     }
     
     return category ? Number(category.id) : null;
   } catch (error) {
-    console.warn('Failed to find category by slug:', error);
     return null;
   }
 }
@@ -190,9 +214,6 @@ export default function CategoryNavigator({ activeCategoryName }) {
 
   const getChildren = useChildrenFetcher();
   
-  // Debug logging
-  console.log('CategoryNavigator: categorySlugParam:', categorySlugParam);
-  console.log('CategoryNavigator: categoryIdParam:', categoryIdParam);
 
   const prevRef = useRef(null);
   const nextRef = useRef(null);
@@ -204,9 +225,7 @@ export default function CategoryNavigator({ activeCategoryName }) {
   // Resolve parentId from URL parameters
   useEffect(() => {
     const resolveParentId = async () => {
-      console.log('CategoryNavigator: Resolving parent ID...');
       if (categoryIdParam) {
-        console.log('CategoryNavigator: Using categoryIdParam:', categoryIdParam);
         setResolvedParentId(Number(categoryIdParam));
         return;
       }
@@ -233,6 +252,29 @@ export default function CategoryNavigator({ activeCategoryName }) {
           setResolvedParentId(foundId);
           return;
         }
+        
+        // Fallback: try to get category info from breadcrumb API
+        try {
+          const breadcrumbResponse = await fetch(
+            `https://admin.keneta-ks.com/api/v2/breadcrumbs/category/${encodeURIComponent(decoded)}`
+          );
+          if (breadcrumbResponse.ok) {
+            const breadcrumbData = await breadcrumbResponse.json();
+            
+            // Look for the category in the breadcrumb data
+            if (breadcrumbData?.data && Array.isArray(breadcrumbData.data)) {
+              const categoryFromBreadcrumb = breadcrumbData.data.find(cat => 
+                normSlug(cat.slug) === normSlug(decoded) || normSlug(cat.name) === normSlug(decoded)
+              );
+              if (categoryFromBreadcrumb?.id) {
+                setResolvedParentId(Number(categoryFromBreadcrumb.id));
+                return;
+              }
+            }
+          }
+        } catch (breadcrumbError) {
+          // Silent fallback failure
+        }
       }
 
       const recent = ssGet(SS_RECENT_TRAIL, []);
@@ -244,8 +286,12 @@ export default function CategoryNavigator({ activeCategoryName }) {
         }
       }
       
-      // Default to root categories
-      setResolvedParentId(1);
+      // Default to root categories only if no category slug was provided
+      if (!categorySlugParam) {
+        setResolvedParentId(1);
+      } else {
+        setResolvedParentId(null); // Don't show children if we can't find the category
+      }
     };
 
     resolveParentId();
@@ -266,7 +312,7 @@ export default function CategoryNavigator({ activeCategoryName }) {
             : rows;
           setChildren(filteredRows);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) setChildren([]);
       } finally {
         if (!cancelled) setLoading(false);

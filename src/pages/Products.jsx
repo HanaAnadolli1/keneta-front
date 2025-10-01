@@ -21,6 +21,7 @@ import { API_V1 } from "../api/config";
 import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useProductSearch } from "../hooks/useProductSearch";
+import { useCategoryBreadcrumbs } from "../hooks/useBreadcrumbs";
 
 /* ================================
  * Products Page
@@ -399,11 +400,25 @@ export default function Products() {
   }, [items, sortBy, hideOutOfStock]);
 
   /* -------- Breadcrumbs -------- */
+  // Use category breadcrumb API if category is selected
+  const { breadcrumbs: categoryBreadcrumbs, loading: breadcrumbsLoading } = useCategoryBreadcrumbs(categorySlugParam);
+  
   const breadcrumbItems = useMemo(() => {
     const base = [{ label: "Home", path: "/" }];
-    // simple Products breadcrumb (extend if you have category trail available)
+    
+    // If we have category breadcrumbs from API, use them
+    if (categoryBreadcrumbs.length > 0) {
+      return [...base, ...categoryBreadcrumbs];
+    }
+    
+    // If we have a category slug but no API breadcrumbs, show simple category breadcrumb
+    if (categorySlugParam) {
+      return [...base, { label: decodeURIComponent(categorySlugParam).replace(/-/g, ' '), path: `/products?category=${categorySlugParam}` }, { label: "Products" }];
+    }
+    
+    // Default: just Home > Products
     return [...base, { label: "Products" }];
-  }, []);
+  }, [categoryBreadcrumbs, categorySlugParam]);
 
   /* -------- Render gates -------- */
   if (initialLoading) {
