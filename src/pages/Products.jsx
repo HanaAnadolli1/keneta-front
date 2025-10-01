@@ -50,9 +50,9 @@ export default function Products() {
   const promotionIdParam = params.get("promotion_id") || "";
   
   // Category-specific filter format: attributes[brand][], attributes[color][], etc.
-  const categoryBrandParam = params.getAll("attributes[brand][]") || [];
-  const categoryColorParam = params.getAll("attributes[color][]") || [];
-  const categorySizeParam = params.getAll("attributes[size][]") || [];
+  const categoryBrandParam = useMemo(() => params.getAll("attributes[brand][]") || [], [params]);
+  const categoryColorParam = useMemo(() => params.getAll("attributes[color][]") || [], [params]);
+  const categorySizeParam = useMemo(() => params.getAll("attributes[size][]") || [], [params]);
 
   const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
   const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
@@ -104,6 +104,7 @@ export default function Products() {
   }, [hideOutOfStock]);
 
   const loadingLock = useRef(false);
+  const scrollPositionRef = useRef(0);
 
   const { isWishlisted, toggleWishlist } = useWishlist();
   const toast = useToast();
@@ -425,11 +426,32 @@ export default function Products() {
     };
   }, [fetchPage]);
 
-  const loadMore = async () => {
+  const loadMore = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (loadingMore || !hasMore) return;
+    
+    // Save current scroll position
+    scrollPositionRef.current = window.pageYOffset || document.documentElement.scrollTop;
+    
     setLoadingMore(true);
-    await fetchPage(page + 1, { append: true });
-    setLoadingMore(false);
+    
+    try {
+      await fetchPage(page + 1, { append: true });
+      
+      // Restore scroll position after a short delay to ensure DOM is updated
+      setTimeout(() => {
+        window.scrollTo(0, scrollPositionRef.current);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Error loading more products:', error);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   /* -------- Client-side sort & hide out-of-stock -------- */
@@ -473,7 +495,8 @@ export default function Products() {
     
     // If we have a category slug but no API breadcrumbs, show simple category breadcrumb
     if (categorySlugParam) {
-      return [...base, { label: decodeURIComponent(categorySlugParam).replace(/-/g, ' '), path: `/products?category=${categorySlugParam}` }, { label: "Products" }];
+      const categoryName = decodeURIComponent(categorySlugParam).replace(/-/g, ' ');
+      return [...base, { label: categoryName }]; // Current category (no path)
     }
     
     // Default: just Home > Products
@@ -723,6 +746,7 @@ export default function Products() {
               {hasMore && (
                 <div className="mt-8 flex justify-center">
                   <button
+                    type="button"
                     onClick={loadMore}
                     disabled={loadingMore}
                     className="px-5 py-2 rounded-xl bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 disabled:opacity-60"

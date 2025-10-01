@@ -139,7 +139,7 @@ export const useCategoryBreadcrumbs = (categorySlug) => {
         // Normalize breadcrumb data to our format
         const normalizedBreadcrumbs = breadcrumbData.map(item => ({
           label: String(item.label || item.name || item.title || ''),
-          path: item.path || item.url || null
+          path: item.path || item.url || (item.slug ? `/products?category=${encodeURIComponent(item.slug)}` : null)
         }));
         
         setBreadcrumbs(normalizedBreadcrumbs);
