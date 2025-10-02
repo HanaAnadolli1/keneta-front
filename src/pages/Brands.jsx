@@ -1,38 +1,119 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { useQuery } from "@tanstack/react-query";
 import { API_V1 } from "../api/config";
 
-const Brands = () => {
-  const [brands, setBrands] = useState([]);
-  const navigate = useNavigate();
+/* ---------------------------------------------
+   Fetch all filterable attributes (same as FilterSidebar)
+---------------------------------------------- */
+async function fetchAllAttributes() {
+  let page = 1;
+  let all = [];
+  let lastPage = 1;
 
-  useEffect(() => {
-    const fetchBrands = async () => {
-      try {
-        const response = await fetch(`${API_V1}/attributes?sort=id`);
-        const data = await response.json();
+  do {
+    const res = await fetch(`${API_V1}/attributes?sort=id&page=${page}`);
+    if (!res.ok) throw new Error("Failed to load attributes");
+    const json = await res.json();
 
-        const brandAttribute = data.data.find((attr) => attr.code === "brand");
+    all.push(...(json?.data || []));
+    lastPage = json?.meta?.last_page || 1;
+    page += 1;
+  } while (page <= lastPage);
 
-        if (brandAttribute && brandAttribute.options) {
-          console.log("🏷️ Brands Loaded:", {
-            totalBrands: brandAttribute.options.length,
-            sampleBrands: brandAttribute.options.slice(0, 5).map(b => ({ id: b.id, label: b.label }))
-          });
-          setBrands(brandAttribute.options);
-        }
-      } catch (error) {
-        console.error("Failed to load brands:", error);
+  return all;
+}
+
+/* ---------------------------------------------
+   De-duplicate options by label (same as FilterSidebar)
+---------------------------------------------- */
+const normLabel = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/\s+/g, " ")
+    .trim();
+
+function dedupeOptionsByLabel(options = []) {
+  const seen = new Set();
+  const out = [];
+  for (const o of options) {
+    const key = normLabel(o.label || o.admin_name || o.id);
+    if (seen.has(key)) continue; // skip duplicates
+    seen.add(key);
+    out.push(o);
+  }
+  return out;
+}
+
+/* ---------------------------------------------
+   Query hook: get brands using same logic as FilterSidebar
+---------------------------------------------- */
+function useBrands() {
+  return useQuery({
+    queryKey: ["brands"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      // Get all available attributes
+      const all = await fetchAllAttributes();
+      
+      // Find the brand attribute
+      const brandAttribute = all.find((attr) => attr.code === "brand");
+      
+      if (brandAttribute && brandAttribute.options) {
+        console.log("🏷️ Brands Loaded:", {
+          totalBrands: brandAttribute.options.length,
+          sampleBrands: brandAttribute.options.slice(0, 5).map(b => ({ id: b.id, label: b.label }))
+        });
+        
+        // Return deduplicated options (same as FilterSidebar)
+        return dedupeOptionsByLabel(brandAttribute.options);
       }
-    };
+      
+      return [];
+    },
+  });
+}
 
-    fetchBrands();
-  }, []);
+const Brands = () => {
+  const navigate = useNavigate();
+  const { data: brands = [], isLoading, error } = useBrands();
 
   // Adjust according to where your files are stored
   const getImageUrl = (swatchValue) =>
     swatchValue ? `https://admin.keneta-ks.com/storage/${swatchValue}` : null;
+
+  // Handle loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[{ label: "Home", path: "/" }, { label: "Brands" }]}
+        />
+        <h1 className="text-2xl font-bold text-indigo-900 mb-6">Brendet</h1>
+        <div className="flex items-center justify-center py-12">
+          <p className="text-gray-600">Loading brands...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[{ label: "Home", path: "/" }, { label: "Brands" }]}
+        />
+        <h1 className="text-2xl font-bold text-indigo-900 mb-6">Brendet</h1>
+        <div className="flex items-center justify-center py-12">
+          <p className="text-red-600">Failed to load brands. Please try again.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -45,6 +126,7 @@ const Brands = () => {
           <div
             key={brand.id}
             onClick={() => {
+              // Use the same URL format as FilterSidebar for consistency
               const url = `/products?brand=${encodeURIComponent(brand.label)}`;
               console.log("🏷️ Brand Click Debug:", {
                 brandId: brand.id,

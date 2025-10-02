@@ -113,23 +113,59 @@ export default function Products() {
   const { searchProducts } = useProductSearch();
 
   /* -------- Load brand options (for name→id mapping) -------- */
+  // Use the same normalization logic as FilterSidebar
+  const normLabel = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // strip accents
+      .replace(/\s+/g, " ")
+      .trim();
+
+  function dedupeOptionsByLabel(options = []) {
+    const seen = new Set();
+    const out = [];
+    for (const o of options) {
+      const key = normLabel(o.label || o.admin_name || o.id);
+      if (seen.has(key)) continue; // skip duplicates
+      seen.add(key);
+      out.push(o);
+    }
+    return out;
+  }
+
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
-        const cached = sessionStorage.getItem("brandOptions");
-        if (cached) {
-          setBrandOptions(JSON.parse(cached));
-          return;
-        }
-        const res = await fetch(`${API_PUBLIC_V1}/attributes?sort=id`, {
-          signal: ac.signal,
-        });
-        const json = await res.json();
-        const options =
-          json?.data?.find?.((a) => a.code === "brand")?.options ?? [];
-        sessionStorage.setItem("brandOptions", JSON.stringify(options));
-        setBrandOptions(options);
+        // Force reload brands to ensure we have the latest data
+        sessionStorage.removeItem("brandOptions");
+        
+        // Use the same pagination logic as FilterSidebar
+        let page = 1;
+        let all = [];
+        let lastPage = 1;
+
+        do {
+          const res = await fetch(`${API_PUBLIC_V1}/attributes?sort=id&page=${page}`, {
+            signal: ac.signal,
+          });
+          if (!res.ok) throw new Error("Failed to load attributes");
+          const json = await res.json();
+
+          all.push(...(json?.data || []));
+          lastPage = json?.meta?.last_page || 1;
+          page += 1;
+        } while (page <= lastPage);
+
+        const brandAttribute = all.find((attr) => attr.code === "brand");
+        const options = brandAttribute?.options ?? [];
+        
+        // Apply the same deduplication logic as FilterSidebar
+        const deduplicatedOptions = dedupeOptionsByLabel(options);
+        
+        sessionStorage.setItem("brandOptions", JSON.stringify(deduplicatedOptions));
+        setBrandOptions(deduplicatedOptions);
       } catch (e) {
         if (e.name !== "AbortError") console.warn("brand load failed", e);
       }
@@ -156,13 +192,35 @@ export default function Products() {
       allBrandNames.push(...categoryBrandParam);
     }
     
-    // Map all brand names to IDs
+    // Map all brand names to IDs using normalized matching (same as FilterSidebar)
     const ids = allBrandNames
-      .map((name) => brandOptions.find((b) => b.label === name)?.id)
+      .map((name) => {
+        // First try exact match
+        let found = brandOptions.find((b) => b.label === name);
+        if (found) return found.id;
+        
+        // Then try normalized match (same logic as FilterSidebar)
+        const normalizedName = normLabel(name);
+        found = brandOptions.find((b) => normLabel(b.label) === normalizedName);
+        return found?.id;
+      })
       .filter(Boolean);
     
     return ids;
   }, [brandParam, categoryBrandParam, brandOptions]);
+
+  // Trigger re-fetch when brand options are loaded and we have brand filters
+  useEffect(() => {
+    if (brandOptions.length > 0 && (brandParam || categoryBrandParam.length > 0)) {
+      // Reset the list to trigger a fresh fetch with brand filters
+      setItems([]);
+      setPage(1);
+      setHasMore(true);
+      setInitialLoading(true);
+      setLoadingMore(false);
+      setError(null);
+    }
+  }, [brandOptions.length, brandParam, categoryBrandParam]);
 
   const activeBrandLabel = useMemo(() => {
     if (!selectedBrandIds.length || !brandOptions.length) return null;
@@ -299,12 +357,19 @@ export default function Products() {
     categorySlugParam,
     categoryIdParam,
     promotionIdParam,
+    categoryColorParam,
+    categorySizeParam,
   ]);
 
   /* -------- Fetch one page -------- */
   const fetchPage = useCallback(
     async (pageToFetch, { append }) => {
       try {
+        // If we have a brand filter but brand options aren't loaded yet, wait
+        if ((brandParam || categoryBrandParam.length > 0) && brandOptions.length === 0) {
+          return;
+        }
+
         // SEARCH MODE → call Laravel /api/v2/search
         if (isSearchActive) {
           const extra = {};
@@ -386,8 +451,16 @@ export default function Products() {
           json?.current_page ??
           pageToFetch;
 
-        const hasNext =
-          typeof lastPage === "number" ? currentPage < lastPage : false;
+        const totalItems = 
+          json?.meta?.total ??
+          json?.pagination?.total ??
+          json?.total ??
+          dataArray.length;
+
+        // More robust hasNext calculation
+        const hasNext = 
+          typeof lastPage === "number" ? currentPage < lastPage : 
+          dataArray.length === PER_PAGE; // If we got a full page, assume there might be more
 
         setItems((prev) => (append ? [...prev, ...dataArray] : dataArray));
         setHasMore(Boolean(hasNext));
@@ -409,6 +482,11 @@ export default function Products() {
       brandSlugParam,
       sort,
       order,
+      categoryColorParam,
+      categorySizeParam,
+      brandOptions,
+      brandParam,
+      categoryBrandParam,
     ]
   );
 
@@ -434,21 +512,13 @@ export default function Products() {
     
     if (loadingMore || !hasMore) return;
     
-    // Save current scroll position
-    scrollPositionRef.current = window.pageYOffset || document.documentElement.scrollTop;
-    
     setLoadingMore(true);
     
     try {
       await fetchPage(page + 1, { append: true });
-      
-      // Restore scroll position after a short delay to ensure DOM is updated
-      setTimeout(() => {
-        window.scrollTo(0, scrollPositionRef.current);
-      }, 100);
-      
     } catch (error) {
       console.error('Error loading more products:', error);
+      setError(error);
     } finally {
       setLoadingMore(false);
     }
@@ -749,9 +819,16 @@ export default function Products() {
                     type="button"
                     onClick={loadMore}
                     disabled={loadingMore}
-                    className="px-5 py-2 rounded-xl bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 disabled:opacity-60"
+                    className="px-6 py-3 rounded-xl bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 min-w-[140px]"
                   >
-                    {loadingMore ? "Loading…" : "Load more"}
+                    {loadingMore ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Loading…
+                      </div>
+                    ) : (
+                      `Load more (${items.length} shown)`
+                    )}
                   </button>
                 </div>
               )}
