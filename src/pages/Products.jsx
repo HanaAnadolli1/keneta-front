@@ -49,6 +49,7 @@ export default function Products() {
   const brandSlugParam = params.get("brand_slug") || ""; // optional
   const promotionIdParam = params.get("promotion_id") || "";
 
+
   // Category-specific filter format: attributes[brand][], attributes[color][], etc.
   const categoryBrandParam = useMemo(
     () => params.getAll("attributes[brand][]") || [],
