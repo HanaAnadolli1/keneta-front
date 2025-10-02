@@ -118,7 +118,11 @@ function ProductCard({
 
         {/* Text area with fixed row heights */}
         <div className="p-4 flex flex-col flex-1">
-          <h2 className="text-sm sm:text-base font-semibold leading-snug text-gray-900 line-clamp-2">
+          {/* Reserve EXACT space for two lines so cards align */}
+          <h2
+            className="text-sm sm:text-base font-semibold leading-snug text-gray-900 line-clamp-2
+                       min-h-[2.75rem] sm:min-h-[3rem]"
+          >
             {product?.name}
           </h2>
 
@@ -147,6 +151,7 @@ function ProductCard({
             )}
           </div>
 
+          {/* Push CTA row to bottom consistently */}
           <div className="mt-auto" />
         </div>
       </Link>
