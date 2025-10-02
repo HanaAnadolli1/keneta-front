@@ -43,7 +43,7 @@ function priceLabel(p) {
   );
 }
 
-// When hiddenWhileScroll is true, the entire root is display:none
+// When hiddenWhileScroll is true, hide on mobile only (display:none). Always visible on md+.
 export default function Search({ className = "", hiddenWhileScroll = false }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -162,9 +162,9 @@ export default function Search({ className = "", hiddenWhileScroll = false }) {
   return (
     <div
       ref={containerRef}
-      className={`relative flex flex-1 w-full md:max-w-3xl mx-auto md:mx-10 ${className} ${
-        hiddenWhileScroll ? "hidden" : "block"
-      }`}
+      className={`relative ${
+        hiddenWhileScroll ? "hidden md:flex" : "flex"
+      } flex-1 w-full md:max-w-3xl mx-auto md:mx-10 ${className}`}
     >
       <form onSubmit={handleSubmit} className="flex w-full">
         <input

@@ -324,8 +324,9 @@ export default function Products() {
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
 
-    if (sort) qs.set("sort", sort);
-    if (order) qs.set("order", order);
+    // Don't send sort/order to API - we'll sort client-side to ensure consistency across pages
+    // if (sort) qs.set("sort", sort);
+    // if (order) qs.set("order", order);
 
     // brand — use category-specific format when on category page, else general format
     if (selectedBrandIds.length > 0) {
@@ -428,9 +429,9 @@ export default function Products() {
             extra["attributes[size][]"] = categorySizeParam;
           }
 
-          // sort/order passthrough
-          if (sort) extra.sort = sort;
-          if (order) extra.order = order;
+          // Don't send sort/order to API - we'll sort client-side to ensure consistency across pages
+          // if (sort) extra.sort = sort;
+          // if (order) extra.order = order;
 
           const { products, hasNext } = await searchProducts(searchTerm, {
             limit: PER_PAGE,
