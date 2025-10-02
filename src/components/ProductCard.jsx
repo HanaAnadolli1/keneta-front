@@ -92,7 +92,9 @@ function ProductCard({
 
       {/* Clickable content block (fills remaining height) */}
       <Link
-        to={`/products/${product?.url_key}`}
+        to={`/products/${
+          product?.slug || product?.url_key || product?.id || "unknown"
+        }`}
         onMouseEnter={() => prefetch && prefetch(idNum)}
         className="flex-1 flex flex-col"
       >
@@ -128,11 +130,17 @@ function ProductCard({
 
           {/* Price row: fixed minimum height */}
           <div className="mt-2 flex items-baseline gap-2 min-h-[1.5rem]">
-            <span className="text-[var(--secondary)] font-bold">
+            <span
+              className={`font-bold ${
+                saleActive
+                  ? "text-[var(--secondary)]"
+                  : "text-[var(--secondary)]"
+              }`}
+            >
               {priceLabel}
             </span>
             {hasStrike && strikeLabel && (
-              <span className="text-sm text-gray-400 line-through">
+              <span className="text-sm text-[var(--secondary)] line-through font-medium">
                 {strikeLabel}
               </span>
             )}

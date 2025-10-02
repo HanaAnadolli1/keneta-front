@@ -48,15 +48,27 @@ export default function Products() {
   const brandParam = params.get("brand") || ""; // can be names in your app
   const brandSlugParam = params.get("brand_slug") || ""; // optional
   const promotionIdParam = params.get("promotion_id") || "";
-  
+
+
   // Category-specific filter format: attributes[brand][], attributes[color][], etc.
-  const categoryBrandParam = useMemo(() => params.getAll("attributes[brand][]") || [], [params]);
-  const categoryColorParam = useMemo(() => params.getAll("attributes[color][]") || [], [params]);
-  const categorySizeParam = useMemo(() => params.getAll("attributes[size][]") || [], [params]);
+  const categoryBrandParam = useMemo(
+    () => params.getAll("attributes[brand][]") || [],
+    [params]
+  );
+  const categoryColorParam = useMemo(
+    () => params.getAll("attributes[color][]") || [],
+    [params]
+  );
+  const categorySizeParam = useMemo(
+    () => params.getAll("attributes[size][]") || [],
+    [params]
+  );
 
   const isSearchActive = searchTerm.length >= MIN_SEARCH_LEN;
   const hasCategoryFilter = Boolean(categoryIdParam || categorySlugParam);
-  const hasBrandFilter = Boolean(brandParam || brandSlugParam || categoryBrandParam.length > 0);
+  const hasBrandFilter = Boolean(
+    brandParam || brandSlugParam || categoryBrandParam.length > 0
+  );
   const hasPromotionFilter = Boolean(promotionIdParam);
   const isShortSearchOnly =
     !!searchTerm &&
@@ -140,16 +152,19 @@ export default function Products() {
       try {
         // Force reload brands to ensure we have the latest data
         sessionStorage.removeItem("brandOptions");
-        
+
         // Use the same pagination logic as FilterSidebar
         let page = 1;
         let all = [];
         let lastPage = 1;
 
         do {
-          const res = await fetch(`${API_PUBLIC_V1}/attributes?sort=id&page=${page}`, {
-            signal: ac.signal,
-          });
+          const res = await fetch(
+            `${API_PUBLIC_V1}/attributes?sort=id&page=${page}`,
+            {
+              signal: ac.signal,
+            }
+          );
           if (!res.ok) throw new Error("Failed to load attributes");
           const json = await res.json();
 
@@ -160,11 +175,14 @@ export default function Products() {
 
         const brandAttribute = all.find((attr) => attr.code === "brand");
         const options = brandAttribute?.options ?? [];
-        
+
         // Apply the same deduplication logic as FilterSidebar
         const deduplicatedOptions = dedupeOptionsByLabel(options);
-        
-        sessionStorage.setItem("brandOptions", JSON.stringify(deduplicatedOptions));
+
+        sessionStorage.setItem(
+          "brandOptions",
+          JSON.stringify(deduplicatedOptions)
+        );
         setBrandOptions(deduplicatedOptions);
       } catch (e) {
         if (e.name !== "AbortError") console.warn("brand load failed", e);
@@ -177,7 +195,7 @@ export default function Products() {
   // brandParam comes as comma-separated brand names in your app; map to IDs for API
   const selectedBrandIds = useMemo(() => {
     const allBrandNames = [];
-    
+
     // Handle general format: brand=3M,AKFIX
     if (brandParam && brandOptions.length) {
       const brandNames = brandParam
@@ -186,32 +204,35 @@ export default function Products() {
         .filter(Boolean);
       allBrandNames.push(...brandNames);
     }
-    
+
     // Handle category-specific format: attributes[brand][]=3M&attributes[brand][]=AKFIX
     if (categoryBrandParam.length > 0) {
       allBrandNames.push(...categoryBrandParam);
     }
-    
+
     // Map all brand names to IDs using normalized matching (same as FilterSidebar)
     const ids = allBrandNames
       .map((name) => {
         // First try exact match
         let found = brandOptions.find((b) => b.label === name);
         if (found) return found.id;
-        
+
         // Then try normalized match (same logic as FilterSidebar)
         const normalizedName = normLabel(name);
         found = brandOptions.find((b) => normLabel(b.label) === normalizedName);
         return found?.id;
       })
       .filter(Boolean);
-    
+
     return ids;
   }, [brandParam, categoryBrandParam, brandOptions]);
 
   // Trigger re-fetch when brand options are loaded and we have brand filters
   useEffect(() => {
-    if (brandOptions.length > 0 && (brandParam || categoryBrandParam.length > 0)) {
+    if (
+      brandOptions.length > 0 &&
+      (brandParam || categoryBrandParam.length > 0)
+    ) {
       // Reset the list to trigger a fresh fetch with brand filters
       setItems([]);
       setPage(1);
@@ -310,7 +331,7 @@ export default function Products() {
     if (selectedBrandIds.length > 0) {
       if (categorySlugParam) {
         // Category page: use attributes[brand][] format
-        selectedBrandIds.forEach(brandId => {
+        selectedBrandIds.forEach((brandId) => {
           qs.append("attributes[brand][]", String(brandId));
         });
       } else {
@@ -320,16 +341,16 @@ export default function Products() {
     } else if (brandSlugParam) {
       qs.set("brand_slug", brandSlugParam);
     }
-    
+
     // Handle other category-specific filters
     if (categoryColorParam.length > 0) {
-      categoryColorParam.forEach(color => {
+      categoryColorParam.forEach((color) => {
         qs.append("attributes[color][]", color);
       });
     }
-    
+
     if (categorySizeParam.length > 0) {
-      categorySizeParam.forEach(size => {
+      categorySizeParam.forEach((size) => {
         qs.append("attributes[size][]", size);
       });
     }
@@ -366,7 +387,10 @@ export default function Products() {
     async (pageToFetch, { append }) => {
       try {
         // If we have a brand filter but brand options aren't loaded yet, wait
-        if ((brandParam || categoryBrandParam.length > 0) && brandOptions.length === 0) {
+        if (
+          (brandParam || categoryBrandParam.length > 0) &&
+          brandOptions.length === 0
+        ) {
           return;
         }
 
@@ -394,12 +418,12 @@ export default function Products() {
           } else if (brandSlugParam) {
             extra.brand_slug = brandSlugParam;
           }
-          
+
           // Handle other category-specific filters in search
           if (categoryColorParam.length > 0) {
             extra["attributes[color][]"] = categoryColorParam;
           }
-          
+
           if (categorySizeParam.length > 0) {
             extra["attributes[size][]"] = categorySizeParam;
           }
@@ -451,16 +475,17 @@ export default function Products() {
           json?.current_page ??
           pageToFetch;
 
-        const totalItems = 
+        const totalItems =
           json?.meta?.total ??
           json?.pagination?.total ??
           json?.total ??
           dataArray.length;
 
         // More robust hasNext calculation
-        const hasNext = 
-          typeof lastPage === "number" ? currentPage < lastPage : 
-          dataArray.length === PER_PAGE; // If we got a full page, assume there might be more
+        const hasNext =
+          typeof lastPage === "number"
+            ? currentPage < lastPage
+            : dataArray.length === PER_PAGE; // If we got a full page, assume there might be more
 
         setItems((prev) => (append ? [...prev, ...dataArray] : dataArray));
         setHasMore(Boolean(hasNext));
@@ -509,15 +534,15 @@ export default function Products() {
       e.preventDefault();
       e.stopPropagation();
     }
-    
+
     if (loadingMore || !hasMore) return;
-    
+
     setLoadingMore(true);
-    
+
     try {
       await fetchPage(page + 1, { append: true });
     } catch (error) {
-      console.error('Error loading more products:', error);
+      console.error("Error loading more products:", error);
       setError(error);
     } finally {
       setLoadingMore(false);
@@ -553,22 +578,26 @@ export default function Products() {
 
   /* -------- Breadcrumbs -------- */
   // Use category breadcrumb API if category is selected
-  const { breadcrumbs: categoryBreadcrumbs, loading: breadcrumbsLoading } = useCategoryBreadcrumbs(categorySlugParam);
-  
+  const { breadcrumbs: categoryBreadcrumbs, loading: breadcrumbsLoading } =
+    useCategoryBreadcrumbs(categorySlugParam);
+
   const breadcrumbItems = useMemo(() => {
     const base = [{ label: "Home", path: "/" }];
-    
+
     // If we have category breadcrumbs from API, use them
     if (categoryBreadcrumbs.length > 0) {
       return [...base, ...categoryBreadcrumbs];
     }
-    
+
     // If we have a category slug but no API breadcrumbs, show simple category breadcrumb
     if (categorySlugParam) {
-      const categoryName = decodeURIComponent(categorySlugParam).replace(/-/g, ' ');
+      const categoryName = decodeURIComponent(categorySlugParam).replace(
+        /-/g,
+        " "
+      );
       return [...base, { label: categoryName }]; // Current category (no path)
     }
-    
+
     // Default: just Home > Products
     return [...base, { label: "Products" }];
   }, [categoryBreadcrumbs, categorySlugParam]);
@@ -827,7 +856,7 @@ export default function Products() {
                         Loading…
                       </div>
                     ) : (
-                      `Load more (${items.length} shown)`
+                      `Load more`
                     )}
                   </button>
                 </div>

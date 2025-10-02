@@ -57,31 +57,38 @@ export default function useSaleFlag(product, { apiBase } = {}) {
   const details = data?.data;
 
   const regular = Number(product?.regular_price ?? 0);
+  const special = Number(product?.special_price ?? 0);
   const effective = Number(product?.price ?? 0);
-  const priceSaysSale = regular > 0 && effective > 0 && effective < regular;
+  
+  // Check if there's a special price available
+  const hasSpecialPrice = product?.formatted_special_price && special > 0;
+  const priceSaysSale = regular > 0 && (special > 0 ? special < regular : effective < regular);
 
   const { from, to } = extractDates(details);
   const haveDates = Boolean(from || to);
 
-  // conservative: require valid dates to allow a sale on PLP
-  const saleActive = haveDates ? priceSaysSale && withinRange(from, to) : false;
+  // Show sale if we have special price OR if price is less than regular (with dates)
+  const saleActive = hasSpecialPrice || (haveDates ? priceSaysSale && withinRange(from, to) : false);
 
   const pct =
-    saleActive && regular > effective
-      ? Math.round(((regular - effective) / regular) * 100)
+    saleActive && regular > 0
+      ? Math.round(((regular - (special || effective)) / regular) * 100)
       : null;
 
-  const hasStrike =
-    saleActive &&
-    product?.formatted_regular_price &&
-    product?.formatted_price &&
-    product.formatted_regular_price !== product.formatted_price;
+  // Show strikethrough if we have special price and regular price
+  const hasStrike = 
+    saleActive && 
+    regular > 0 && 
+    (special > 0 || (product?.formatted_special_price && effective < regular));
 
   const priceLabel = saleActive
-    ? product?.formatted_price
+    ? product?.formatted_special_price || product?.formatted_price
     : product?.formatted_regular_price || product?.formatted_price;
 
-  const strikeLabel = saleActive ? product?.formatted_regular_price : null;
+  // Create formatted regular price if it doesn't exist
+  const strikeLabel = hasStrike 
+    ? product?.formatted_regular_price || `€${regular.toFixed(2)}`
+    : null;
 
   return { saleActive, pct, hasStrike, priceLabel, strikeLabel };
 }

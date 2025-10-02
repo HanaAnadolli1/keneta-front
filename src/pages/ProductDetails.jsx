@@ -24,6 +24,7 @@ import ProductReviews from "../components/ProductReviews";
 import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useProductBreadcrumbs } from "../hooks/useBreadcrumbs";
+import useSaleFlag from "../hooks/useSaleFlag";
 
 const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
 
@@ -127,7 +128,6 @@ const normalizeSlug = (s = "") =>
     .replace(/[^a-z0-9-_/]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-
 /* ---------------- component ---------------- */
 export default function ProductDetails() {
   const { url_key } = useParams();
@@ -146,6 +146,10 @@ export default function ProductDetails() {
   const [error, setError] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Use sale flag hook for proper price display
+  const { saleActive, hasStrike, priceLabel, strikeLabel } =
+    useSaleFlag(product);
   const [activeTab, setActiveTab] = useState("description");
 
   // related
@@ -154,7 +158,11 @@ export default function ProductDetails() {
   const [relatedError, setRelatedError] = useState(null);
 
   // breadcrumbs - using API
-  const { breadcrumbs: apiBreadcrumbs, loading: breadcrumbsLoading, error: breadcrumbsError } = useProductBreadcrumbs(url_key);
+  const {
+    breadcrumbs: apiBreadcrumbs,
+    loading: breadcrumbsLoading,
+    error: breadcrumbsError,
+  } = useProductBreadcrumbs(url_key);
 
   const accessToken =
     localStorage.getItem("access_token") ||
@@ -192,7 +200,6 @@ export default function ProductDetails() {
     };
   }, [url_key]);
 
-
   /* --------- related --------- */
   useEffect(() => {
     if (!product?.id) return;
@@ -219,7 +226,6 @@ export default function ProductDetails() {
       controller.abort();
     };
   }, [product?.id]);
-
 
   /* --------- auto-open reviews tab --------- */
   useEffect(() => {
@@ -268,31 +274,47 @@ export default function ProductDetails() {
       return [
         { label: "Home", path: "/" },
         ...apiBreadcrumbs,
-        { label: product?.name || "Product" }
+        { label: product?.name || "Product" },
       ];
     }
-    
+
     // Fallback: build breadcrumbs from product data
     const base = [{ label: "Home", path: "/" }];
-    
+
     // Try to get category info from product
-    if (product?.categories && Array.isArray(product.categories) && product.categories.length > 0) {
+    if (
+      product?.categories &&
+      Array.isArray(product.categories) &&
+      product.categories.length > 0
+    ) {
       const category = product.categories[0]; // Use first category
       const categoryBreadcrumb = {
         label: category.name || category.label || "Category",
-        path: `/products?category=${encodeURIComponent(category.slug || category.name || "")}`
+        path: `/products?category=${encodeURIComponent(
+          category.slug || category.name || ""
+        )}`,
       };
-      return [...base, categoryBreadcrumb, { label: product?.name || "Product" }];
+      return [
+        ...base,
+        categoryBreadcrumb,
+        { label: product?.name || "Product" },
+      ];
     }
-    
+
     // Fallback: simple breadcrumbs
-    return [...base, { label: "Products", path: "/products" }, { label: product?.name || "Product" }];
+    return [
+      ...base,
+      { label: "Products", path: "/products" },
+      { label: product?.name || "Product" },
+    ];
   }, [apiBreadcrumbs, product]);
 
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-10">
-        <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Product" }]} />
+        <Breadcrumbs
+          items={[{ label: "Home", path: "/" }, { label: "Product" }]}
+        />
         <div className="text-red-600">{error}</div>
       </div>
     );
@@ -300,7 +322,9 @@ export default function ProductDetails() {
   if (!product) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-10">
-        <Breadcrumbs items={[{ label: "Home", path: "/" }, { label: "Product" }]} />
+        <Breadcrumbs
+          items={[{ label: "Home", path: "/" }, { label: "Product" }]}
+        />
         Loading…
       </div>
     );
@@ -510,8 +534,21 @@ export default function ProductDetails() {
           )}
 
           {/* Price */}
-          <div className="text-3xl font-bold text-[var(--secondary)]">
-            {unitPriceLabel}
+          <div className="space-y-2">
+            <div
+              className={`text-3xl font-bold ${
+                saleActive
+                  ? "text-[var(--secondary)]"
+                  : "text-[var(--secondary)]"
+              }`}
+            >
+              {priceLabel}
+            </div>
+            {hasStrike && strikeLabel && (
+              <div className="text-lg text-[var(--secondary)] line-through font-medium">
+                {strikeLabel}
+              </div>
+            )}
           </div>
 
           {/* Availability */}
