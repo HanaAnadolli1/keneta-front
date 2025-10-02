@@ -1,4 +1,3 @@
-// src/components/Search.jsx
 import React, {
   useEffect,
   useRef,
@@ -44,7 +43,8 @@ function priceLabel(p) {
   );
 }
 
-export default function Search({ className = "" }) {
+// When hiddenWhileScroll is true, the entire root is display:none
+export default function Search({ className = "", hiddenWhileScroll = false }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [show, setShow] = useState(false);
@@ -162,7 +162,9 @@ export default function Search({ className = "" }) {
   return (
     <div
       ref={containerRef}
-      className={`relative flex flex-1 w-full md:max-w-3xl mx-auto md:mx-10 ${className}`}
+      className={`relative flex flex-1 w-full md:max-w-3xl mx-auto md:mx-10 ${className} ${
+        hiddenWhileScroll ? "hidden" : "block"
+      }`}
     >
       <form onSubmit={handleSubmit} className="flex w-full">
         <input

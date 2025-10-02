@@ -15,6 +15,9 @@ export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+  // Hide Search (display:none) while scrolling in any direction
+  const [hideSearch, setHideSearch] = useState(false);
+
   const { wishlistCount } = useWishlist();
   const { count: compareCount } = useCompare();
   const { currentUser, logout } = useContext(AuthContext);
@@ -22,6 +25,7 @@ export default function Header() {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
 
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -32,11 +36,45 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Cart open event
   useEffect(() => {
     const onOpenCart = () => setIsCartOpen(true);
     window.addEventListener("keneta:openCart", onOpenCart);
     return () => window.removeEventListener("keneta:openCart", onOpenCart);
   }, []);
+
+  // rAF loop: hide while moving (up or down), show after idle
+  useEffect(() => {
+    let rafId = 0;
+    let lastY = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+    let lastMoveTs = performance.now();
+
+    const THRESH = 2; // px to count as movement
+    const IDLE_MS = 300; // time without movement to show again
+
+    const loop = () => {
+      const now = performance.now();
+      const y = window.scrollY ?? document.documentElement.scrollTop ?? 0;
+      const dy = y - lastY;
+
+      if (Math.abs(dy) >= THRESH) {
+        // any movement → hide
+        if (!hideSearch) setHideSearch(true);
+        lastMoveTs = now;
+        lastY = y;
+      } else {
+        // no meaningful movement → if idle long enough, show
+        if (hideSearch && now - lastMoveTs >= IDLE_MS) {
+          setHideSearch(false);
+        }
+      }
+
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [hideSearch]);
 
   function handleLogout() {
     logout();
@@ -72,12 +110,12 @@ export default function Header() {
               </Link>
             </div>
 
-            {/* Search */}
-            <Search />
+            {/* Search: fully removed from layout while scrolling */}
+            <Search hiddenWhileScroll={hideSearch} />
 
             {/* Account & Cart (hidden on mobile) */}
             <div className="hidden md:flex items-center gap-4 md:gap-6">
-              {/* Compare with badge */}
+              {/* Compare */}
               <div className="relative group">
                 <Link
                   to="/compare"
@@ -90,14 +128,13 @@ export default function Header() {
                     </span>
                   )}
                 </Link>
-                {/* Tooltip */}
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   Compare Products
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               </div>
 
-              {/* Wishlist with badge */}
+              {/* Wishlist */}
               <div className="relative group">
                 <Link
                   to="/wishlist"
@@ -110,7 +147,6 @@ export default function Header() {
                     </span>
                   )}
                 </Link>
-                {/* Tooltip */}
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   Wishlist
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
