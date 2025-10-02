@@ -6,7 +6,7 @@ import {
   User2,
   Heart,
 } from "lucide-react";
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 
@@ -14,6 +14,16 @@ export default function BottomNav() {
   const { currentUser } = useContext(AuthContext);
   const { wishlistCount } = useWishlist();
   const { pathname } = useLocation();
+
+  // Ensure body has proper padding for fixed bottom nav
+  useEffect(() => {
+    const originalPaddingBottom = document.body.style.paddingBottom;
+    document.body.style.paddingBottom = 'calc(64px + env(safe-area-inset-bottom))';
+    
+    return () => {
+      document.body.style.paddingBottom = originalPaddingBottom;
+    };
+  }, []);
 
   const openCategories = () => {
     window.dispatchEvent(new CustomEvent("keneta:openMobileCategories"));
@@ -35,11 +45,21 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-[70] bg-white border-t border-gray-200 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] bg-white border-t border-gray-200 shadow-[0_-2px_12px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]"
       role="navigation"
       aria-label="Mobile bottom navigation"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        transform: 'translateZ(0)', // Force hardware acceleration
+        WebkitTransform: 'translateZ(0)', // Safari fix
+        willChange: 'transform', // Optimize for animations
+      }}
     >
-      <div className="grid grid-cols-5 h-16">
+      <div className="grid grid-cols-5" style={{ minHeight: '64px' }}>
         {/* Ballina */}
         <Link
           to="/"
