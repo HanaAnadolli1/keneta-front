@@ -51,7 +51,9 @@ export default function CartSidebar({ open, onClose }) {
     setBusyId(item.id);
     try {
       if (newQty === 0) {
-        const confirmed = window.confirm(`Remove "${getItemName(item)}" from cart?`);
+        const confirmed = window.confirm(
+          `Remove "${getItemName(item)}" from cart?`
+        );
         if (!confirmed) return;
         await removeItem.mutateAsync(lineItemId);
       } else {
@@ -75,7 +77,7 @@ export default function CartSidebar({ open, onClose }) {
 
   return (
     <div
-      className={`fixed top-0 right-0 h-full w-96 bg-[#132232] shadow-2xl z-50 transform duration-300 ${
+      className={`fixed top-0 right-0 h-full w-96 bg-[var(--secondary)] shadow-2xl z-50 transform duration-300 ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
       role="dialog"
@@ -118,13 +120,17 @@ export default function CartSidebar({ open, onClose }) {
                 <div className="flex items-center gap-3 mt-2">
                   <button
                     disabled={busyId === item.id}
-                    onClick={() => changeItem(item, Math.max(0, (item.quantity ?? 1) - 1))}
+                    onClick={() =>
+                      changeItem(item, Math.max(0, (item.quantity ?? 1) - 1))
+                    }
                     className="px-2 py-1 rounded text-white bg-[#1e456c] disabled:opacity-50"
                     aria-label="Decrease quantity"
                   >
                     −
                   </button>
-                  <span className="text-white tabular-nums">{item.quantity}</span>
+                  <span className="text-white tabular-nums">
+                    {item.quantity}
+                  </span>
                   <button
                     disabled={busyId === item.id}
                     onClick={() => changeItem(item, (item.quantity ?? 1) + 1)}
