@@ -31,7 +31,7 @@ import { useCategoryBreadcrumbs } from "../hooks/useBreadcrumbs";
  * - Category filter prefers numeric category_id, falls back to slug
  * ================================ */
 
-const PER_PAGE = 12;
+const PER_PAGE = 36;
 const MIN_SEARCH_LEN = 3;
 const API_PUBLIC_V1 = API_V1;
 
@@ -48,7 +48,6 @@ export default function Products() {
   const brandParam = params.get("brand") || ""; // can be names in your app
   const brandSlugParam = params.get("brand_slug") || ""; // optional
   const promotionIdParam = params.get("promotion_id") || "";
-
 
   // Category-specific filter format: attributes[brand][], attributes[color][], etc.
   const categoryBrandParam = useMemo(
@@ -433,11 +432,15 @@ export default function Products() {
           // if (sort) extra.sort = sort;
           // if (order) extra.order = order;
 
+          console.log("🔍 Search API call with limit:", PER_PAGE);
           const { products, hasNext } = await searchProducts(searchTerm, {
             limit: PER_PAGE,
             page: pageToFetch,
             extraParams: extra,
           });
+
+          console.log("📦 Search products returned:", products.length);
+          console.log("📄 Search page:", pageToFetch, "Has more:", hasNext);
 
           setItems((prev) => (append ? [...prev, ...products] : products));
           setHasMore(Boolean(hasNext));
@@ -448,9 +451,13 @@ export default function Products() {
 
         // LISTING MODE → normal products endpoint
         const qs = new URLSearchParams(baseFiltersQS);
-        qs.set("per_page", String(PER_PAGE));
+        qs.set("limit", String(PER_PAGE)); // Try 'limit' instead of 'per_page'
         qs.set("page", String(pageToFetch));
         const url = `${API_V1}/products?${qs.toString()}`;
+
+        console.log("🔍 Products API call:", url);
+        console.log("📊 PER_PAGE value:", PER_PAGE);
+        console.log("🔍 Query string:", qs.toString());
 
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -487,6 +494,9 @@ export default function Products() {
           typeof lastPage === "number"
             ? currentPage < lastPage
             : dataArray.length === PER_PAGE; // If we got a full page, assume there might be more
+
+        console.log("📦 Products returned:", dataArray.length);
+        console.log("📄 Page:", pageToFetch, "Has more:", hasNext);
 
         setItems((prev) => (append ? [...prev, ...dataArray] : dataArray));
         setHasMore(Boolean(hasNext));
@@ -791,7 +801,7 @@ export default function Products() {
           ) : !isShortSearchOnly ? (
             <>
               {viewMode === "grid" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 lg:gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   {sortedAndFilteredItems.map((product) => (
                     <ProductCard
                       key={product.id}

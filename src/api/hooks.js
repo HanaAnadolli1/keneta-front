@@ -4,7 +4,7 @@ import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import { API_V1, API_CART } from "./config";
 import axios from "./axios";
 
-const PER_PAGE = 12;
+const PER_PAGE = 36;
 const SESSION_COOKIE = "bagisto_session";
 const SESSION_LENGTH = 40;
 // add near the top (below other consts)
@@ -46,13 +46,8 @@ export function useProducts(search, options = {}) {
     qs = new URLSearchParams(search.toString());
   }
 
-  // Back-compat: old code used `limit`; new API expects `per_page`
-  if (qs.has("limit")) {
-    const v = qs.get("limit") || String(PER_PAGE);
-    qs.delete("limit");
-    if (!qs.has("per_page")) qs.set("per_page", v);
-  }
-  if (!qs.has("per_page")) qs.set("per_page", String(PER_PAGE));
+  // Use 'limit' parameter (API expects 'limit', not 'per_page')
+  if (!qs.has("limit")) qs.set("limit", String(PER_PAGE));
 
   const queryString = qs.toString();
 
