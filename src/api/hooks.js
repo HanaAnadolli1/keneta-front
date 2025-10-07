@@ -50,15 +50,25 @@ export function useProducts(search, options = {}) {
   if (!qs.has("limit")) qs.set("limit", String(PER_PAGE));
 
   const queryString = qs.toString();
+  // Include token state in query key to trigger refetch on auth changes
+  const token = localStorage.getItem("token");
+  const authKey = token ? "authenticated" : "guest";
 
   return useQuery({
-    queryKey: ["products", queryString],
+    queryKey: ["products", queryString, authKey],
     queryFn: async ({ signal }) => {
+      // Get bearer token for customer-group pricing
+      const token = localStorage.getItem("token");
+      const headers = { Accept: "application/json" };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const res = await fetch(
         `https://admin.keneta-ks.com/api/v2/products?${queryString}`,
         {
           signal,
-          headers: { Accept: "application/json" },
+          headers,
         }
       );
       if (!res.ok) {
@@ -85,13 +95,24 @@ export function useProducts(search, options = {}) {
 }
 
 export function useProduct(id) {
+  // Include token state in query key to trigger refetch on auth changes
+  const token = localStorage.getItem("token");
+  const authKey = token ? "authenticated" : "guest";
+
   return useQuery({
     enabled: !!id,
-    queryKey: ["product", id],
+    queryKey: ["product", id, authKey],
     queryFn: async ({ signal }) => {
+      // Get bearer token for customer-group pricing
+      const token = localStorage.getItem("token");
+      const headers = { Accept: "application/json" };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const res = await fetch(`${API_V1}/products/${id}`, {
         signal,
-        headers: { Accept: "application/json" },
+        headers,
       });
       if (!res.ok) {
         throw new Error(`Fetch product failed: ${res.status}`);

@@ -1,5 +1,5 @@
 // src/hooks/useProductSearch.js
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 
 // Hardcode the API host as requested.
 // (You can still override via VITE_API_BASE_URL if you want later.)
@@ -41,6 +41,21 @@ function normalizeProduct(p) {
 export function useProductSearch() {
   const [loading, setLoading] = useState(false);
   const controllerRef = useRef(null);
+  const [authKey, setAuthKey] = useState(() => {
+    const token = localStorage.getItem("token");
+    return token ? "authenticated" : "guest";
+  });
+
+  // Listen for auth changes to update auth key
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const token = localStorage.getItem("token");
+      setAuthKey(token ? "authenticated" : "guest");
+    };
+
+    window.addEventListener("auth-changed", handleAuthChange);
+    return () => window.removeEventListener("auth-changed", handleAuthChange);
+  }, []);
 
   /** GET https://admin.keneta-ks.com/api/v2/search?q=&per_page=&page= */
   const searchProducts = useCallback(async (q, opts = {}) => {
@@ -67,10 +82,17 @@ export function useProductSearch() {
 
     setLoading(true);
     try {
+      // Get bearer token for customer-group pricing
+      const token = localStorage.getItem("token");
+      const headers = { Accept: "application/json" };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const url = `${API_BASE}/api/v2/search?${params.toString()}`;
       const res = await fetch(url, {
         method: "GET",
-        headers: { Accept: "application/json" },
+        headers,
         signal: ctrl.signal,
         credentials: "omit",
       });

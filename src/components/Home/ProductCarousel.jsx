@@ -44,8 +44,16 @@ const ProductCarousel = ({ customization }) => {
         if (filters.category_id) queryParams.set("category_id", filters.category_id);
         if (filters.brand) queryParams.set("brand", filters.brand);
 
+        // Get bearer token for customer-group pricing
+        const token = localStorage.getItem("token");
+        const headers = { Accept: "application/json" };
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
         const response = await fetch(
-          `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`
+          `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`,
+          { headers }
         );
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
