@@ -7,6 +7,7 @@ import ProductCard from "../ProductCard";
 import { useWishlist } from "../../context/WishlistContext";
 import { useToast } from "../../context/ToastContext";
 import { usePrefetchProduct, useCartMutations } from "../../api/hooks";
+import { buildApiHeaders } from "../../utils/apiHelpers";
 
 const ProductCarousel = ({ customization }) => {
   const [products, setProducts] = useState([]);
@@ -44,12 +45,8 @@ const ProductCarousel = ({ customization }) => {
         if (filters.category_id) queryParams.set("category_id", filters.category_id);
         if (filters.brand) queryParams.set("brand", filters.brand);
 
-        // Get bearer token for customer-group pricing
-        const token = localStorage.getItem("token");
-        const headers = { Accept: "application/json" };
-        if (token) {
-          headers.Authorization = `Bearer ${token}`;
-        }
+        // Build headers with bearer token if available
+        const headers = buildApiHeaders();
 
         const response = await fetch(
           `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`,

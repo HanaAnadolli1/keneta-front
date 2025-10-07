@@ -3,6 +3,7 @@ import Cookies from "js-cookie";
 import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import { API_V1, API_CART } from "./config";
 import axios from "./axios";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 const PER_PAGE = 36;
 const SESSION_COOKIE = "bagisto_session";
@@ -50,25 +51,15 @@ export function useProducts(search, options = {}) {
   if (!qs.has("limit")) qs.set("limit", String(PER_PAGE));
 
   const queryString = qs.toString();
-  // Include token state in query key to trigger refetch on auth changes
-  const token = localStorage.getItem("token");
-  const authKey = token ? "authenticated" : "guest";
 
   return useQuery({
-    queryKey: ["products", queryString, authKey],
+    queryKey: ["products", queryString],
     queryFn: async ({ signal }) => {
-      // Get bearer token for customer-group pricing
-      const token = localStorage.getItem("token");
-      const headers = { Accept: "application/json" };
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
       const res = await fetch(
         `https://admin.keneta-ks.com/api/v2/products?${queryString}`,
         {
           signal,
-          headers,
+          headers: buildApiHeaders(),
         }
       );
       if (!res.ok) {
@@ -95,24 +86,13 @@ export function useProducts(search, options = {}) {
 }
 
 export function useProduct(id) {
-  // Include token state in query key to trigger refetch on auth changes
-  const token = localStorage.getItem("token");
-  const authKey = token ? "authenticated" : "guest";
-
   return useQuery({
     enabled: !!id,
-    queryKey: ["product", id, authKey],
+    queryKey: ["product", id],
     queryFn: async ({ signal }) => {
-      // Get bearer token for customer-group pricing
-      const token = localStorage.getItem("token");
-      const headers = { Accept: "application/json" };
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
       const res = await fetch(`${API_V1}/products/${id}`, {
         signal,
-        headers,
+        headers: buildApiHeaders(),
       });
       if (!res.ok) {
         throw new Error(`Fetch product failed: ${res.status}`);

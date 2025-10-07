@@ -22,6 +22,7 @@ import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useProductSearch } from "../hooks/useProductSearch";
 import { useCategoryBreadcrumbs } from "../hooks/useBreadcrumbs";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 /* ================================
  * Products Page
@@ -459,7 +460,7 @@ export default function Products() {
         console.log("📊 PER_PAGE value:", PER_PAGE);
         console.log("🔍 Query string:", qs.toString());
 
-        const res = await fetch(url);
+        const res = await fetch(url, { headers: buildApiHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
 

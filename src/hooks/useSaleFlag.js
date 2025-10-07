@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 // Treat date-only (YYYY-MM-DD) as inclusive end-of-day
 const withinRange = (from, to) => {
@@ -48,7 +49,9 @@ export default function useSaleFlag(product, { apiBase } = {}) {
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await fetch(`${base}/products/${id}`);
+      const res = await fetch(`${base}/products/${id}`, { 
+        headers: buildApiHeaders() 
+      });
       if (!res.ok) throw new Error("Product load failed");
       return res.json();
     },

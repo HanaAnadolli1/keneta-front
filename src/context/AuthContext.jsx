@@ -28,8 +28,6 @@ export function AuthProvider({ children }) {
   const signalAuthChanged = () => {
     // let listeners (WishlistContext, etc.) know auth changed
     window.dispatchEvent(new Event("auth-changed"));
-    // Signal that data should be refetched for updated pricing
-    window.dispatchEvent(new Event("auth-data-refetch"));
   };
 
   const login = (user) => {
