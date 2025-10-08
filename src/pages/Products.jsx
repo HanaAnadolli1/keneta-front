@@ -809,9 +809,9 @@ export default function Products() {
                       product={product}
                       isWishlisted={isWishlisted(product.id)}
                       toggleWishlist={toggleWishlist}
-                      handleAddToCart={(p) =>
+                      handleAddToCart={(productId) =>
                         addItem.mutate(
-                          { productId: p.id, quantity: 1 },
+                          { productId: productId, quantity: 1 },
                           {
                             onSuccess: () =>
                               toast.success("Item added to cart."),
@@ -835,9 +835,9 @@ export default function Products() {
                         product={product}
                         isWishlisted={isWishlisted(product.id)}
                         toggleWishlist={toggleWishlist}
-                        handleAddToCart={(p) =>
+                        handleAddToCart={(productId) =>
                           addItem.mutate(
-                            { productId: p.id, quantity: 1 },
+                            { productId: productId, quantity: 1 },
                             {
                               onSuccess: () =>
                                 toast.success("Item added to cart."),
