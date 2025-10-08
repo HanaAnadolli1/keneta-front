@@ -47,25 +47,39 @@
 @media (max-width: 768px) {
   .custom-gallery {
     height: 300px; /* Smaller height on mobile */
-    touch-action: pan-y; /* Allow vertical scrolling on mobile */
+    touch-action: pan-y !important; /* Allow vertical scrolling on mobile */
   }
 
   .custom-gallery .image-gallery-slide {
     height: 300px;
-    touch-action: pan-y; /* Allow vertical scrolling on mobile */
+    touch-action: pan-y !important; /* Allow vertical scrolling on mobile */
+    pointer-events: none; /* Don't capture touch events */
   }
 
   .custom-gallery .image-gallery-image {
     height: 300px;
+    pointer-events: none; /* Don't capture touch events */
   }
 
   .custom-gallery .image-gallery-content {
     height: 300px;
-    touch-action: pan-y; /* Allow vertical scrolling on mobile */
+    touch-action: pan-y !important; /* Allow vertical scrolling on mobile */
   }
 
   /* Ensure the wrapper allows scrolling */
   .custom-gallery .image-gallery-swipe {
-    touch-action: pan-y; /* Allow vertical scrolling while preventing horizontal swipe */
+    touch-action: pan-y !important; /* Allow vertical scrolling while preventing horizontal swipe */
+    pointer-events: none; /* Don't capture touch events on mobile */
+  }
+
+  /* Prevent any gallery element from blocking scroll */
+  .custom-gallery * {
+    touch-action: pan-y !important;
+  }
+
+  /* Only allow pointer events on bullets for navigation */
+  .custom-gallery .image-gallery-bullets,
+  .custom-gallery .image-gallery-bullet {
+    pointer-events: auto;
   }
 }
