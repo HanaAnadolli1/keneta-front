@@ -43,6 +43,24 @@
   pointer-events: none;
 }
 
+/* Zoom functionality */
+.cursor-zoom-in {
+  cursor: zoom-in;
+  user-select: none;
+}
+
+.cursor-zoom-in:hover {
+  cursor: zoom-in;
+}
+
+/* Prevent text selection during zoom */
+.cursor-zoom-in * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .custom-gallery {
@@ -81,5 +99,10 @@
   .custom-gallery .image-gallery-bullets,
   .custom-gallery .image-gallery-bullet {
     pointer-events: auto;
+  }
+
+  /* Mobile zoom cursor should be pointer */
+  .cursor-zoom-in {
+    cursor: pointer;
   }
 }
