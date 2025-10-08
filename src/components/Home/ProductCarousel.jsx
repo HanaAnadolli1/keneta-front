@@ -149,10 +149,13 @@ const ProductCarousel = ({ customization }) => {
                   showToast("Added to wishlist", "success");
                 }
               }}
-              handleAddToCart={(productId) => {
-                addToCart(productId, 1)
-                  .then(() => showToast("Added to cart", "success"))
-                  .catch((err) => showToast("Failed to add to cart", "error"));
+              onAddToCart={async (quantity = 1) => {
+                try {
+                  await addToCart(product.id, quantity);
+                  showToast("Added to cart", "success");
+                } catch (err) {
+                  showToast("Failed to add to cart", "error");
+                }
               }}
               onPrefetch={() => prefetchProduct(product.id)}
               isInWishlist={isWishlisted(product.id)}

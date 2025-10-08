@@ -899,21 +899,7 @@ export default function ProductDetails() {
         {!relatedLoading && !relatedError && related?.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
             {related.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                handleAddToCart={(productId) =>
-                  addItem.mutate(
-                    { productId: productId, quantity: 1 },
-                    {
-                      onSuccess: () => toast.success("Item added to cart."),
-                      onError: (e) =>
-                        toast.error(e?.message || "Failed to add to cart."),
-                    }
-                  )
-                }
-                busy={addItem.isPending}
-              />
+              <ProductCard key={p.id} product={p} />
             ))}
           </div>
         )}
