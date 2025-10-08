@@ -37,3 +37,8 @@
 .image-gallery-bullet.active {
   background-color: #4f46e5;
 }
+
+/* allow vertical page scroll when finger/trackpad is over the image */
+.custom-gallery .image-gallery-slide img {
+  pointer-events: none;
+}
