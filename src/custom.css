@@ -42,3 +42,30 @@
 .custom-gallery .image-gallery-slide img {
   pointer-events: none;
 }
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .custom-gallery {
+    height: 300px; /* Smaller height on mobile */
+    touch-action: pan-y; /* Allow vertical scrolling on mobile */
+  }
+
+  .custom-gallery .image-gallery-slide {
+    height: 300px;
+    touch-action: pan-y; /* Allow vertical scrolling on mobile */
+  }
+
+  .custom-gallery .image-gallery-image {
+    height: 300px;
+  }
+
+  .custom-gallery .image-gallery-content {
+    height: 300px;
+    touch-action: pan-y; /* Allow vertical scrolling on mobile */
+  }
+
+  /* Ensure the wrapper allows scrolling */
+  .custom-gallery .image-gallery-swipe {
+    touch-action: pan-y; /* Allow vertical scrolling while preventing horizontal swipe */
+  }
+}

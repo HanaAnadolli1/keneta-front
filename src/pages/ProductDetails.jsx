@@ -439,6 +439,7 @@ export default function ProductDetails() {
                 showFullscreenButton={false}
                 showNav={false}
                 showBullets={isMobile}
+                disableSwipe={isMobile}
                 additionalClass="custom-gallery"
               />
             </div>
