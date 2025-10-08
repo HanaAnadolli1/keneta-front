@@ -438,7 +438,12 @@ export default function ProductDetails() {
 
   const add = addItem;
   const handleAdd = () => {
-    if (!product || qty < 1) return;
+    if (!product || !product.id || qty < 1) return;
+    console.log("Adding to cart:", {
+      productId: product.id,
+      quantity: qty,
+      product,
+    });
     const tid = toast.info("Adding to cart…", { duration: 0 });
     add.mutate(
       { productId: product.id, quantity: qty },
@@ -448,6 +453,7 @@ export default function ProductDetails() {
           toast.success("Item added to cart.");
         },
         onError: (e) => {
+          console.error("Add to cart error:", e);
           toast.remove(tid);
           toast.error(e?.message || "Failed to add to cart.");
         },
