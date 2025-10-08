@@ -25,6 +25,7 @@ import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useProductBreadcrumbs } from "../hooks/useBreadcrumbs";
 import useSaleFlag from "../hooks/useSaleFlag";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
 
@@ -156,8 +157,26 @@ export default function ProductDetails() {
   const [showImageModal, setShowImageModal] = useState(false);
 
   // Use sale flag hook for proper price display
-  const { saleActive, hasStrike, priceLabel, strikeLabel } =
-    useSaleFlag(product);
+  const { saleActive, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
+    product,
+    { apiBase: "https://admin.keneta-ks.com/api/v2" }
+  );
+
+  console.log("ProductDetails - useSaleFlag result:", {
+    product: product
+      ? {
+          id: product.id,
+          price: product.price,
+          regular_price: product.regular_price,
+          special_price: product.special_price,
+          formatted_price: product.formatted_price,
+          formatted_regular_price: product.formatted_regular_price,
+          formatted_special_price: product.formatted_special_price,
+        }
+      : null,
+    result: { saleActive, hasStrike, priceLabel, strikeLabel },
+  });
+
   const [activeTab, setActiveTab] = useState("description");
 
   // related
@@ -191,14 +210,42 @@ export default function ProductDetails() {
     (async () => {
       try {
         setError(null);
-        const res = await fetch(
+        // First, get the product ID from the list endpoint
+        const listRes = await fetch(
           `${API_V1}/products?url_key=${encodeURIComponent(url_key)}`
         );
-        if (!res.ok) throw new Error(`Status ${res.status}`);
-        const json = await res.json();
-        const list = Array.isArray(json?.data) ? json.data : [];
+        if (!listRes.ok) throw new Error(`Status ${listRes.status}`);
+        const listJson = await listRes.json();
+        const list = Array.isArray(listJson?.data) ? listJson.data : [];
         if (!list.length) throw new Error("Product not found");
-        if (!ignore) setProduct(list[0]);
+
+        const productId = list[0].id;
+        console.log("ProductDetails - List API result:", {
+          productId,
+          listProduct: list[0],
+          url_key,
+        });
+
+        // Then fetch the detailed product data with special pricing
+        const detailRes = await fetch(`${API_V1}/products/${productId}`, {
+          headers: buildApiHeaders(),
+        });
+        if (!detailRes.ok)
+          throw new Error(`Detail fetch failed: ${detailRes.status}`);
+        const detailJson = await detailRes.json();
+
+        console.log("ProductDetails - Detail API result:", {
+          productId,
+          detailProduct: detailJson.data,
+          price: detailJson.data?.price,
+          regular_price: detailJson.data?.regular_price,
+          special_price: detailJson.data?.special_price,
+          formatted_price: detailJson.data?.formatted_price,
+          formatted_special_price: detailJson.data?.formatted_special_price,
+          formatted_regular_price: detailJson.data?.formatted_regular_price,
+        });
+
+        if (!ignore) setProduct(detailJson.data);
       } catch (e) {
         if (!ignore) setError(e.message);
       }

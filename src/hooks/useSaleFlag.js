@@ -49,10 +49,12 @@ export default function useSaleFlag(product, { apiBase } = {}) {
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await fetch(`${base}/products/${id}`, { 
-        headers: buildApiHeaders() 
+      const res = await fetch(`${base}/products/${id}`, {
+        headers: buildApiHeaders(),
       });
-      if (!res.ok) throw new Error("Product load failed");
+      if (!res.ok) {
+        throw new Error("Product load failed");
+      }
       return res.json();
     },
   });
@@ -62,16 +64,19 @@ export default function useSaleFlag(product, { apiBase } = {}) {
   const regular = Number(product?.regular_price ?? 0);
   const special = Number(product?.special_price ?? 0);
   const effective = Number(product?.price ?? 0);
-  
+
   // Check if there's a special price available
   const hasSpecialPrice = product?.formatted_special_price && special > 0;
-  const priceSaysSale = regular > 0 && (special > 0 ? special < regular : effective < regular);
+  const priceSaysSale =
+    regular > 0 && (special > 0 ? special < regular : effective < regular);
 
   const { from, to } = extractDates(details);
   const haveDates = Boolean(from || to);
 
   // Show sale if we have special price OR if price is less than regular (with dates)
-  const saleActive = hasSpecialPrice || (haveDates ? priceSaysSale && withinRange(from, to) : false);
+  const saleActive =
+    hasSpecialPrice ||
+    (haveDates ? priceSaysSale && withinRange(from, to) : false);
 
   const pct =
     saleActive && regular > 0
@@ -79,9 +84,9 @@ export default function useSaleFlag(product, { apiBase } = {}) {
       : null;
 
   // Show strikethrough if we have special price and regular price
-  const hasStrike = 
-    saleActive && 
-    regular > 0 && 
+  const hasStrike =
+    saleActive &&
+    regular > 0 &&
     (special > 0 || (product?.formatted_special_price && effective < regular));
 
   const priceLabel = saleActive
@@ -89,7 +94,7 @@ export default function useSaleFlag(product, { apiBase } = {}) {
     : product?.formatted_regular_price || product?.formatted_price;
 
   // Create formatted regular price if it doesn't exist
-  const strikeLabel = hasStrike 
+  const strikeLabel = hasStrike
     ? product?.formatted_regular_price || `€${regular.toFixed(2)}`
     : null;
 
