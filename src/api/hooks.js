@@ -154,9 +154,16 @@ export function useCartMutations() {
   // Add item
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1, ...rest }) => {
+      console.log("Cart mutation called with:", { productId, quantity, rest });
+
+      if (!productId) {
+        throw new Error("Product ID is required");
+      }
+
       ensureSession();
       await ensureCsrfCookie();
       if (token) {
+        console.log("Using customer cart API");
         return axios.post(`/customer/cart/add/${productId}`, {
           is_buy_now: 0,
           product_id: productId,
@@ -164,22 +171,77 @@ export function useCartMutations() {
           ...rest,
         });
       }
+      console.log("Using guest cart API");
       const csrf = getCsrfToken();
-      const res = await fetch(`${API_CART}/checkout/cart`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "X-XSRF-TOKEN": csrf,
+
+      // Try different approaches for guest cart
+      const approaches = [
+        // Approach 1: Original fetch with checkout/cart
+        async () => {
+          const res = await fetch(`${API_CART}/checkout/cart`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-XSRF-TOKEN": csrf,
+            },
+            body: JSON.stringify({ product_id: productId, quantity }),
+          });
+          if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+          return res.json();
         },
-        body: JSON.stringify({ product_id: productId, quantity }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.message || `Add failed: ${res.status}`);
+
+        // Approach 2: Try axios with guest cart endpoint
+        async () => {
+          const res = await axios.post("/checkout/cart", {
+            product_id: productId,
+            quantity,
+          });
+          return res.data;
+        },
+
+        // Approach 3: Try with different parameter format
+        async () => {
+          const res = await fetch(`${API_CART}/checkout/cart`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-XSRF-TOKEN": csrf,
+            },
+            body: JSON.stringify({ productId, quantity }),
+          });
+          if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+          return res.json();
+        },
+
+        // Approach 4: Try direct cart endpoint
+        async () => {
+          const res = await axios.post("/cart", {
+            product_id: productId,
+            quantity,
+          });
+          return res.data;
+        },
+      ];
+
+      let lastError = null;
+
+      for (let i = 0; i < approaches.length; i++) {
+        try {
+          console.log(`Trying approach ${i + 1}...`);
+          const result = await approaches[i]();
+          console.log(`Success with approach ${i + 1}!`);
+          return result;
+        } catch (err) {
+          console.log(`Approach ${i + 1} failed:`, err.message);
+          lastError = err;
+        }
       }
-      return res.json();
+
+      throw lastError || new Error("All cart approaches failed");
     },
     onSettled: () => qc.invalidateQueries(["cart"]),
   });

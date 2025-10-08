@@ -809,17 +809,27 @@ export default function Products() {
                       product={product}
                       isWishlisted={isWishlisted(product.id)}
                       toggleWishlist={toggleWishlist}
-                      handleAddToCart={(p) =>
+                      handleAddToCart={(p) => {
+                        const productId = Number(p.id);
+                        if (!productId || isNaN(productId)) {
+                          console.error("Invalid product ID:", p.id);
+                          toast.error("Invalid product ID");
+                          return;
+                        }
                         addItem.mutate(
-                          { productId: p.id, quantity: 1 },
+                          { productId, quantity: 1 },
                           {
                             onSuccess: () =>
                               toast.success("Item added to cart."),
-                            onError: () =>
-                              toast.error("Failed to add to cart."),
+                            onError: (e) => {
+                              console.error("Add to cart error:", e);
+                              toast.error(
+                                e?.message || "Failed to add to cart."
+                              );
+                            },
                           }
-                        )
-                      }
+                        );
+                      }}
                       busy={false}
                       prefetch={prefetch}
                     />
@@ -835,17 +845,27 @@ export default function Products() {
                         product={product}
                         isWishlisted={isWishlisted(product.id)}
                         toggleWishlist={toggleWishlist}
-                        handleAddToCart={(p) =>
+                        handleAddToCart={(p) => {
+                          const productId = Number(p.id);
+                          if (!productId || isNaN(productId)) {
+                            console.error("Invalid product ID:", p.id);
+                            toast.error("Invalid product ID");
+                            return;
+                          }
                           addItem.mutate(
-                            { productId: p.id, quantity: 1 },
+                            { productId, quantity: 1 },
                             {
                               onSuccess: () =>
                                 toast.success("Item added to cart."),
-                              onError: () =>
-                                toast.error("Failed to add to cart."),
+                              onError: (e) => {
+                                console.error("Add to cart error:", e);
+                                toast.error(
+                                  e?.message || "Failed to add to cart."
+                                );
+                              },
                             }
-                          )
-                        }
+                          );
+                        }}
                         busy={false}
                         prefetch={prefetch}
                       />

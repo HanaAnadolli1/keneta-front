@@ -439,14 +439,25 @@ export default function ProductDetails() {
   const add = addItem;
   const handleAdd = () => {
     if (!product || !product.id || qty < 1) return;
+
+    // Ensure productId is a number
+    const productId = Number(product.id);
+    if (!productId || isNaN(productId)) {
+      console.error("Invalid product ID:", product.id);
+      toast.error("Invalid product ID");
+      return;
+    }
+
     console.log("Adding to cart:", {
-      productId: product.id,
+      productId,
       quantity: qty,
+      productIdType: typeof productId,
       product,
     });
+
     const tid = toast.info("Adding to cart…", { duration: 0 });
     add.mutate(
-      { productId: product.id, quantity: qty },
+      { productId, quantity: qty },
       {
         onSuccess: () => {
           toast.remove(tid);
