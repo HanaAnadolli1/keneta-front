@@ -23,7 +23,9 @@ function useThemeCustomizations() {
       // Filter active customizations and sort by sort_order
       const activeCustomizations = items
         .filter((x) => Number(x?.status) === 1)
-        .sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
+        .sort(
+          (a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0)
+        );
 
       // Extract image carousels for hero section
       const imageCarousels = activeCustomizations
@@ -63,7 +65,9 @@ export default function Home() {
   return (
     <div>
       {error ? (
-        <div className="p-8 text-red-600">Failed to load theme customizations.</div>
+        <div className="p-8 text-red-600">
+          Failed to load theme customizations.
+        </div>
       ) : (
         <>
           {/* Hero Carousel Section */}
@@ -82,20 +86,23 @@ export default function Home() {
 
               {/* Right (1/3) */}
               {(rightSlides.length > 0 || isLoading) && (
-                <div className="md:col-span-1">
+                <div className="hidden md:block md:col-span-1">
                   <Carousel
                     slides={isLoading ? [] : rightSlides}
                     className="h-[420px] md:h-[560px]"
                     buttonAlign="center"
                   />
-          </div>
+                </div>
               )}
-        </div>
+            </div>
           </section>
 
           {/* Render all theme customizations in order */}
           {customizations.map((customization) => (
-            <ThemeRenderer key={customization.id} customization={customization} />
+            <ThemeRenderer
+              key={customization.id}
+              customization={customization}
+            />
           ))}
         </>
       )}

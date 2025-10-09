@@ -22,6 +22,7 @@ import useLoadColors from "./hooks/useLoadColors";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AccountShell from "./components/account/AccountShell";
 import Profile from "./pages/account/Profile";
+import Address from "./pages/account/Address";
 import Orders from "./pages/account/Orders";
 import OrderDetail from "./pages/account/OrderDetail";
 
@@ -76,10 +77,11 @@ export default function App() {
         >
           <Route index element={<Profile />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="address" element={<Address />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetail />} />
-          <Route path="gdpr" element={<GDPR />} /> 
-          <Route path="reviews" element={<Reviews />} /> 
+          <Route path="gdpr" element={<GDPR />} />
+          <Route path="reviews" element={<Reviews />} />
         </Route>
 
         {/* 404 */}

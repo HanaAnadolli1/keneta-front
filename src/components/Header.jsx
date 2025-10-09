@@ -5,6 +5,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useCompare } from "../context/CompareContext";
+import { useCart } from "../api/hooks";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import BottomNav from "./BottomNav";
@@ -20,7 +21,13 @@ export default function Header() {
 
   const { wishlistCount } = useWishlist();
   const { count: compareCount } = useCompare();
+  const { data: cart } = useCart();
   const { currentUser, logout } = useContext(AuthContext);
+
+  // Calculate cart total quantity (sum of all item quantities)
+  const cartCount = Array.isArray(cart?.items)
+    ? cart.items.reduce((total, item) => total + (item.quantity || 0), 0)
+    : 0;
 
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -163,7 +170,7 @@ export default function Header() {
                 >
                   <FiHeart />
                   {wishlistCount > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-semibold">
+                    <span className="absolute -top-7 -right-9 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-semibold">
                       {wishlistCount}
                     </span>
                   )}
@@ -216,11 +223,22 @@ export default function Header() {
               </div>
 
               {/* Cart Icon */}
-              <div
-                onClick={() => setIsCartOpen(true)}
-                className="text-[var(--secondary)] text-2xl cursor-pointer"
-              >
-                <FiShoppingCart />
+              <div className="relative group">
+                <div
+                  onClick={() => setIsCartOpen(true)}
+                  className="relative text-[var(--secondary)] text-2xl cursor-pointer"
+                >
+                  <FiShoppingCart />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-semibold">
+                      {cartCount}
+                    </span>
+                  )}
+                </div>
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                  Shopping Cart
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                </div>
               </div>
             </div>
           </div>

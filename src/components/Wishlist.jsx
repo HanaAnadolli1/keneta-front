@@ -13,6 +13,7 @@ import { API_V1 } from "../api/config";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { AuthContext } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import useSaleFlag from "../hooks/useSaleFlag";
 import logo from "../assets/logo.svg";
 
@@ -111,14 +112,13 @@ function resolvePrices(product, sale) {
 /** Normalize many possible API shapes into a product object */
 function normalizeProductShape(j) {
   // common shapes: {data:{...}}, {data:[...]}, {...}, {product:{...}}
-  const p =
-    j?.data?.id
-      ? j.data
-      : Array.isArray(j?.data) && j.data[0]?.id
-      ? j.data[0]
-      : j?.product?.id
-      ? j.product
-      : j;
+  const p = j?.data?.id
+    ? j.data
+    : Array.isArray(j?.data) && j.data[0]?.id
+    ? j.data[0]
+    : j?.product?.id
+    ? j.product
+    : j;
 
   return p && Number(p.id) ? p : null;
 }
@@ -215,7 +215,11 @@ function toCORSProxy(originalUrl, cacheBust = true) {
     const u = new URL(originalUrl, window.location.href);
     const base = `${u.host}${u.pathname}`;
     const qs = u.search ? u.search.slice(1) : "";
-    const cb = cacheBust ? (qs ? `&cb_pdf=${Date.now()}` : `cb_pdf=${Date.now()}`) : "";
+    const cb = cacheBust
+      ? qs
+        ? `&cb_pdf=${Date.now()}`
+        : `cb_pdf=${Date.now()}`
+      : "";
     const finalQS = [qs, cb].filter(Boolean).join("&");
     return `https://images.weserv.nl/?url=${encodeURIComponent(base)}${
       finalQS ? `&${finalQS}` : ""
@@ -237,7 +241,9 @@ const WishlistRow = memo(function WishlistRow({
   const product = item.product;
 
   const urlKey =
-    product?.url_key || product?.slug || (product?.id ? String(product.id) : "");
+    product?.url_key ||
+    product?.slug ||
+    (product?.id ? String(product.id) : "");
 
   const sale = useSaleFlag(product, { apiBase: API_V1 });
   const { priceLabel, strikeLabel, hasStrike } = resolvePrices(product, sale);
@@ -252,17 +258,19 @@ const WishlistRow = memo(function WishlistRow({
     return rawImage;
   }, [rawImage, cross, showHeaderForPDF]);
 
-  // ✅ Be permissive: only declare OOS if we can prove it
+  // More accurate stock checking
   const qty = Number(product?.quantity);
-  const computedInStock =
-    product?.in_stock === true ||
-    (product?.in_stock === undefined && (!Number.isFinite(qty) || qty > 0));
+  const computedInStock = product?.in_stock ?? (product?.quantity ?? 0) > 0;
+  const definitelyOutOfStock =
+    product?.in_stock === false || (Number.isFinite(qty) && qty <= 0);
 
   return (
     <div className="flex items-center justify-between gap-4 pb-4 p-2">
       <Link
         to={urlKey ? `/products/${urlKey}` : "#"}
-        className={`flex gap-4 ${urlKey ? "" : "pointer-events-none opacity-70"}`}
+        className={`flex gap-4 ${
+          urlKey ? "" : "pointer-events-none opacity-70"
+        }`}
       >
         <img
           src={imgSrc}
@@ -292,7 +300,9 @@ const WishlistRow = memo(function WishlistRow({
 
       <div className="flex items-center gap-4">
         {token ? (
-          computedInStock ? (
+          definitelyOutOfStock ? (
+            <span className="text-sm text-red-500">Out of Stock</span>
+          ) : (
             <button
               onClick={() => moveToCart(item.product_id)}
               className="bg-[#001242] text-white px-4 py-2 rounded text-sm"
@@ -300,8 +310,6 @@ const WishlistRow = memo(function WishlistRow({
             >
               Move To Cart
             </button>
-          ) : (
-            <span className="text-sm text-red-500">Out of Stock</span>
           )
         ) : (
           <span className="text-sm text-gray-500">Login to move to cart</span>
@@ -310,7 +318,9 @@ const WishlistRow = memo(function WishlistRow({
         <div className="text-right text-sm">
           <span className="font-medium">{priceLabel || "—"}</span>
           {hasStrike && strikeLabel && (
-            <div className="line-through text-gray-400 text-xs">{strikeLabel}</div>
+            <div className="line-through text-gray-400 text-xs">
+              {strikeLabel}
+            </div>
           )}
           {!showHeaderForPDF && (
             <button
@@ -333,6 +343,7 @@ export default function Wishlist() {
   const [loading, setLoading] = useState(false);
 
   const { currentUser } = useContext(AuthContext);
+  const toast = useToast();
 
   // Token for API calls
   const [token, setToken] = useState(
@@ -378,7 +389,9 @@ export default function Wishlist() {
       jwtClaims?.family_name ??
       "";
     const full_name =
-      currentUser?.name || [first, last].filter(Boolean).join(" ") || "Customer";
+      currentUser?.name ||
+      [first, last].filter(Boolean).join(" ") ||
+      "Customer";
     const email = currentUser?.email ?? jwtClaims?.email ?? "-";
     const phone =
       currentUser?.phone ??
@@ -396,7 +409,10 @@ export default function Wishlist() {
       if (token) {
         // 1) Get wishlist rows
         const res = await fetch(`${API_V1}/customer/wishlist?limit=100`, {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
         });
         const json = await res.json().catch(() => ({}));
         const rows = Array.isArray(json?.data)
@@ -438,7 +454,9 @@ export default function Wishlist() {
           try {
             const raw = localStorage.getItem(GUEST_KEY);
             const arr = raw ? JSON.parse(raw) : [];
-            return Array.isArray(arr) ? arr.map(Number).filter(Number.isFinite) : [];
+            return Array.isArray(arr)
+              ? arr.map(Number).filter(Number.isFinite)
+              : [];
           } catch {
             return [];
           }
@@ -473,63 +491,173 @@ export default function Wishlist() {
 
   const moveToCart = async (productId) => {
     if (!token) {
-      alert("Please login to move items to the cart.");
+      toast.error("Please login to move items to the cart.");
       return;
     }
-    const item = wishlist.find((w) => Number(w.product_id) === Number(productId));
-    const product = item?.product;
+    const item = wishlist.find(
+      (w) => Number(w.product_id) === Number(productId)
+    );
+    let product = item?.product;
 
     if (product?.super_attributes?.length) {
-      alert("Please select a variant on the product page.");
+      toast.error("Please select a variant on the product page.");
       return;
     }
     if (!product) {
-      alert("Product details missing.");
+      toast.error("Product details missing.");
       return;
     }
 
-    // ✅ Only block if we can PROVE it's out of stock
-    const qty = Number(product?.quantity);
-    const definitelyOut =
-      product?.in_stock === false || (Number.isFinite(qty) && qty <= 0);
+    // Try to get fresh product data to check current stock status
+    try {
+      console.log("🔄 Fetching fresh product data for:", productId);
+      const freshRes = await fetch(`${API_V1}/products/${productId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
 
-    if (definitelyOut) {
-      alert("Product is out of stock.");
+      if (freshRes.ok) {
+        const freshJson = await freshRes.json();
+        const freshProduct = freshJson?.data;
+        if (freshProduct) {
+          console.log("🔄 Fresh product data:", {
+            id: freshProduct.id,
+            in_stock: freshProduct.in_stock,
+            quantity: freshProduct.quantity,
+            name: freshProduct.name,
+          });
+          product = freshProduct; // Use fresh data
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch fresh product data, using cached:", err);
+    }
+
+    // Check stock status more thoroughly
+    const qty = Number(product?.quantity);
+    const inStock = product?.in_stock ?? (product?.quantity ?? 0) > 0;
+
+    // If we have definitive stock info, use it
+    if (product?.in_stock === false) {
+      toast.error("This product is out of stock.");
       return;
+    }
+
+    // If we have quantity info and it's 0 or less, block it
+    if (Number.isFinite(qty) && qty <= 0) {
+      toast.error("This product is out of stock.");
+      return;
+    }
+
+    // If we can't determine stock status, warn user but let them try
+    if (!inStock && product?.in_stock === undefined && !Number.isFinite(qty)) {
+      toast.warn("Stock status unknown. Attempting to add to cart...");
     }
 
     try {
-      const res = await fetch(
-        `${API_V1}/customer/wishlist/${productId}/move-to-cart`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ additional: { product_id: productId, quantity: 1 } }),
+      console.log("🛒 Attempting to move to cart:", {
+        productId,
+        productName: product?.name,
+        productStock: product?.in_stock,
+        productQuantity: product?.quantity,
+        requestBody: {
+          is_buy_now: 0,
+          product_id: productId,
+          quantity: 1,
+        },
+      });
+
+      // Use the same API endpoint as the cart mutations
+      const res = await fetch(`${API_V1}/customer/cart/add/${productId}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          is_buy_now: 0,
+          product_id: productId,
+          quantity: 1,
+        }),
+      });
+
+      console.log("🛒 Cart API response:", {
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.ok,
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+
+        console.log("🛒 Error response:", json);
+
+        // Handle specific error messages from server
+        if (json?.message?.includes("quantity is not available")) {
+          toast.error(
+            "Sorry, this product is currently out of stock. It may have been in stock when you added it to your wishlist, but is no longer available."
+          );
+          // Auto-remove from wishlist after a delay
+          setTimeout(() => {
+            removeItem(productId);
+            toast.info("Item removed from wishlist automatically.");
+          }, 2000);
+          return;
+        } else if (json?.message?.includes("out of stock")) {
+          toast.error("This product is currently out of stock.");
+          // Auto-remove from wishlist after a delay
+          setTimeout(() => {
+            removeItem(productId);
+            toast.info("Item removed from wishlist automatically.");
+          }, 2000);
+          return;
+        } else {
+          throw new Error(
+            json?.message || `Failed to add to cart: ${res.status}`
+          );
         }
-      );
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.message || "Failed to move");
-      fetchWishlist();
+      }
+
+      // Remove from wishlist after successfully adding to cart
+      await removeItem(productId);
+
+      toast.success("Item moved to cart successfully!");
     } catch (err) {
       console.error("Move to cart failed", err);
-      alert(err.message || "Failed to move to cart.");
+      toast.error(err.message || "Failed to move to cart.");
     }
   };
 
   const removeItem = async (productId) => {
     try {
       if (token) {
-        await fetch(`${API_V1}/customer/wishlist/${productId}`, {
-          method: "POST",
+        // Try DELETE first, then POST toggle as fallback (same as WishlistContext)
+        let res = await fetch(`${API_V1}/customer/wishlist/${productId}`, {
+          method: "DELETE",
           headers: {
             Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
+            Accept: "application/json",
           },
-          body: JSON.stringify({ additional: { product_id: productId, quantity: 1 } }),
         });
+
+        if (!res.ok) {
+          res = await fetch(`${API_V1}/customer/wishlist/${productId}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ product_id: productId, quantity: 1 }),
+          });
+        }
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          console.error("Remove from wishlist failed:", res.status, txt);
+        }
       } else {
         const raw = localStorage.getItem(GUEST_KEY);
         const ids = raw ? JSON.parse(raw) : [];
@@ -549,7 +677,10 @@ export default function Wishlist() {
       if (token) {
         await fetch(`${API_V1}/customer/wishlist/all`, {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
         });
       } else {
         localStorage.setItem(GUEST_KEY, JSON.stringify([]));
@@ -598,8 +729,13 @@ export default function Wishlist() {
         heightLeft -= pageHeight;
       }
 
-      const nameForFile = (customer.full_name || "Customer").replace(/\s+/g, "_");
-      pdf.save(`Wishlist_${nameForFile}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      const nameForFile = (customer.full_name || "Customer").replace(
+        /\s+/g,
+        "_"
+      );
+      pdf.save(
+        `Wishlist_${nameForFile}_${new Date().toISOString().slice(0, 10)}.pdf`
+      );
     } finally {
       setShowHeaderForPDF(false);
       setBusyPDF(false);
@@ -649,11 +785,21 @@ export default function Wishlist() {
           </div>
 
           <div className="grid gap-1 text-sm md:grid-cols-2">
-            <div><strong>Name:</strong> {customer.full_name}</div>
-            <div><strong>Email:</strong> {customer.email}</div>
-            <div><strong>Phone:</strong> {customer.phone}</div>
-            <div><strong>Generated:</strong> {new Date().toLocaleString()}</div>
-            <div><strong>Total Items:</strong> {wishlist.length}</div>
+            <div>
+              <strong>Name:</strong> {customer.full_name}
+            </div>
+            <div>
+              <strong>Email:</strong> {customer.email}
+            </div>
+            <div>
+              <strong>Phone:</strong> {customer.phone}
+            </div>
+            <div>
+              <strong>Generated:</strong> {new Date().toLocaleString()}
+            </div>
+            <div>
+              <strong>Total Items:</strong> {wishlist.length}
+            </div>
           </div>
         </div>
 

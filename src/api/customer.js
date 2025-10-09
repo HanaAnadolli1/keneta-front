@@ -205,3 +205,47 @@ export function revokeGdprRequest(id) {
 export function getProductReviews(productId) {
   return apiFetch(`${API_V1}/products/${productId}/reviews`);
 }
+
+// --- Addresses ---
+export function getAddresses() {
+  return apiFetch(`${API_V1}/customer/addresses`);
+}
+
+export function createAddress(payload) {
+  const form = new FormData();
+  Object.entries(payload).forEach(([k, v]) => {
+    if (Array.isArray(v)) {
+      v.forEach((val) => form.append(`${k}[]`, val ?? ""));
+    } else {
+      form.append(k, v ?? "");
+    }
+  });
+  return apiFetch(`${API_V1}/customer/addresses`, {
+    method: "POST",
+    body: form,
+  });
+}
+
+export function getAddressById(id) {
+  return apiFetch(`${API_V1}/customer/addresses/${id}`);
+}
+
+export function updateAddress(id, payload) {
+  const form = new FormData();
+  Object.entries(payload).forEach(([k, v]) => {
+    if (Array.isArray(v)) {
+      v.forEach((val) => form.append(`${k}[]`, val ?? ""));
+    } else {
+      form.append(k, v ?? "");
+    }
+  });
+  form.append("_method", "PUT");
+  return apiFetch(`${API_V1}/customer/addresses/${id}`, {
+    method: "POST",
+    body: form,
+  });
+}
+
+export function deleteAddress(id) {
+  return apiFetch(`${API_V1}/customer/addresses/${id}`, { method: "DELETE" });
+}

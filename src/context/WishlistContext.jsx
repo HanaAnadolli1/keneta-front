@@ -36,7 +36,9 @@ export function WishlistProvider({ children }) {
     null;
 
   const toUniqueNums = (arr) =>
-    Array.from(new Set((arr || []).map((x) => Number(x)).filter(Number.isFinite)));
+    Array.from(
+      new Set((arr || []).map((x) => Number(x)).filter(Number.isFinite))
+    );
 
   const readGuestIds = () => {
     if (typeof window === "undefined") return [];
@@ -93,20 +95,25 @@ export function WishlistProvider({ children }) {
     if (!t) return;
     const id = Number(productId);
 
-    // Try POST /customer/wishlist/:id (toggle)
-    let res = await fetch(`${API}/${id}`, {
+    console.log("🔵 Adding to wishlist:", id);
+
+    // Try the main endpoint first
+    let res = await fetch(`${API}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         Authorization: `Bearer ${t}`,
       },
-      body: JSON.stringify({ additional: { product_id: id, quantity: 1 } }),
+      body: JSON.stringify({ product_id: id, quantity: 1 }),
     });
 
-    // Fallback: POST /customer/wishlist (some backends use this)
+    console.log("🔵 First attempt response:", res.status, res.statusText);
+
+    // Fallback: Try with ID in URL path
     if (!res.ok) {
-      res = await fetch(`${API}`, {
+      console.log("🔵 Trying with ID in URL path...");
+      res = await fetch(`${API}/${id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -115,14 +122,21 @@ export function WishlistProvider({ children }) {
         },
         body: JSON.stringify({ product_id: id, quantity: 1 }),
       });
+      console.log("🔵 URL path response:", res.status, res.statusText);
     }
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
+      console.error("❌ Add to wishlist failed:", res.status, txt);
       // If it "already exists", treat as success
-      if (res.status === 409 || /exist/i.test(txt)) return;
+      if (res.status === 409 || /exist/i.test(txt)) {
+        console.log("✅ Item already in wishlist, treating as success");
+        return;
+      }
       throw new Error(txt || "Failed to add to wishlist");
     }
+
+    console.log("✅ Successfully added to wishlist");
   };
 
   const removeFromServer = async (productId) => {
@@ -130,14 +144,19 @@ export function WishlistProvider({ children }) {
     if (!t) return;
     const id = Number(productId);
 
+    console.log("🔴 Removing from wishlist:", id);
+
     // Prefer DELETE
     let res = await fetch(`${API}/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${t}`, Accept: "application/json" },
     });
 
+    console.log("🔴 DELETE response:", res.status, res.statusText);
+
     // Fallback to toggle POST
     if (!res.ok) {
+      console.log("🔴 Trying POST toggle fallback...");
       res = await fetch(`${API}/${id}`, {
         method: "POST",
         headers: {
@@ -145,16 +164,23 @@ export function WishlistProvider({ children }) {
           Accept: "application/json",
           Authorization: `Bearer ${t}`,
         },
-        body: JSON.stringify({ additional: { product_id: id, quantity: 1 } }),
+        body: JSON.stringify({ product_id: id, quantity: 1 }),
       });
+      console.log("🔴 POST toggle response:", res.status, res.statusText);
     }
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
+      console.error("❌ Remove from wishlist failed:", res.status, txt);
       // If it's already gone, treat as success
-      if (res.status === 404) return;
+      if (res.status === 404) {
+        console.log("✅ Item already removed, treating as success");
+        return;
+      }
       throw new Error(txt || "Failed to remove from wishlist");
     }
+
+    console.log("✅ Successfully removed from wishlist");
   };
 
   // --- keep token in sync ---------------------------------------------------
@@ -251,9 +277,21 @@ export function WishlistProvider({ children }) {
 
   const toggleWishlist = async (productId) => {
     const id = Number(productId);
+    console.log(
+      "🔄 Toggle wishlist called for product:",
+      id,
+      "Logged in:",
+      !!token
+    );
 
     if (token) {
-      if (isWishlisted(id)) {
+      const wasWishlisted = isWishlisted(id);
+      console.log(
+        "🔄 Current wishlist state:",
+        wasWishlisted ? "IN wishlist" : "NOT in wishlist"
+      );
+
+      if (wasWishlisted) {
         await removeFromServer(id);
       } else {
         await addToServer(id);
@@ -263,6 +301,7 @@ export function WishlistProvider({ children }) {
     }
 
     // guest: local only
+    console.log("🔄 Guest mode - updating local storage");
     setWishlistItems((prev) => {
       const set = new Set(prev);
       set.has(id) ? set.delete(id) : set.add(id);

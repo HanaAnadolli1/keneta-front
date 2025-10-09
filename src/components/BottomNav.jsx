@@ -9,17 +9,25 @@ import {
 import { useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
+import { useCart } from "../api/hooks";
 
 export default function BottomNav() {
   const { currentUser } = useContext(AuthContext);
   const { wishlistCount } = useWishlist();
+  const { data: cart } = useCart();
   const { pathname } = useLocation();
+
+  // Calculate cart total quantity (sum of all item quantities)
+  const cartCount = Array.isArray(cart?.items)
+    ? cart.items.reduce((total, item) => total + (item.quantity || 0), 0)
+    : 0;
 
   // Ensure body has proper padding for fixed bottom nav
   useEffect(() => {
     const originalPaddingBottom = document.body.style.paddingBottom;
-    document.body.style.paddingBottom = 'calc(64px + env(safe-area-inset-bottom))';
-    
+    document.body.style.paddingBottom =
+      "calc(64px + env(safe-area-inset-bottom))";
+
     return () => {
       document.body.style.paddingBottom = originalPaddingBottom;
     };
@@ -49,17 +57,17 @@ export default function BottomNav() {
       role="navigation"
       aria-label="Mobile bottom navigation"
       style={{
-        position: 'fixed',
+        position: "fixed",
         bottom: 0,
         left: 0,
         right: 0,
         zIndex: 9999,
-        transform: 'translateZ(0)', // Force hardware acceleration
-        WebkitTransform: 'translateZ(0)', // Safari fix
-        willChange: 'transform', // Optimize for animations
+        transform: "translateZ(0)", // Force hardware acceleration
+        WebkitTransform: "translateZ(0)", // Safari fix
+        willChange: "transform", // Optimize for animations
       }}
     >
-      <div className="grid grid-cols-5" style={{ minHeight: '64px' }}>
+      <div className="grid grid-cols-5" style={{ minHeight: "64px" }}>
         {/* Ballina */}
         <Link
           to="/"
@@ -91,7 +99,14 @@ export default function BottomNav() {
           aria-label="Shporta"
         >
           <Item active={false}>
-            <ShoppingCart size={22} />
+            <div className="relative">
+              <ShoppingCart size={22} />
+              {cartCount > 0 && (
+                <span className="absolute -top-2 -right-3 bg-blue-600 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-semibold leading-none">
+                  {cartCount}
+                </span>
+              )}
+            </div>
             <span>Cart</span>
           </Item>
         </button>
@@ -106,7 +121,7 @@ export default function BottomNav() {
             <div className="relative">
               <Heart size={22} />
               {wishlistCount > 0 && (
-                <span className="absolute -top-2 -right-3 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-semibold leading-none">
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-semibold leading-none">
                   {wishlistCount}
                 </span>
               )}
