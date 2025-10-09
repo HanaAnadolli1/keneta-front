@@ -26,7 +26,7 @@ const DealsCarousel = () => {
         // You’ll likely want to fetch actual product data based on filters
         // But since this config only contains filter info, you must query the products manually.
         const productRes = await fetch(
-          `https://admin.keneta-ks.com/api/v2/products?sort=name-asc&limit=12`
+          `https://admin.keneta-ks.com/api/v2/products?sort=name-asc&limit=36`
         );
         const productData = await productRes.json();
         setProducts(productData.data || []);

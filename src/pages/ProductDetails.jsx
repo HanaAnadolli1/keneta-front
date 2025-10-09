@@ -25,6 +25,7 @@ import ProductCard from "../components/ProductCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useProductBreadcrumbs } from "../hooks/useBreadcrumbs";
 import useSaleFlag from "../hooks/useSaleFlag";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
 
@@ -139,6 +140,9 @@ export default function ProductDetails() {
   const toast = useToast();
 
   const galleryRef = useRef();
+  const imageRef = useRef();
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
   // base product
   const [product, setProduct] = useState(null);
@@ -147,9 +151,32 @@ export default function ProductDetails() {
   const [isMobile, setIsMobile] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  // zoom states
+  const [isZooming, setIsZooming] = useState(false);
+  const [zoomPosition, setZoomPosition] = useState({ x: 0, y: 0 });
+  const [showImageModal, setShowImageModal] = useState(false);
+
   // Use sale flag hook for proper price display
-  const { saleActive, hasStrike, priceLabel, strikeLabel } =
-    useSaleFlag(product);
+  const { saleActive, hasStrike, priceLabel, strikeLabel } = useSaleFlag(
+    product,
+    { apiBase: "https://admin.keneta-ks.com/api/v2" }
+  );
+
+  console.log("ProductDetails - useSaleFlag result:", {
+    product: product
+      ? {
+          id: product.id,
+          price: product.price,
+          regular_price: product.regular_price,
+          special_price: product.special_price,
+          formatted_price: product.formatted_price,
+          formatted_regular_price: product.formatted_regular_price,
+          formatted_special_price: product.formatted_special_price,
+        }
+      : null,
+    result: { saleActive, hasStrike, priceLabel, strikeLabel },
+  });
+
   const [activeTab, setActiveTab] = useState("description");
 
   // related
@@ -183,14 +210,42 @@ export default function ProductDetails() {
     (async () => {
       try {
         setError(null);
-        const res = await fetch(
+        // First, get the product ID from the list endpoint
+        const listRes = await fetch(
           `${API_V1}/products?url_key=${encodeURIComponent(url_key)}`
         );
-        if (!res.ok) throw new Error(`Status ${res.status}`);
-        const json = await res.json();
-        const list = Array.isArray(json?.data) ? json.data : [];
+        if (!listRes.ok) throw new Error(`Status ${listRes.status}`);
+        const listJson = await listRes.json();
+        const list = Array.isArray(listJson?.data) ? listJson.data : [];
         if (!list.length) throw new Error("Product not found");
-        if (!ignore) setProduct(list[0]);
+
+        const productId = list[0].id;
+        console.log("ProductDetails - List API result:", {
+          productId,
+          listProduct: list[0],
+          url_key,
+        });
+
+        // Then fetch the detailed product data with special pricing
+        const detailRes = await fetch(`${API_V1}/products/${productId}`, {
+          headers: buildApiHeaders(),
+        });
+        if (!detailRes.ok)
+          throw new Error(`Detail fetch failed: ${detailRes.status}`);
+        const detailJson = await detailRes.json();
+
+        console.log("ProductDetails - Detail API result:", {
+          productId,
+          detailProduct: detailJson.data,
+          price: detailJson.data?.price,
+          regular_price: detailJson.data?.regular_price,
+          special_price: detailJson.data?.special_price,
+          formatted_price: detailJson.data?.formatted_price,
+          formatted_special_price: detailJson.data?.formatted_special_price,
+          formatted_regular_price: detailJson.data?.formatted_regular_price,
+        });
+
+        if (!ignore) setProduct(detailJson.data);
       } catch (e) {
         if (!ignore) setError(e.message);
       }
@@ -234,6 +289,66 @@ export default function ProductDetails() {
     const hashWantsReviews = location.hash?.toLowerCase() === "#reviews";
     if (tab === "reviews" || hashWantsReviews) setActiveTab("reviews");
   }, [location.search, location.hash]);
+
+  /* --------- modal slider navigation callbacks --------- */
+  const goToPrevImage = useCallback((e) => {
+    if (e?.stopPropagation) e.stopPropagation();
+    setSelectedIndex((prev) => {
+      if (prev <= 0) return prev;
+      const newIndex = prev - 1;
+      galleryRef.current?.slideToIndex(newIndex);
+      return newIndex;
+    });
+  }, []);
+
+  const goToNextImage = useCallback((e) => {
+    if (e?.stopPropagation) e.stopPropagation();
+    setSelectedIndex((prev) => {
+      const newIndex = prev + 1;
+      galleryRef.current?.slideToIndex(newIndex);
+      return newIndex;
+    });
+  }, []);
+
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    touchEndX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartX.current || !touchEndX.current) return;
+
+    const distance = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(distance) > minSwipeDistance) {
+      if (distance > 0) {
+        goToNextImage();
+      } else {
+        goToPrevImage();
+      }
+    }
+
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  }, [goToPrevImage, goToNextImage]);
+
+  /* --------- keyboard navigation --------- */
+  useEffect(() => {
+    if (!showImageModal) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") closeImageModal();
+      if (e.key === "ArrowLeft") goToPrevImage(e);
+      if (e.key === "ArrowRight") goToNextImage(e);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showImageModal, goToPrevImage, goToNextImage]);
 
   /* --------- extra rows --------- */
   const extraRows = useMemo(() => {
@@ -370,16 +485,33 @@ export default function ProductDetails() {
 
   const add = addItem;
   const handleAdd = () => {
-    if (!product || qty < 1) return;
+    if (!product || !product.id || qty < 1) return;
+
+    // Ensure productId is a number
+    const productId = Number(product.id);
+    if (!productId || isNaN(productId)) {
+      console.error("Invalid product ID:", product.id);
+      toast.error("Invalid product ID");
+      return;
+    }
+
+    console.log("Adding to cart:", {
+      productId,
+      quantity: qty,
+      productIdType: typeof productId,
+      product,
+    });
+
     const tid = toast.info("Adding to cart…", { duration: 0 });
     add.mutate(
-      { productId: product.id, quantity: qty },
+      { productId, quantity: qty },
       {
         onSuccess: () => {
           toast.remove(tid);
           toast.success("Item added to cart.");
         },
         onError: (e) => {
+          console.error("Add to cart error:", e);
           toast.remove(tid);
           toast.error(e?.message || "Failed to add to cart.");
         },
@@ -401,6 +533,32 @@ export default function ProductDetails() {
     toast.success("Item added to compare list.");
   };
 
+  // Zoom handlers for desktop
+  const handleMouseMove = (e) => {
+    if (!imageRef.current || isMobile) return;
+    const rect = imageRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setZoomPosition({ x, y });
+  };
+
+  const handleMouseEnter = () => {
+    if (!isMobile) setIsZooming(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (!isMobile) setIsZooming(false);
+  };
+
+  // Image modal handlers (works on all screen sizes)
+  const handleImageClick = () => {
+    setShowImageModal(true);
+  };
+
+  const closeImageModal = () => {
+    setShowImageModal(false);
+  };
+
   /* ---------------- render ---------------- */
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
@@ -409,7 +567,7 @@ export default function ProductDetails() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
         {/* LEFT */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 relative">
           {galleryImages.length > 1 && (
             <div className="hidden md:flex flex-col gap-4">
               {galleryImages.map((img, idx) => (
@@ -428,8 +586,15 @@ export default function ProductDetails() {
             </div>
           )}
 
-          <div className="flex-1">
-            <div className="rounded-2xl ring-1 ring-black/5 overflow-hidden">
+          <div className="flex-1 relative">
+            <div
+              ref={imageRef}
+              className="rounded-2xl ring-1 ring-black/5 overflow-hidden cursor-zoom-in"
+              onMouseMove={handleMouseMove}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              onClick={handleImageClick}
+            >
               <ImageGallery
                 ref={galleryRef}
                 items={galleryImages}
@@ -439,9 +604,25 @@ export default function ProductDetails() {
                 showFullscreenButton={false}
                 showNav={false}
                 showBullets={isMobile}
+                disableSwipe={isMobile}
                 additionalClass="custom-gallery"
               />
             </div>
+
+            {/* Desktop Zoom View - Shows on the side */}
+            {!isMobile && isZooming && galleryImages[selectedIndex] && (
+              <div className="absolute left-full ml-4 top-0 w-96 h-96 rounded-2xl ring-1 ring-black/5 overflow-hidden bg-white shadow-2xl z-10 hidden xl:block">
+                <div
+                  className="w-full h-full"
+                  style={{
+                    backgroundImage: `url(${galleryImages[selectedIndex].original})`,
+                    backgroundSize: "200%",
+                    backgroundPosition: `${zoomPosition.x}% ${zoomPosition.y}%`,
+                    backgroundRepeat: "no-repeat",
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -781,6 +962,103 @@ export default function ProductDetails() {
           </div>
         )}
       </div>
+
+      {/* Image Modal - Works on all screen sizes */}
+      {showImageModal && galleryImages[selectedIndex] && (
+        <div
+          className="fixed inset-0 bg-white z-[9999] flex items-center justify-center p-4"
+          onClick={closeImageModal}
+        >
+          <button
+            onClick={closeImageModal}
+            className="absolute top-4 right-4 text-[var(--secondary)] text-4xl font-bold w-14 h-14 flex items-center justify-center rounded-full hover:bg-gray-100 transition z-[10000]"
+            aria-label="Close"
+          >
+            ×
+          </button>
+
+          {/* Left Arrow - Only show if multiple images */}
+          {galleryImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const newIndex =
+                  selectedIndex > 0
+                    ? selectedIndex - 1
+                    : galleryImages.length - 1;
+                setSelectedIndex(newIndex);
+                galleryRef.current?.slideToIndex(newIndex);
+              }}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[var(--secondary)] text-5xl font-bold w-16 h-16 flex items-center justify-center rounded-full hover:bg-gray-100 transition z-[10000]"
+              aria-label="Previous image"
+            >
+              ‹
+            </button>
+          )}
+
+          <div
+            className="relative max-w-full max-h-full"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <img
+              src={galleryImages[selectedIndex].original}
+              alt={`${product.name} - Full view`}
+              className="max-w-full max-h-[95vh] object-contain select-none"
+            />
+
+            {/* Image counter */}
+            {galleryImages.length > 1 && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded-full text-sm">
+                {selectedIndex + 1} / {galleryImages.length}
+              </div>
+            )}
+
+            {/* Navigation bullets for modal */}
+            {galleryImages.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                {galleryImages.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedIndex(idx);
+                      galleryRef.current?.slideToIndex(idx);
+                    }}
+                    className={`w-3 h-3 rounded-full transition ${
+                      selectedIndex === idx
+                        ? "bg-[var(--secondary)]"
+                        : "bg-gray-400"
+                    }`}
+                    aria-label={`View image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right Arrow - Only show if multiple images */}
+          {galleryImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const newIndex =
+                  selectedIndex < galleryImages.length - 1
+                    ? selectedIndex + 1
+                    : 0;
+                setSelectedIndex(newIndex);
+                galleryRef.current?.slideToIndex(newIndex);
+              }}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[var(--secondary)] text-5xl font-bold w-16 h-16 flex items-center justify-center rounded-full hover:bg-gray-100 transition z-[10000]"
+              aria-label="Next image"
+            >
+              ›
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

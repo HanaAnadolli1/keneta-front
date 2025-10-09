@@ -22,6 +22,7 @@ import CategoryNavigator from "../components/CategoryNavigator";
 import Breadcrumbs from "../components/Breadcrumbs";
 import { useProductSearch } from "../hooks/useProductSearch";
 import { useCategoryBreadcrumbs } from "../hooks/useBreadcrumbs";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 /* ================================
  * Products Page
@@ -31,7 +32,7 @@ import { useCategoryBreadcrumbs } from "../hooks/useBreadcrumbs";
  * - Category filter prefers numeric category_id, falls back to slug
  * ================================ */
 
-const PER_PAGE = 12;
+const PER_PAGE = 36;
 const MIN_SEARCH_LEN = 3;
 const API_PUBLIC_V1 = API_V1;
 
@@ -48,7 +49,6 @@ export default function Products() {
   const brandParam = params.get("brand") || ""; // can be names in your app
   const brandSlugParam = params.get("brand_slug") || ""; // optional
   const promotionIdParam = params.get("promotion_id") || "";
-
 
   // Category-specific filter format: attributes[brand][], attributes[color][], etc.
   const categoryBrandParam = useMemo(
@@ -324,8 +324,9 @@ export default function Products() {
   const baseFiltersQS = useMemo(() => {
     const qs = new URLSearchParams();
 
-    if (sort) qs.set("sort", sort);
-    if (order) qs.set("order", order);
+    // Don't send sort/order to API - we'll sort client-side to ensure consistency across pages
+    // if (sort) qs.set("sort", sort);
+    // if (order) qs.set("order", order);
 
     // brand — use category-specific format when on category page, else general format
     if (selectedBrandIds.length > 0) {
@@ -428,15 +429,19 @@ export default function Products() {
             extra["attributes[size][]"] = categorySizeParam;
           }
 
-          // sort/order passthrough
-          if (sort) extra.sort = sort;
-          if (order) extra.order = order;
+          // Don't send sort/order to API - we'll sort client-side to ensure consistency across pages
+          // if (sort) extra.sort = sort;
+          // if (order) extra.order = order;
 
+          console.log("🔍 Search API call with limit:", PER_PAGE);
           const { products, hasNext } = await searchProducts(searchTerm, {
             limit: PER_PAGE,
             page: pageToFetch,
             extraParams: extra,
           });
+
+          console.log("📦 Search products returned:", products.length);
+          console.log("📄 Search page:", pageToFetch, "Has more:", hasNext);
 
           setItems((prev) => (append ? [...prev, ...products] : products));
           setHasMore(Boolean(hasNext));
@@ -447,11 +452,15 @@ export default function Products() {
 
         // LISTING MODE → normal products endpoint
         const qs = new URLSearchParams(baseFiltersQS);
-        qs.set("per_page", String(PER_PAGE));
+        qs.set("limit", String(PER_PAGE)); // Try 'limit' instead of 'per_page'
         qs.set("page", String(pageToFetch));
         const url = `${API_V1}/products?${qs.toString()}`;
 
-        const res = await fetch(url);
+        console.log("🔍 Products API call:", url);
+        console.log("📊 PER_PAGE value:", PER_PAGE);
+        console.log("🔍 Query string:", qs.toString());
+
+        const res = await fetch(url, { headers: buildApiHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
 
@@ -486,6 +495,9 @@ export default function Products() {
           typeof lastPage === "number"
             ? currentPage < lastPage
             : dataArray.length === PER_PAGE; // If we got a full page, assume there might be more
+
+        console.log("📦 Products returned:", dataArray.length);
+        console.log("📄 Page:", pageToFetch, "Has more:", hasNext);
 
         setItems((prev) => (append ? [...prev, ...dataArray] : dataArray));
         setHasMore(Boolean(hasNext));
@@ -790,24 +802,34 @@ export default function Products() {
           ) : !isShortSearchOnly ? (
             <>
               {viewMode === "grid" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 lg:gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   {sortedAndFilteredItems.map((product) => (
                     <ProductCard
                       key={product.id}
                       product={product}
                       isWishlisted={isWishlisted(product.id)}
                       toggleWishlist={toggleWishlist}
-                      handleAddToCart={(p) =>
+                      handleAddToCart={(p) => {
+                        const productId = Number(p.id);
+                        if (!productId || isNaN(productId)) {
+                          console.error("Invalid product ID:", p.id);
+                          toast.error("Invalid product ID");
+                          return;
+                        }
                         addItem.mutate(
-                          { productId: p.id, quantity: 1 },
+                          { productId, quantity: 1 },
                           {
                             onSuccess: () =>
                               toast.success("Item added to cart."),
-                            onError: () =>
-                              toast.error("Failed to add to cart."),
+                            onError: (e) => {
+                              console.error("Add to cart error:", e);
+                              toast.error(
+                                e?.message || "Failed to add to cart."
+                              );
+                            },
                           }
-                        )
-                      }
+                        );
+                      }}
                       busy={false}
                       prefetch={prefetch}
                     />
@@ -823,17 +845,27 @@ export default function Products() {
                         product={product}
                         isWishlisted={isWishlisted(product.id)}
                         toggleWishlist={toggleWishlist}
-                        handleAddToCart={(p) =>
+                        handleAddToCart={(p) => {
+                          const productId = Number(p.id);
+                          if (!productId || isNaN(productId)) {
+                            console.error("Invalid product ID:", p.id);
+                            toast.error("Invalid product ID");
+                            return;
+                          }
                           addItem.mutate(
-                            { productId: p.id, quantity: 1 },
+                            { productId, quantity: 1 },
                             {
                               onSuccess: () =>
                                 toast.success("Item added to cart."),
-                              onError: () =>
-                                toast.error("Failed to add to cart."),
+                              onError: (e) => {
+                                console.error("Add to cart error:", e);
+                                toast.error(
+                                  e?.message || "Failed to add to cart."
+                                );
+                              },
                             }
-                          )
-                        }
+                          );
+                        }}
                         busy={false}
                         prefetch={prefetch}
                       />

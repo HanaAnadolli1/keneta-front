@@ -7,6 +7,7 @@ import ProductCard from "../ProductCard";
 import { useWishlist } from "../../context/WishlistContext";
 import { useToast } from "../../context/ToastContext";
 import { usePrefetchProduct, useCartMutations } from "../../api/hooks";
+import { buildApiHeaders } from "../../utils/apiHelpers";
 
 const ProductCarousel = ({ customization }) => {
   const [products, setProducts] = useState([]);
@@ -28,7 +29,7 @@ const ProductCarousel = ({ customization }) => {
       try {
         setLoading(true);
         const { filters, title } = customization.options || {};
-        
+
         if (!filters) {
           setLoading(false);
           return;
@@ -36,23 +37,32 @@ const ProductCarousel = ({ customization }) => {
 
         // Build query string from filters
         const queryParams = new URLSearchParams();
-        
+
         if (filters.new) queryParams.set("new", "1");
         if (filters.featured) queryParams.set("featured", "1");
         if (filters.sort) queryParams.set("sort", filters.sort);
         if (filters.limit) queryParams.set("per_page", filters.limit);
-        if (filters.category_id) queryParams.set("category_id", filters.category_id);
+        if (filters.category_id)
+          queryParams.set("category_id", filters.category_id);
         if (filters.brand) queryParams.set("brand", filters.brand);
 
+        // Build headers with bearer token if available
+        const headers = buildApiHeaders();
+
         const response = await fetch(
-          `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`
+          `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`,
+          { headers }
         );
-        
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
+
         const data = await response.json();
-        const items = data?.data?.items || data?.items || (Array.isArray(data?.data) ? data.data : []) || [];
-        
+        const items =
+          data?.data?.items ||
+          data?.items ||
+          (Array.isArray(data?.data) ? data.data : []) ||
+          [];
+
         setProducts(items);
       } catch (err) {
         console.error("Error fetching products:", err);
@@ -108,7 +118,9 @@ const ProductCarousel = ({ customization }) => {
     <div className="max-w-7xl mx-auto px-4 py-10">
       {title && (
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-[var(--primary)]">{title}</h2>
+          <h2 className="text-xl font-semibold text-[var(--primary)]">
+            {title}
+          </h2>
         </div>
       )}
 

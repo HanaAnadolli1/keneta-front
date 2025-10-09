@@ -1,5 +1,6 @@
 // src/hooks/useProductSearch.js
 import { useCallback, useRef, useState } from "react";
+import { buildApiHeaders } from "../utils/apiHelpers";
 
 // Hardcode the API host as requested.
 // (You can still override via VITE_API_BASE_URL if you want later.)
@@ -44,7 +45,7 @@ export function useProductSearch() {
 
   /** GET https://admin.keneta-ks.com/api/v2/search?q=&per_page=&page= */
   const searchProducts = useCallback(async (q, opts = {}) => {
-    const { limit = 12, page = 1, extraParams = {} } = opts;
+    const { limit = 36, page = 1, extraParams = {} } = opts;
 
     if (controllerRef.current) controllerRef.current.abort();
     const ctrl = new AbortController();
@@ -52,19 +53,26 @@ export function useProductSearch() {
 
     const params = new URLSearchParams({
       q: q ?? "",
-      per_page: String(limit),
+      limit: String(limit), // Use 'limit' instead of 'per_page'
       page: String(page),
     });
     for (const [k, v] of Object.entries(extraParams)) {
       if (v != null && v !== "") params.set(k, String(v));
     }
 
+    console.log("🔍 Search hook - limit:", limit, "page:", page);
+    console.log(
+      "🔍 Search hook - URL:",
+      `${API_BASE}/api/v2/search?${params.toString()}`
+    );
+
     setLoading(true);
     try {
       const url = `${API_BASE}/api/v2/search?${params.toString()}`;
+      
       const res = await fetch(url, {
         method: "GET",
-        headers: { Accept: "application/json" },
+        headers: buildApiHeaders(),
         signal: ctrl.signal,
         credentials: "omit",
       });
@@ -85,6 +93,9 @@ export function useProductSearch() {
 
       const dataArray = Array.isArray(json?.data) ? json.data : [];
       const products = dataArray.map(normalizeProduct);
+
+      console.log("📦 Search hook - raw data length:", dataArray.length);
+      console.log("📦 Search hook - products length:", products.length);
 
       const total =
         json?.meta?.total ??

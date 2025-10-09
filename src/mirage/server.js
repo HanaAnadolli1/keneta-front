@@ -31,7 +31,7 @@ export function makeServer({ environment = "development" } = {}) {
 
       this.get("/products", (schema, req) => {
         const all = schema.products.all().models.map((m) => m.attrs);
-        const limit = Number(req.queryParams.limit) || 12;
+        const limit = Number(req.queryParams.limit) || 36;
         const page = Number(req.queryParams.page) || 1;
         const start = (page - 1) * limit;
         return {

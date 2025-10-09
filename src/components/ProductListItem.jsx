@@ -38,7 +38,9 @@ function ProductListItem({
       <div className="flex">
         {/* Image */}
         <Link
-          to={`/products/${product?.slug || product?.url_key || product?.id || 'unknown'}`}
+          to={`/products/${
+            product?.slug || product?.url_key || product?.id || "unknown"
+          }`}
           onMouseEnter={() => prefetch && prefetch(idNum)}
           className="relative shrink-0 w-[260px] max-w-[45%] flex items-center justify-center"
         >
@@ -61,7 +63,9 @@ function ProductListItem({
           {/* Top line: title + quick actions */}
           <div className="flex items-start gap-3">
             <Link
-              to={`/products/${product?.slug || product?.url_key || product?.id || 'unknown'}`}
+              to={`/products/${
+                product?.slug || product?.url_key || product?.id || "unknown"
+              }`}
               onMouseEnter={() => prefetch && prefetch(idNum)}
               className="text-lg font-semibold text-gray-900 hover:text-[var(--primary)] flex-1"
               title={product?.name}
@@ -142,7 +146,11 @@ function ProductListItem({
 
           {/* Price + strike */}
           <div className="mt-2 flex items-baseline gap-3">
-            <span className={`font-bold text-xl ${saleActive ? 'text-red-600' : 'text-[var(--secondary)]'}`}>
+            <span
+              className={`font-bold text-xl ${
+                saleActive ? "text-red-600" : "text-[var(--secondary)]"
+              }`}
+            >
               {priceLabel}
             </span>
             {hasStrike && strikeLabel && (
@@ -174,7 +182,7 @@ function ProductListItem({
             <div className="ml-auto">
               {inStock ? (
                 <button
-                  onClick={() => handleAddToCart?.(idNum)}
+                  onClick={() => handleAddToCart?.(product)}
                   disabled={busy}
                   className={`rounded-xl px-6 py-2 text-sm font-semibold transition
                     ${

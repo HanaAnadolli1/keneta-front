@@ -98,21 +98,21 @@ export function useSaveAddress() {
   return useMutation({
     mutationFn: async (addressData) => {
       console.log("Attempting to save address with data:", addressData);
-      
+
       // Try different API endpoints and formats
       const endpoints = [
         "/customer/addresses",
         "/customer/address",
-        "/customer/checkout/save-address"
+        "/customer/checkout/save-address",
       ];
-      
+
       const formats = [
         addressData, // Direct data
         { address: addressData }, // Wrapped in address
         { billing: addressData }, // Wrapped in billing (like checkout)
-        { data: addressData } // Wrapped in data
+        { data: addressData }, // Wrapped in data
       ];
-      
+
       // Also try FormData format
       const formData = new FormData();
       Object.entries(addressData).forEach(([key, value]) => {
@@ -120,7 +120,7 @@ export function useSaveAddress() {
           formData.append(key, value);
         }
       });
-      
+
       for (const endpoint of endpoints) {
         for (const format of formats) {
           try {
@@ -129,14 +129,18 @@ export function useSaveAddress() {
             console.log("Success with:", endpoint, format);
             return res.data;
           } catch (error) {
-            console.log(`Failed ${endpoint} with JSON format:`, error.response?.status, error.response?.data);
+            console.log(
+              `Failed ${endpoint} with JSON format:`,
+              error.response?.status,
+              error.response?.data
+            );
             if (error.response?.status !== 422) {
               // If it's not a validation error, don't try other formats
               break;
             }
           }
         }
-        
+
         // Try FormData for this endpoint
         try {
           console.log(`Trying ${endpoint} with FormData format`);
@@ -144,11 +148,17 @@ export function useSaveAddress() {
           console.log("Success with FormData:", endpoint);
           return res.data;
         } catch (error) {
-          console.log(`Failed ${endpoint} with FormData:`, error.response?.status, error.response?.data);
+          console.log(
+            `Failed ${endpoint} with FormData:`,
+            error.response?.status,
+            error.response?.data
+          );
         }
       }
-      
-      throw new Error("All address saving attempts failed. Check console for details.");
+
+      throw new Error(
+        "All address saving attempts failed. Check console for details."
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries(["savedAddresses"]);

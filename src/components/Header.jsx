@@ -15,7 +15,7 @@ export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // Hide Search (display:none) while scrolling in any direction
+  // Hide Search (display:none on mobile only) while scrolling in any direction
   const [hideSearch, setHideSearch] = useState(false);
 
   const { wishlistCount } = useWishlist();
@@ -24,6 +24,7 @@ export default function Header() {
 
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
+  const isMobileRef = useRef(false);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -43,7 +44,19 @@ export default function Header() {
     return () => window.removeEventListener("keneta:openCart", onOpenCart);
   }, []);
 
-  // rAF loop: hide while moving (up or down), show after idle
+  // Track viewport (mobile = width < 768 === Tailwind md)
+  useEffect(() => {
+    const update = () => {
+      isMobileRef.current = window.innerWidth < 768;
+      // Ensure it's visible on desktop/tablet
+      if (!isMobileRef.current && hideSearch) setHideSearch(false);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [hideSearch]);
+
+  // rAF loop: on mobile, hide while moving; show after idle
   useEffect(() => {
     let rafId = 0;
     let lastY = window.scrollY ?? document.documentElement.scrollTop ?? 0;
@@ -54,16 +67,24 @@ export default function Header() {
 
     const loop = () => {
       const now = performance.now();
+
+      if (!isMobileRef.current) {
+        // Always show on md+ screens
+        if (hideSearch) setHideSearch(false);
+        rafId = requestAnimationFrame(loop);
+        return;
+      }
+
       const y = window.scrollY ?? document.documentElement.scrollTop ?? 0;
       const dy = y - lastY;
 
       if (Math.abs(dy) >= THRESH) {
-        // any movement → hide
+        // any movement on mobile → hide
         if (!hideSearch) setHideSearch(true);
         lastMoveTs = now;
         lastY = y;
       } else {
-        // no meaningful movement → if idle long enough, show
+        // idle long enough → show
         if (hideSearch && now - lastMoveTs >= IDLE_MS) {
           setHideSearch(false);
         }
@@ -110,7 +131,7 @@ export default function Header() {
               </Link>
             </div>
 
-            {/* Search: fully removed from layout while scrolling */}
+            {/* Search: display:none on mobile while scrolling; always visible on md+ */}
             <Search hiddenWhileScroll={hideSearch} />
 
             {/* Account & Cart (hidden on mobile) */}
