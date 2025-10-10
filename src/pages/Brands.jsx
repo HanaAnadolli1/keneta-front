@@ -58,20 +58,15 @@ function useBrands() {
     queryFn: async () => {
       // Get all available attributes
       const all = await fetchAllAttributes();
-      
+
       // Find the brand attribute
       const brandAttribute = all.find((attr) => attr.code === "brand");
-      
+
       if (brandAttribute && brandAttribute.options) {
-        console.log("🏷️ Brands Loaded:", {
-          totalBrands: brandAttribute.options.length,
-          sampleBrands: brandAttribute.options.slice(0, 5).map(b => ({ id: b.id, label: b.label }))
-        });
-        
         // Return deduplicated options (same as FilterSidebar)
         return dedupeOptionsByLabel(brandAttribute.options);
       }
-      
+
       return [];
     },
   });
@@ -109,7 +104,9 @@ const Brands = () => {
         />
         <h1 className="text-2xl font-bold text-indigo-900 mb-6">Brendet</h1>
         <div className="flex items-center justify-center py-12">
-          <p className="text-red-600">Failed to load brands. Please try again.</p>
+          <p className="text-red-600">
+            Failed to load brands. Please try again.
+          </p>
         </div>
       </div>
     );
@@ -128,11 +125,6 @@ const Brands = () => {
             onClick={() => {
               // Use the same URL format as FilterSidebar for consistency
               const url = `/products?brand=${encodeURIComponent(brand.label)}`;
-              console.log("🏷️ Brand Click Debug:", {
-                brandId: brand.id,
-                brandLabel: brand.label,
-                navigationUrl: url
-              });
               navigate(url);
             }}
             className="cursor-pointer bg-gray-100 h-24 flex items-center justify-center text-center rounded shadow-sm text-lg font-semibold text-gray-700 hover:bg-indigo-100 transition p-2"

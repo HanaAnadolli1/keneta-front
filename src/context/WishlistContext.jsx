@@ -95,8 +95,6 @@ export function WishlistProvider({ children }) {
     if (!t) return;
     const id = Number(productId);
 
-    console.log("🔵 Adding to wishlist:", id);
-
     // Try the main endpoint first
     let res = await fetch(`${API}`, {
       method: "POST",
@@ -108,11 +106,8 @@ export function WishlistProvider({ children }) {
       body: JSON.stringify({ product_id: id, quantity: 1 }),
     });
 
-    console.log("🔵 First attempt response:", res.status, res.statusText);
-
     // Fallback: Try with ID in URL path
     if (!res.ok) {
-      console.log("🔵 Trying with ID in URL path...");
       res = await fetch(`${API}/${id}`, {
         method: "POST",
         headers: {
@@ -122,7 +117,6 @@ export function WishlistProvider({ children }) {
         },
         body: JSON.stringify({ product_id: id, quantity: 1 }),
       });
-      console.log("🔵 URL path response:", res.status, res.statusText);
     }
 
     if (!res.ok) {
@@ -130,13 +124,10 @@ export function WishlistProvider({ children }) {
       console.error("❌ Add to wishlist failed:", res.status, txt);
       // If it "already exists", treat as success
       if (res.status === 409 || /exist/i.test(txt)) {
-        console.log("✅ Item already in wishlist, treating as success");
         return;
       }
       throw new Error(txt || "Failed to add to wishlist");
     }
-
-    console.log("✅ Successfully added to wishlist");
   };
 
   const removeFromServer = async (productId) => {
@@ -144,19 +135,14 @@ export function WishlistProvider({ children }) {
     if (!t) return;
     const id = Number(productId);
 
-    console.log("🔴 Removing from wishlist:", id);
-
     // Prefer DELETE
     let res = await fetch(`${API}/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${t}`, Accept: "application/json" },
     });
 
-    console.log("🔴 DELETE response:", res.status, res.statusText);
-
     // Fallback to toggle POST
     if (!res.ok) {
-      console.log("🔴 Trying POST toggle fallback...");
       res = await fetch(`${API}/${id}`, {
         method: "POST",
         headers: {
@@ -166,7 +152,6 @@ export function WishlistProvider({ children }) {
         },
         body: JSON.stringify({ product_id: id, quantity: 1 }),
       });
-      console.log("🔴 POST toggle response:", res.status, res.statusText);
     }
 
     if (!res.ok) {
@@ -174,13 +159,10 @@ export function WishlistProvider({ children }) {
       console.error("❌ Remove from wishlist failed:", res.status, txt);
       // If it's already gone, treat as success
       if (res.status === 404) {
-        console.log("✅ Item already removed, treating as success");
         return;
       }
       throw new Error(txt || "Failed to remove from wishlist");
     }
-
-    console.log("✅ Successfully removed from wishlist");
   };
 
   // --- keep token in sync ---------------------------------------------------
@@ -277,19 +259,9 @@ export function WishlistProvider({ children }) {
 
   const toggleWishlist = async (productId) => {
     const id = Number(productId);
-    console.log(
-      "🔄 Toggle wishlist called for product:",
-      id,
-      "Logged in:",
-      !!token
-    );
 
     if (token) {
       const wasWishlisted = isWishlisted(id);
-      console.log(
-        "🔄 Current wishlist state:",
-        wasWishlisted ? "IN wishlist" : "NOT in wishlist"
-      );
 
       if (wasWishlisted) {
         await removeFromServer(id);
@@ -301,7 +273,6 @@ export function WishlistProvider({ children }) {
     }
 
     // guest: local only
-    console.log("🔄 Guest mode - updating local storage");
     setWishlistItems((prev) => {
       const set = new Set(prev);
       set.has(id) ? set.delete(id) : set.add(id);

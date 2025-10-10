@@ -59,30 +59,30 @@ function CategoryCard({ cat }) {
   const getImageSrc = () => {
     const logoUrl = cat.logo_url;
     const imageUrl = cat.image_url;
-    
+
     // Check logo_url first
     if (logoUrl) {
-      if (logoUrl.startsWith('http')) {
+      if (logoUrl.startsWith("http")) {
         return logoUrl;
-      } else if (logoUrl.startsWith('storage/')) {
+      } else if (logoUrl.startsWith("storage/")) {
         return `https://admin.keneta-ks.com/${logoUrl}`;
       }
     }
-    
+
     // Check image_url
     if (imageUrl) {
-      if (imageUrl.startsWith('http')) {
+      if (imageUrl.startsWith("http")) {
         return imageUrl;
-      } else if (imageUrl.startsWith('storage/')) {
+      } else if (imageUrl.startsWith("storage/")) {
         return `https://admin.keneta-ks.com/${imageUrl}`;
       }
     }
-    
+
     return noImage;
   };
-  
+
   const imgSrc = getImageSrc();
-  
+
   return (
     <Link
       to={`/products?category=${encodeURIComponent(cat.slug)}`}
@@ -143,7 +143,6 @@ function useChildrenFetcher() {
         inflight.current.delete(key);
         return rows;
       } catch (error) {
-        console.warn(`Failed to fetch children for parent ${parentId}:`, error);
         inflight.current.delete(key);
         return [];
       }
@@ -163,14 +162,14 @@ async function findCategoryIdBySlug(slug) {
       `${API_PUBLIC_V1}/categories?sort=id&order=asc&limit=1000`, // Sorted
       `${API_PUBLIC_V1}/categories?include=parent,children&limit=1000`, // Include relationships
     ];
-    
+
     let categories = [];
     for (const endpoint of endpoints) {
       try {
         const response = await fetch(endpoint);
         const data = await response.json();
         const cats = data?.data || [];
-        
+
         if (cats.length > categories.length) {
           categories = cats;
           break; // Use the first endpoint that returns more categories
@@ -179,27 +178,30 @@ async function findCategoryIdBySlug(slug) {
         // Continue to next endpoint
       }
     }
-    
+
     // Look for exact match first
-    let category = categories.find(cat => {
+    let category = categories.find((cat) => {
       const catSlugNorm = normSlug(cat.slug);
       const catNameNorm = normSlug(cat.name);
       const searchSlugNorm = normSlug(slug);
-      
+
       return catSlugNorm === searchSlugNorm || catNameNorm === searchSlugNorm;
     });
-    
+
     if (!category) {
       // Look for partial match
-      category = categories.find(cat => {
+      category = categories.find((cat) => {
         const catSlugNorm = normSlug(cat.slug);
         const catNameNorm = normSlug(cat.name);
         const searchSlugNorm = normSlug(slug);
-        
-        return catSlugNorm.includes(searchSlugNorm) || catNameNorm.includes(searchSlugNorm);
+
+        return (
+          catSlugNorm.includes(searchSlugNorm) ||
+          catNameNorm.includes(searchSlugNorm)
+        );
       });
     }
-    
+
     return category ? Number(category.id) : null;
   } catch (error) {
     return null;
@@ -213,7 +215,6 @@ export default function CategoryNavigator({ activeCategoryName }) {
   const categoryIdParam = params.get("category_id") || "";
 
   const getChildren = useChildrenFetcher();
-  
 
   const prevRef = useRef(null);
   const nextRef = useRef(null);
@@ -232,7 +233,7 @@ export default function CategoryNavigator({ activeCategoryName }) {
 
       if (categorySlugParam) {
         const decoded = decodeURIComponent(categorySlugParam);
-        
+
         // First try cache
         const key = normSlug(decoded);
         const tc = ssGet(SS_TRAIL_CACHE, {});
@@ -252,19 +253,23 @@ export default function CategoryNavigator({ activeCategoryName }) {
           setResolvedParentId(foundId);
           return;
         }
-        
+
         // Fallback: try to get category info from breadcrumb API
         try {
           const breadcrumbResponse = await fetch(
-            `https://admin.keneta-ks.com/api/v2/breadcrumbs/category/${encodeURIComponent(decoded)}`
+            `https://admin.keneta-ks.com/api/v2/breadcrumbs/category/${encodeURIComponent(
+              decoded
+            )}`
           );
           if (breadcrumbResponse.ok) {
             const breadcrumbData = await breadcrumbResponse.json();
-            
+
             // Look for the category in the breadcrumb data
             if (breadcrumbData?.data && Array.isArray(breadcrumbData.data)) {
-              const categoryFromBreadcrumb = breadcrumbData.data.find(cat => 
-                normSlug(cat.slug) === normSlug(decoded) || normSlug(cat.name) === normSlug(decoded)
+              const categoryFromBreadcrumb = breadcrumbData.data.find(
+                (cat) =>
+                  normSlug(cat.slug) === normSlug(decoded) ||
+                  normSlug(cat.name) === normSlug(decoded)
               );
               if (categoryFromBreadcrumb?.id) {
                 setResolvedParentId(Number(categoryFromBreadcrumb.id));
@@ -285,7 +290,7 @@ export default function CategoryNavigator({ activeCategoryName }) {
           return;
         }
       }
-      
+
       // Default to root categories only if no category slug was provided
       if (!categorySlugParam) {
         setResolvedParentId(1);
@@ -299,7 +304,7 @@ export default function CategoryNavigator({ activeCategoryName }) {
 
   useEffect(() => {
     if (resolvedParentId === null) return; // Wait for parent ID to be resolved
-    
+
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -307,8 +312,8 @@ export default function CategoryNavigator({ activeCategoryName }) {
         const rows = await getChildren(resolvedParentId);
         if (!cancelled) {
           // Filter out children that have the same name as the active category
-          const filteredRows = activeCategoryName 
-            ? rows.filter(cat => cat.name !== activeCategoryName)
+          const filteredRows = activeCategoryName
+            ? rows.filter((cat) => cat.name !== activeCategoryName)
             : rows;
           setChildren(filteredRows);
         }

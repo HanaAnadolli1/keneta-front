@@ -476,7 +476,6 @@ export default function Wishlist() {
         }
       }
     } catch (e) {
-      console.error("Wishlist fetch error", e);
       setWishlist([]);
     } finally {
       setLoading(false);
@@ -510,7 +509,6 @@ export default function Wishlist() {
 
     // Try to get fresh product data to check current stock status
     try {
-      console.log("🔄 Fetching fresh product data for:", productId);
       const freshRes = await fetch(`${API_V1}/products/${productId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -522,12 +520,6 @@ export default function Wishlist() {
         const freshJson = await freshRes.json();
         const freshProduct = freshJson?.data;
         if (freshProduct) {
-          console.log("🔄 Fresh product data:", {
-            id: freshProduct.id,
-            in_stock: freshProduct.in_stock,
-            quantity: freshProduct.quantity,
-            name: freshProduct.name,
-          });
           product = freshProduct; // Use fresh data
         }
       }
@@ -557,18 +549,6 @@ export default function Wishlist() {
     }
 
     try {
-      console.log("🛒 Attempting to move to cart:", {
-        productId,
-        productName: product?.name,
-        productStock: product?.in_stock,
-        productQuantity: product?.quantity,
-        requestBody: {
-          is_buy_now: 0,
-          product_id: productId,
-          quantity: 1,
-        },
-      });
-
       // Use the same API endpoint as the cart mutations
       const res = await fetch(`${API_V1}/customer/cart/add/${productId}`, {
         method: "POST",
@@ -583,16 +563,8 @@ export default function Wishlist() {
         }),
       });
 
-      console.log("🛒 Cart API response:", {
-        status: res.status,
-        statusText: res.statusText,
-        ok: res.ok,
-      });
-
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-
-        console.log("🛒 Error response:", json);
 
         // Handle specific error messages from server
         if (json?.message?.includes("quantity is not available")) {

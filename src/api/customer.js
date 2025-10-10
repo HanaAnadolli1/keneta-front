@@ -129,7 +129,6 @@ export async function downloadInvoicePdf(id) {
   // 1) check JSON for direct URL
   try {
     const detail = await getInvoiceById(id);
-    console.debug("[invoice detail]", detail); // <-- helps discover fields
     const direct = extractPdfUrlFromDetail(detail);
     if (direct) return await tryFetchPdf(direct, { withAcceptHeader: false });
   } catch {

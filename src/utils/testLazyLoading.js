@@ -15,9 +15,6 @@ const testLazyHtml = `
 </div>
 `;
 
-console.log("Original lazy HTML:", testLazyHtml);
-console.log("Fixed lazy HTML:", fixThemeImageUrls(testLazyHtml));
-
 // The fix should convert:
 // <img src="" data-src="storage/theme/5/image.webp" class="lazy" ...>
 // To:

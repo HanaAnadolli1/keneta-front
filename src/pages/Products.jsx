@@ -433,15 +433,11 @@ export default function Products() {
           // if (sort) extra.sort = sort;
           // if (order) extra.order = order;
 
-          console.log("🔍 Search API call with limit:", PER_PAGE);
           const { products, hasNext } = await searchProducts(searchTerm, {
             limit: PER_PAGE,
             page: pageToFetch,
             extraParams: extra,
           });
-
-          console.log("📦 Search products returned:", products.length);
-          console.log("📄 Search page:", pageToFetch, "Has more:", hasNext);
 
           setItems((prev) => (append ? [...prev, ...products] : products));
           setHasMore(Boolean(hasNext));
@@ -455,10 +451,6 @@ export default function Products() {
         qs.set("limit", String(PER_PAGE)); // Try 'limit' instead of 'per_page'
         qs.set("page", String(pageToFetch));
         const url = `${API_V1}/products?${qs.toString()}`;
-
-        console.log("🔍 Products API call:", url);
-        console.log("📊 PER_PAGE value:", PER_PAGE);
-        console.log("🔍 Query string:", qs.toString());
 
         const res = await fetch(url, { headers: buildApiHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -495,9 +487,6 @@ export default function Products() {
           typeof lastPage === "number"
             ? currentPage < lastPage
             : dataArray.length === PER_PAGE; // If we got a full page, assume there might be more
-
-        console.log("📦 Products returned:", dataArray.length);
-        console.log("📄 Page:", pageToFetch, "Has more:", hasNext);
 
         setItems((prev) => (append ? [...prev, ...dataArray] : dataArray));
         setHasMore(Boolean(hasNext));
@@ -812,7 +801,6 @@ export default function Products() {
                       handleAddToCart={(p) => {
                         const productId = Number(p.id);
                         if (!productId || isNaN(productId)) {
-                          console.error("Invalid product ID:", p.id);
                           toast.error("Invalid product ID");
                           return;
                         }
@@ -822,7 +810,6 @@ export default function Products() {
                             onSuccess: () =>
                               toast.success("Item added to cart."),
                             onError: (e) => {
-                              console.error("Add to cart error:", e);
                               toast.error(
                                 e?.message || "Failed to add to cart."
                               );
@@ -848,7 +835,6 @@ export default function Products() {
                         handleAddToCart={(p) => {
                           const productId = Number(p.id);
                           if (!productId || isNaN(productId)) {
-                            console.error("Invalid product ID:", p.id);
                             toast.error("Invalid product ID");
                             return;
                           }
@@ -858,7 +844,6 @@ export default function Products() {
                               onSuccess: () =>
                                 toast.success("Item added to cart."),
                               onError: (e) => {
-                                console.error("Add to cart error:", e);
                                 toast.error(
                                   e?.message || "Failed to add to cart."
                                 );

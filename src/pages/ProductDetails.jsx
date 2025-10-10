@@ -162,21 +162,6 @@ export default function ProductDetails() {
     { apiBase: "https://admin.keneta-ks.com/api/v2" }
   );
 
-  console.log("ProductDetails - useSaleFlag result:", {
-    product: product
-      ? {
-          id: product.id,
-          price: product.price,
-          regular_price: product.regular_price,
-          special_price: product.special_price,
-          formatted_price: product.formatted_price,
-          formatted_regular_price: product.formatted_regular_price,
-          formatted_special_price: product.formatted_special_price,
-        }
-      : null,
-    result: { saleActive, hasStrike, priceLabel, strikeLabel },
-  });
-
   const [activeTab, setActiveTab] = useState("description");
 
   // related
@@ -220,11 +205,6 @@ export default function ProductDetails() {
         if (!list.length) throw new Error("Product not found");
 
         const productId = list[0].id;
-        console.log("ProductDetails - List API result:", {
-          productId,
-          listProduct: list[0],
-          url_key,
-        });
 
         // Then fetch the detailed product data with special pricing
         const detailRes = await fetch(`${API_V1}/products/${productId}`, {
@@ -233,17 +213,6 @@ export default function ProductDetails() {
         if (!detailRes.ok)
           throw new Error(`Detail fetch failed: ${detailRes.status}`);
         const detailJson = await detailRes.json();
-
-        console.log("ProductDetails - Detail API result:", {
-          productId,
-          detailProduct: detailJson.data,
-          price: detailJson.data?.price,
-          regular_price: detailJson.data?.regular_price,
-          special_price: detailJson.data?.special_price,
-          formatted_price: detailJson.data?.formatted_price,
-          formatted_special_price: detailJson.data?.formatted_special_price,
-          formatted_regular_price: detailJson.data?.formatted_regular_price,
-        });
 
         if (!ignore) setProduct(detailJson.data);
       } catch (e) {
@@ -493,17 +462,9 @@ export default function ProductDetails() {
     // Ensure productId is a number
     const productId = Number(product.id);
     if (!productId || isNaN(productId)) {
-      console.error("Invalid product ID:", product.id);
       toast.error("Invalid product ID");
       return;
     }
-
-    console.log("Adding to cart:", {
-      productId,
-      quantity: qty,
-      productIdType: typeof productId,
-      product,
-    });
 
     const tid = toast.info("Adding to cart…", { duration: 0 });
     add.mutate(
@@ -514,7 +475,6 @@ export default function ProductDetails() {
           toast.success("Item added to cart.");
         },
         onError: (e) => {
-          console.error("Add to cart error:", e);
           toast.remove(tid);
           toast.error(e?.message || "Failed to add to cart.");
         },

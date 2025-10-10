@@ -97,8 +97,6 @@ export function useSaveAddress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (addressData) => {
-      console.log("Attempting to save address with data:", addressData);
-
       // Try different API endpoints and formats
       const endpoints = [
         "/customer/addresses",
@@ -124,16 +122,9 @@ export function useSaveAddress() {
       for (const endpoint of endpoints) {
         for (const format of formats) {
           try {
-            console.log(`Trying ${endpoint} with JSON format:`, format);
             const res = await axios.post(endpoint, format);
-            console.log("Success with:", endpoint, format);
             return res.data;
           } catch (error) {
-            console.log(
-              `Failed ${endpoint} with JSON format:`,
-              error.response?.status,
-              error.response?.data
-            );
             if (error.response?.status !== 422) {
               // If it's not a validation error, don't try other formats
               break;
@@ -143,16 +134,10 @@ export function useSaveAddress() {
 
         // Try FormData for this endpoint
         try {
-          console.log(`Trying ${endpoint} with FormData format`);
           const res = await axios.post(endpoint, formData);
-          console.log("Success with FormData:", endpoint);
           return res.data;
         } catch (error) {
-          console.log(
-            `Failed ${endpoint} with FormData:`,
-            error.response?.status,
-            error.response?.data
-          );
+          // Continue to next endpoint
         }
       }
 
