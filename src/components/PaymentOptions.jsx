@@ -7,11 +7,6 @@ export default function PaymentOptions({
   loading,
   error,
 }) {
-  useEffect(() => {
-    console.log("💳 Payment methods received:", methods);
-    console.log("✅ Selected payment method:", selected);
-  }, [methods, selected]);
-
   const paymentList = Array.isArray(methods)
     ? methods
     : Object.values(methods || {});

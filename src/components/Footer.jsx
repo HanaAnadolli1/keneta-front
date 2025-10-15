@@ -1,5 +1,5 @@
 // src/components/Footer.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import logo from "../assets/logo_footer.svg";
 
@@ -11,6 +11,37 @@ export default function Footer() {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Footer links state
+  const [footerLinks, setFooterLinks] = useState(null);
+  const [loadingLinks, setLoadingLinks] = useState(true);
+
+  // Fetch footer links from API
+  useEffect(() => {
+    const fetchFooterLinks = async () => {
+      try {
+        const res = await fetch(
+          "https://admin.keneta-ks.com/api/v2/theme/customizations",
+          { headers: { Accept: "application/json" } }
+        );
+
+        const data = await res.json();
+        const footerLinksData = data.data?.find(
+          (item) => item.type === "footer_links" && Number(item.status) === 1
+        );
+
+        if (footerLinksData) {
+          setFooterLinks(footerLinksData.options);
+        }
+      } catch (err) {
+        console.error("Error fetching footer links:", err);
+      } finally {
+        setLoadingLinks(false);
+      }
+    };
+
+    fetchFooterLinks();
+  }, []);
 
   const validateEmail = (v) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).toLowerCase());
@@ -74,85 +105,163 @@ export default function Footer() {
             </p>
           </div>
 
-          {/* Nav 1 (1 col) */}
+          {/* Nav 1 (1 col) - Column 1 from API */}
           <nav className="md:col-span-1">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
-              Navigimi
+              {footerLinks?.column_1_title || "Navigimi"}
             </h4>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link
-                  to="/products"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Produktet
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/brands"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Brendet
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/deals"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Deals
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/outlet"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Outlet
-                </Link>
-              </li>
+              {loadingLinks ? (
+                // Loading state
+                <>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                </>
+              ) : footerLinks?.column_1 && footerLinks.column_1.length > 0 ? (
+                // API links
+                footerLinks.column_1.map((link, index) => (
+                  <li key={index}>
+                    <a
+                      href={link.url}
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                      target={link.url.startsWith("http") ? "_blank" : "_self"}
+                      rel={
+                        link.url.startsWith("http")
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
+                    >
+                      {link.title}
+                    </a>
+                  </li>
+                ))
+              ) : (
+                // Fallback links
+                <>
+                  <li>
+                    <Link
+                      to="/products"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Produktet
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/brands"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Brendet
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/deals"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Deals
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/outlet"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Outlet
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </nav>
 
-          {/* Nav 2 (1 col) */}
+          {/* Nav 2 (1 col) - Column 2 from API */}
           <nav className="md:col-span-1">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
-              Ndihmë
+              {footerLinks?.column_2_title || "Ndihmë"}
             </h4>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link
-                  to="/shipping"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Dërgesat
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/returns"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Kthimet & Garancia
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/contact"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Kontakt
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/faq"
-                  className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
-                >
-                  Pyetjet e shpeshta
-                </Link>
-              </li>
+              {loadingLinks ? (
+                // Loading state
+                <>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                  <li>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </li>
+                </>
+              ) : footerLinks?.column_2 && footerLinks.column_2.length > 0 ? (
+                // API links
+                footerLinks.column_2.map((link, index) => (
+                  <li key={index}>
+                    <a
+                      href={link.url}
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                      target={link.url.startsWith("http") ? "_blank" : "_self"}
+                      rel={
+                        link.url.startsWith("http")
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
+                    >
+                      {link.title}
+                    </a>
+                  </li>
+                ))
+              ) : (
+                // Fallback links
+                <>
+                  <li>
+                    <Link
+                      to="/shipping"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Dërgesat
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/returns"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Kthimet & Garancia
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/contact"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Kontakt
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/faq"
+                      className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
+                    >
+                      Pyetjet e shpeshta
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </nav>
 

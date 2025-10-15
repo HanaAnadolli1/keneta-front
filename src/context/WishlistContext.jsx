@@ -36,7 +36,9 @@ export function WishlistProvider({ children }) {
     null;
 
   const toUniqueNums = (arr) =>
-    Array.from(new Set((arr || []).map((x) => Number(x)).filter(Number.isFinite)));
+    Array.from(
+      new Set((arr || []).map((x) => Number(x)).filter(Number.isFinite))
+    );
 
   const readGuestIds = () => {
     if (typeof window === "undefined") return [];
@@ -93,20 +95,20 @@ export function WishlistProvider({ children }) {
     if (!t) return;
     const id = Number(productId);
 
-    // Try POST /customer/wishlist/:id (toggle)
-    let res = await fetch(`${API}/${id}`, {
+    // Try the main endpoint first
+    let res = await fetch(`${API}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         Authorization: `Bearer ${t}`,
       },
-      body: JSON.stringify({ additional: { product_id: id, quantity: 1 } }),
+      body: JSON.stringify({ product_id: id, quantity: 1 }),
     });
 
-    // Fallback: POST /customer/wishlist (some backends use this)
+    // Fallback: Try with ID in URL path
     if (!res.ok) {
-      res = await fetch(`${API}`, {
+      res = await fetch(`${API}/${id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -119,8 +121,11 @@ export function WishlistProvider({ children }) {
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
+      console.error("❌ Add to wishlist failed:", res.status, txt);
       // If it "already exists", treat as success
-      if (res.status === 409 || /exist/i.test(txt)) return;
+      if (res.status === 409 || /exist/i.test(txt)) {
+        return;
+      }
       throw new Error(txt || "Failed to add to wishlist");
     }
   };
@@ -145,14 +150,17 @@ export function WishlistProvider({ children }) {
           Accept: "application/json",
           Authorization: `Bearer ${t}`,
         },
-        body: JSON.stringify({ additional: { product_id: id, quantity: 1 } }),
+        body: JSON.stringify({ product_id: id, quantity: 1 }),
       });
     }
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
+      console.error("❌ Remove from wishlist failed:", res.status, txt);
       // If it's already gone, treat as success
-      if (res.status === 404) return;
+      if (res.status === 404) {
+        return;
+      }
       throw new Error(txt || "Failed to remove from wishlist");
     }
   };
@@ -253,7 +261,9 @@ export function WishlistProvider({ children }) {
     const id = Number(productId);
 
     if (token) {
-      if (isWishlisted(id)) {
+      const wasWishlisted = isWishlisted(id);
+
+      if (wasWishlisted) {
         await removeFromServer(id);
       } else {
         await addToServer(id);

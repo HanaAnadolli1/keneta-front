@@ -154,8 +154,6 @@ export function useCartMutations() {
   // Add item
   const addItem = useMutation({
     mutationFn: async ({ productId, quantity = 1, ...rest }) => {
-      console.log("Cart mutation called with:", { productId, quantity, rest });
-
       if (!productId) {
         throw new Error("Product ID is required");
       }
@@ -163,7 +161,6 @@ export function useCartMutations() {
       ensureSession();
       await ensureCsrfCookie();
       if (token) {
-        console.log("Using customer cart API");
         return axios.post(`/customer/cart/add/${productId}`, {
           is_buy_now: 0,
           product_id: productId,
@@ -171,7 +168,6 @@ export function useCartMutations() {
           ...rest,
         });
       }
-      console.log("Using guest cart API");
       const csrf = getCsrfToken();
 
       // Try different approaches for guest cart
@@ -231,12 +227,9 @@ export function useCartMutations() {
 
       for (let i = 0; i < approaches.length; i++) {
         try {
-          console.log(`Trying approach ${i + 1}...`);
           const result = await approaches[i]();
-          console.log(`Success with approach ${i + 1}!`);
           return result;
         } catch (err) {
-          console.log(`Approach ${i + 1} failed:`, err.message);
           lastError = err;
         }
       }

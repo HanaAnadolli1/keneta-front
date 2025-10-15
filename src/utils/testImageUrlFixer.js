@@ -24,9 +24,3 @@ const testCss = `
   transition: transform 300ms ease;
 }
 `;
-
-console.log("Original HTML:", testHtml);
-console.log("Fixed HTML:", fixThemeImageUrls(testHtml));
-
-console.log("Original CSS:", testCss);
-console.log("Fixed CSS:", fixThemeCss(testCss));

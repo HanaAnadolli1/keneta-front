@@ -37,13 +37,19 @@ function ProductCard({
           type="button"
           aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
           title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-          onClick={(e) => {
+          onClick={async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            toggleWishlist?.(idNum);
-            toast.success(
-              isWishlisted ? "Removed from wishlist." : "Added to wishlist."
-            );
+            try {
+              await toggleWishlist?.(idNum);
+              toast.success(
+                isWishlisted ? "Removed from wishlist." : "Added to wishlist."
+              );
+            } catch (error) {
+              toast.error(
+                error?.message || "Failed to update wishlist. Please try again."
+              );
+            }
           }}
           className="h-9 w-9 rounded-full grid place-items-center bg-white/95 backdrop-blur ring-1 ring-black/5 shadow-sm transition hover:ring-red-200"
         >
@@ -165,7 +171,7 @@ function ProductCard({
       </Link>
 
       {/* Bottom action row always aligned */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-2">
         {inStock ? (
           <button
             onClick={() => handleAddToCart?.(product)}

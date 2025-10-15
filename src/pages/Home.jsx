@@ -23,15 +23,19 @@ function useThemeCustomizations() {
       // Filter active customizations and sort by sort_order
       const activeCustomizations = items
         .filter((x) => Number(x?.status) === 1)
-        .sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
+        .sort(
+          (a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0)
+        );
 
-      // Extract image carousels for hero section
+      // Extract image carousels and group them intelligently
       const imageCarousels = activeCustomizations
         .filter((x) => x?.type === "image_carousel")
         .map((x) => {
           const translated =
             x?.translations?.[0]?.options?.images ?? x?.options?.images ?? [];
           return {
+            id: x.id,
+            name: x.name,
             sort_order: Number(x?.sort_order ?? 0),
             images: translated.map((img) => ({
               image: img?.image ?? "",
@@ -40,15 +44,32 @@ function useThemeCustomizations() {
               link: img?.link ?? "",
             })),
           };
-        });
+        })
+        .sort((a, b) => a.sort_order - b.sort_order);
 
-      const byOrder = (n) =>
-        imageCarousels.find((c) => c.sort_order === n)?.images ?? [];
+      // Group consecutive image carousels
+      const groupedCarousels = [];
+      let currentGroup = [];
+
+      imageCarousels.forEach((carousel, index) => {
+        const nextCarousel = imageCarousels[index + 1];
+
+        currentGroup.push(carousel);
+
+        // If this is the last carousel or the next one is not consecutive
+        if (
+          !nextCarousel ||
+          nextCarousel.sort_order !== carousel.sort_order + 1
+        ) {
+          groupedCarousels.push([...currentGroup]);
+          currentGroup = [];
+        }
+      });
 
       return {
         customizations: activeCustomizations,
-        leftSlides: byOrder(1), // 2/3 width
-        rightSlides: byOrder(2), // 1/3 width
+        groupedCarousels: groupedCarousels,
+        imageCarousels: imageCarousels,
       };
     },
   });
@@ -56,47 +77,94 @@ function useThemeCustomizations() {
 
 export default function Home() {
   const { data, isLoading, error } = useThemeCustomizations();
-  const leftSlides = data?.leftSlides ?? [];
-  const rightSlides = data?.rightSlides ?? [];
+  const groupedCarousels = data?.groupedCarousels ?? [];
   const customizations = data?.customizations ?? [];
+  const imageCarousels = data?.imageCarousels ?? [];
 
   return (
     <div>
       {error ? (
-        <div className="p-8 text-red-600">Failed to load theme customizations.</div>
+        <div className="p-8 text-red-600">
+          Failed to load theme customizations.
+        </div>
       ) : (
         <>
-          {/* Hero Carousel Section */}
-          <section className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Left (2/3) */}
-              {(leftSlides.length > 0 || isLoading) && (
-                <div className="md:col-span-2">
-                  <Carousel
-                    slides={isLoading ? [] : leftSlides}
-                    className="h-[420px] md:h-[560px]"
-                    buttonAlign="left"
-                  />
-                </div>
-              )}
+          {/* Render all customizations in sort_order sequence */}
+          {customizations
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+            .map((customization) => {
+              // Handle image carousels with smart grouping
+              if (customization.type === "image_carousel") {
+                // Find if this carousel is part of a group
+                const carouselIndex = imageCarousels.findIndex(
+                  (c) => c.id === customization.id
+                );
+                if (carouselIndex === -1) return null;
 
-              {/* Right (1/3) */}
-              {(rightSlides.length > 0 || isLoading) && (
-                <div className="md:col-span-1">
-                  <Carousel
-                    slides={isLoading ? [] : rightSlides}
-                    className="h-[420px] md:h-[560px]"
-                    buttonAlign="center"
-                  />
-          </div>
-              )}
-        </div>
-          </section>
+                const carousel = imageCarousels[carouselIndex];
+                const nextCarousel = imageCarousels[carouselIndex + 1];
+                const prevCarousel = imageCarousels[carouselIndex - 1];
 
-          {/* Render all theme customizations in order */}
-          {customizations.map((customization) => (
-            <ThemeRenderer key={customization.id} customization={customization} />
-          ))}
+                // Check if this is the first carousel in a group
+                const isFirstInGroup =
+                  !prevCarousel ||
+                  prevCarousel.sort_order !== carousel.sort_order - 1;
+
+                // Only render if this is the first carousel in a group
+                if (!isFirstInGroup) return null;
+
+                // Determine if this is a single carousel or part of a pair
+                const isGrouped =
+                  nextCarousel &&
+                  nextCarousel.sort_order === carousel.sort_order + 1;
+
+                return (
+                  <section
+                    key={customization.id}
+                    className="w-full px-4 md:px-6 lg:px-8 py-4"
+                  >
+                    <div className="max-w-7xl mx-auto">
+                      {isGrouped ? (
+                        // Two carousels side by side (2x1 layout)
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2">
+                            <Carousel
+                              slides={carousel.images || []}
+                              className="h-[420px] md:h-[560px]"
+                              buttonAlign="left"
+                            />
+                          </div>
+                          <div className="hidden md:block md:col-span-1">
+                            <Carousel
+                              slides={nextCarousel.images || []}
+                              className="h-[420px] md:h-[560px]"
+                              buttonAlign="center"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        // Single carousel full width
+                        <div className="w-full">
+                          <Carousel
+                            slides={carousel.images || []}
+                            className="h-[420px] md:h-[560px]"
+                            buttonAlign="center"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                );
+              }
+
+              // Handle all other customization types
+              return (
+                <ThemeRenderer
+                  key={customization.id}
+                  customization={customization}
+                />
+              );
+            })}
         </>
       )}
     </div>

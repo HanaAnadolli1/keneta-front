@@ -162,21 +162,6 @@ export default function ProductDetails() {
     { apiBase: "https://admin.keneta-ks.com/api/v2" }
   );
 
-  console.log("ProductDetails - useSaleFlag result:", {
-    product: product
-      ? {
-          id: product.id,
-          price: product.price,
-          regular_price: product.regular_price,
-          special_price: product.special_price,
-          formatted_price: product.formatted_price,
-          formatted_regular_price: product.formatted_regular_price,
-          formatted_special_price: product.formatted_special_price,
-        }
-      : null,
-    result: { saleActive, hasStrike, priceLabel, strikeLabel },
-  });
-
   const [activeTab, setActiveTab] = useState("description");
 
   // related
@@ -220,11 +205,6 @@ export default function ProductDetails() {
         if (!list.length) throw new Error("Product not found");
 
         const productId = list[0].id;
-        console.log("ProductDetails - List API result:", {
-          productId,
-          listProduct: list[0],
-          url_key,
-        });
 
         // Then fetch the detailed product data with special pricing
         const detailRes = await fetch(`${API_V1}/products/${productId}`, {
@@ -233,17 +213,6 @@ export default function ProductDetails() {
         if (!detailRes.ok)
           throw new Error(`Detail fetch failed: ${detailRes.status}`);
         const detailJson = await detailRes.json();
-
-        console.log("ProductDetails - Detail API result:", {
-          productId,
-          detailProduct: detailJson.data,
-          price: detailJson.data?.price,
-          regular_price: detailJson.data?.regular_price,
-          special_price: detailJson.data?.special_price,
-          formatted_price: detailJson.data?.formatted_price,
-          formatted_special_price: detailJson.data?.formatted_special_price,
-          formatted_regular_price: detailJson.data?.formatted_regular_price,
-        });
 
         if (!ignore) setProduct(detailJson.data);
       } catch (e) {
@@ -468,6 +437,9 @@ export default function ProductDetails() {
   const compared = isCompared(idNum);
   const canAddMoreCompare = compared || count < max;
 
+  // Check stock status - same logic as ProductCard
+  const inStock = product?.in_stock ?? (product?.quantity ?? 0) > 0;
+
   const unitPriceLabel = product.formatted_price ?? "€0.00";
   const unitPrice = Number(product?.price ?? 0);
   const currencyMatch = String(product?.formatted_price || "").match(
@@ -490,17 +462,9 @@ export default function ProductDetails() {
     // Ensure productId is a number
     const productId = Number(product.id);
     if (!productId || isNaN(productId)) {
-      console.error("Invalid product ID:", product.id);
       toast.error("Invalid product ID");
       return;
     }
-
-    console.log("Adding to cart:", {
-      productId,
-      quantity: qty,
-      productIdType: typeof productId,
-      product,
-    });
 
     const tid = toast.info("Adding to cart…", { duration: 0 });
     add.mutate(
@@ -511,7 +475,6 @@ export default function ProductDetails() {
           toast.success("Item added to cart.");
         },
         onError: (e) => {
-          console.error("Add to cart error:", e);
           toast.remove(tid);
           toast.error(e?.message || "Failed to add to cart.");
         },
@@ -730,13 +693,23 @@ export default function ProductDetails() {
                 {strikeLabel}
               </div>
             )}
+            {/* VAT Text */}
+            <div className="text-xs text-gray-400">
+              Çmimet përfshijnë TVSH-në.
+            </div>
           </div>
 
           {/* Availability */}
           <div className="inline-flex">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-              In stock
-            </span>
+            {inStock ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-sm font-medium">
+                ✓ In Stock
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-700 px-3 py-1 text-sm font-medium">
+                ✗ Out of Stock
+              </span>
+            )}
           </div>
 
           {/* Quantity Selector */}
@@ -763,14 +736,18 @@ export default function ProductDetails() {
             {/* Add to Cart Button */}
             <button
               onClick={handleAdd}
-              disabled={addItem.isPending}
+              disabled={addItem.isPending || !inStock}
               className={`px-6 py-3 rounded-lg font-semibold text-white transition ${
-                addItem.isPending
+                addItem.isPending || !inStock
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[var(--primary)] hover:bg-[var(--secondary)]"
               }`}
             >
-              {addItem.isPending ? "Adding…" : "Add to Cart"}
+              {addItem.isPending
+                ? "Adding…"
+                : !inStock
+                ? "Out of Stock"
+                : "Add to Cart"}
             </button>
           </div>
 
@@ -796,11 +773,18 @@ export default function ProductDetails() {
             <button
               type="button"
               title={wished ? "Remove from wishlist" : "Add to wishlist"}
-              onClick={() => {
-                toggleWishlist?.(idNum);
-                toast.success(
-                  wished ? "Removed from wishlist." : "Added to wishlist."
-                );
+              onClick={async () => {
+                try {
+                  await toggleWishlist?.(idNum);
+                  toast.success(
+                    wished ? "Removed from wishlist." : "Added to wishlist."
+                  );
+                } catch (error) {
+                  toast.error(
+                    error?.message ||
+                      "Failed to update wishlist. Please try again."
+                  );
+                }
               }}
               className="flex items-center gap-2 hover:text-[var(--primary)]"
             >

@@ -17,6 +17,8 @@ export default function Carousel({
   buttonAlign = "center",
 }) {
   const [current, setCurrent] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
   const total = slides.length;
 
   useEffect(() => {
@@ -29,6 +31,35 @@ export default function Carousel({
 
   if (!total) return null;
 
+  // Minimum swipe distance (in px) to trigger a slide change
+  const minSwipeDistance = 50;
+
+  const handleTouchStart = (e) => {
+    setTouchEnd(0); // Reset touch end
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      // Swipe left - go to next slide
+      setCurrent((p) => (p + 1) % total);
+    }
+    if (isRightSwipe) {
+      // Swipe right - go to previous slide
+      setCurrent((p) => (p - 1 + total) % total);
+    }
+  };
+
   const overlayPos =
     buttonAlign === "left"
       ? "left-6 md:left-10 bottom-8 md:bottom-12 items-start text-left"
@@ -37,6 +68,9 @@ export default function Carousel({
   return (
     <div
       className={`relative group w-full overflow-hidden rounded-2xl shadow-lg ${className}`}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {slides.map((slide, i) => {
         const src = slide?.image ? `${BASE_URL}${slide.image}` : "";

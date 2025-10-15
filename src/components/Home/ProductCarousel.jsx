@@ -21,16 +21,27 @@ const ProductCarousel = ({ customization }) => {
 
   useEffect(() => {
     const fetchProducts = async () => {
+      console.log("ProductCarousel received customization:", customization);
+
       if (!customization || customization.type !== "product_carousel") {
+        console.log("ProductCarousel: No valid customization, returning null");
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        const { filters, title } = customization.options || {};
+        const { filters } = customization.options || {};
+        const title =
+          customization.options?.title ||
+          customization.translations?.[0]?.options?.title;
+
+        console.log("ProductCarousel filters:", filters);
+        console.log("ProductCarousel title:", title);
+        console.log("ProductCarousel customization:", customization);
 
         if (!filters) {
+          console.log("ProductCarousel: No filters found, returning null");
           setLoading(false);
           return;
         }
@@ -40,7 +51,16 @@ const ProductCarousel = ({ customization }) => {
 
         if (filters.new) queryParams.set("new", "1");
         if (filters.featured) queryParams.set("featured", "1");
-        if (filters.sort) queryParams.set("sort", filters.sort);
+        if (filters.sort) {
+          // Handle different sort formats
+          if (filters.sort.includes("-")) {
+            const [field, order] = filters.sort.split("-");
+            queryParams.set("sort", field);
+            queryParams.set("order", order);
+          } else {
+            queryParams.set("sort", filters.sort);
+          }
+        }
         if (filters.limit) queryParams.set("per_page", filters.limit);
         if (filters.category_id)
           queryParams.set("category_id", filters.category_id);
@@ -49,20 +69,24 @@ const ProductCarousel = ({ customization }) => {
         // Build headers with bearer token if available
         const headers = buildApiHeaders();
 
-        const response = await fetch(
-          `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`,
-          { headers }
-        );
+        const apiUrl = `https://admin.keneta-ks.com/api/v2/products?${queryParams.toString()}`;
+        console.log("ProductCarousel API URL:", apiUrl);
+        console.log("ProductCarousel query params:", queryParams.toString());
+
+        const response = await fetch(apiUrl, { headers });
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const data = await response.json();
+        console.log("ProductCarousel API response:", data);
+
         const items =
           data?.data?.items ||
           data?.items ||
           (Array.isArray(data?.data) ? data.data : []) ||
           [];
 
+        console.log("ProductCarousel processed items:", items);
         setProducts(items);
       } catch (err) {
         console.error("Error fetching products:", err);
@@ -79,11 +103,14 @@ const ProductCarousel = ({ customization }) => {
     return null;
   }
 
-  const { title } = customization.options || {};
+  const { filters } = customization.options || {};
+  const title =
+    customization.options?.title ||
+    customization.translations?.[0]?.options?.title;
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-10">
+      <div className="w-full px-4 py-10">
         <div className="animate-pulse">
           <div className="h-6 bg-gray-300 rounded w-48 mb-6"></div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -102,7 +129,7 @@ const ProductCarousel = ({ customization }) => {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-10">
+      <div className="w-full px-4 py-10">
         <div className="text-center text-red-500">
           <p>Failed to load products: {error}</p>
         </div>
@@ -115,7 +142,7 @@ const ProductCarousel = ({ customization }) => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
+    <div className="w-full px-4 py-10">
       {title && (
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-[var(--primary)]">

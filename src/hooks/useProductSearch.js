@@ -60,16 +60,10 @@ export function useProductSearch() {
       if (v != null && v !== "") params.set(k, String(v));
     }
 
-    console.log("🔍 Search hook - limit:", limit, "page:", page);
-    console.log(
-      "🔍 Search hook - URL:",
-      `${API_BASE}/api/v2/search?${params.toString()}`
-    );
-
     setLoading(true);
     try {
       const url = `${API_BASE}/api/v2/search?${params.toString()}`;
-      
+
       const res = await fetch(url, {
         method: "GET",
         headers: buildApiHeaders(),
@@ -93,9 +87,6 @@ export function useProductSearch() {
 
       const dataArray = Array.isArray(json?.data) ? json.data : [];
       const products = dataArray.map(normalizeProduct);
-
-      console.log("📦 Search hook - raw data length:", dataArray.length);
-      console.log("📦 Search hook - products length:", products.length);
 
       const total =
         json?.meta?.total ??

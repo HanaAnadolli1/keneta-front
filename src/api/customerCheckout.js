@@ -5,9 +5,10 @@ import axios from "./axios";
 export function useCustomerCheckoutAddress() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (billing) => {
+    mutationFn: async ({ billing, shipping }) => {
       const res = await axios.post("/customer/checkout/save-address", {
         billing,
+        shipping,
       });
 
       const shippingData = res.data?.data;
@@ -73,8 +74,8 @@ export function useCustomerProfile() {
   return useQuery({
     queryKey: ["customerProfile"],
     queryFn: async () => {
-      const res = await axios.get("/customer/get");
-      return res.data;
+      const { getCustomer } = await import("./customer");
+      return await getCustomer();
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
@@ -85,8 +86,8 @@ export function useSavedAddresses() {
   return useQuery({
     queryKey: ["savedAddresses"],
     queryFn: async () => {
-      const res = await axios.get("/customer/addresses");
-      return res.data;
+      const { getAddresses } = await import("./customer");
+      return await getAddresses();
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
@@ -97,68 +98,9 @@ export function useSaveAddress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (addressData) => {
-      console.log("Attempting to save address with data:", addressData);
-
-      // Try different API endpoints and formats
-      const endpoints = [
-        "/customer/addresses",
-        "/customer/address",
-        "/customer/checkout/save-address",
-      ];
-
-      const formats = [
-        addressData, // Direct data
-        { address: addressData }, // Wrapped in address
-        { billing: addressData }, // Wrapped in billing (like checkout)
-        { data: addressData }, // Wrapped in data
-      ];
-
-      // Also try FormData format
-      const formData = new FormData();
-      Object.entries(addressData).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-          formData.append(key, value);
-        }
-      });
-
-      for (const endpoint of endpoints) {
-        for (const format of formats) {
-          try {
-            console.log(`Trying ${endpoint} with JSON format:`, format);
-            const res = await axios.post(endpoint, format);
-            console.log("Success with:", endpoint, format);
-            return res.data;
-          } catch (error) {
-            console.log(
-              `Failed ${endpoint} with JSON format:`,
-              error.response?.status,
-              error.response?.data
-            );
-            if (error.response?.status !== 422) {
-              // If it's not a validation error, don't try other formats
-              break;
-            }
-          }
-        }
-
-        // Try FormData for this endpoint
-        try {
-          console.log(`Trying ${endpoint} with FormData format`);
-          const res = await axios.post(endpoint, formData);
-          console.log("Success with FormData:", endpoint);
-          return res.data;
-        } catch (error) {
-          console.log(
-            `Failed ${endpoint} with FormData:`,
-            error.response?.status,
-            error.response?.data
-          );
-        }
-      }
-
-      throw new Error(
-        "All address saving attempts failed. Check console for details."
-      );
+      // Use the existing createAddress function from customer.js
+      const { createAddress } = await import("./customer");
+      return await createAddress(addressData);
     },
     onSuccess: () => {
       qc.invalidateQueries(["savedAddresses"]);
@@ -171,8 +113,8 @@ export function useUpdateAddress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, addressData }) => {
-      const res = await axios.put(`/customer/addresses/${id}`, addressData);
-      return res.data;
+      const { updateAddress } = await import("./customer");
+      return await updateAddress(id, addressData);
     },
     onSuccess: () => {
       qc.invalidateQueries(["savedAddresses"]);
@@ -185,8 +127,8 @@ export function useDeleteAddress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id) => {
-      const res = await axios.delete(`/customer/addresses/${id}`);
-      return res.data;
+      const { deleteAddress } = await import("./customer");
+      return await deleteAddress(id);
     },
     onSuccess: () => {
       qc.invalidateQueries(["savedAddresses"]);

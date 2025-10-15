@@ -22,6 +22,7 @@ import useLoadColors from "./hooks/useLoadColors";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AccountShell from "./components/account/AccountShell";
 import Profile from "./pages/account/Profile";
+import Address from "./pages/account/Address";
 import Orders from "./pages/account/Orders";
 import OrderDetail from "./pages/account/OrderDetail";
 
@@ -51,40 +52,43 @@ export default function App() {
       <BackToTop showAt={300} />
       <Header />
 
-      <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<Home />} />
-        <Route path="/products" element={<Products />} />
-        <Route path="/products/:url_key" element={<ProductDetails />} />
-        <Route path="/brands" element={<Brands />} />
-        <Route path="/deals" element={<Deals />} />
-        <Route path="/deals/:id" element={<DealDetails />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/compare" element={<ComparePage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+      <main className="max-w-7xl mx-auto">
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Home />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/products/:url_key" element={<ProductDetails />} />
+          <Route path="/brands" element={<Brands />} />
+          <Route path="/deals" element={<Deals />} />
+          <Route path="/deals/:id" element={<DealDetails />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        {/* Protected Account area */}
-        <Route
-          path="/account"
-          element={
-            <ProtectedRoute>
-              <AccountShell />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Profile />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="orders/:id" element={<OrderDetail />} />
-          <Route path="gdpr" element={<GDPR />} /> 
-          <Route path="reviews" element={<Reviews />} /> 
-        </Route>
+          {/* Protected Account area */}
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <AccountShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Profile />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="address" element={<Address />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="orders/:id" element={<OrderDetail />} />
+            <Route path="gdpr" element={<GDPR />} />
+            <Route path="reviews" element={<Reviews />} />
+          </Route>
 
-        {/* 404 */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          {/* 404 */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
 
       <Footer />
     </Router>

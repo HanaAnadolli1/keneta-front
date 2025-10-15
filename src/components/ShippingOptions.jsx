@@ -8,26 +8,14 @@ export default function ShippingOptions({
   loading,
   error,
 }) {
-  // Log what's being received as props
-  useEffect(() => {
-    console.log("📦 ShippingOptions received methods:", methods);
-    console.log("✅ Selected method:", selected);
-    if (error) {
-      console.error("❌ ShippingOptions error:", error);
-    }
-  }, [methods, selected, error]);
-
   // Normalize to array
   const shippingGroups = Array.isArray(methods)
     ? methods
     : Object.values(methods || {});
 
   const rates = shippingGroups.flatMap((group) => {
-    console.log("➡️ Group being rendered:", group);
     return group?.rates || [];
   });
-
-  console.log("🧾 All rates to render:", rates);
 
   return (
     <div className="mt-8 bg-white shadow rounded-lg p-8 space-y-6">

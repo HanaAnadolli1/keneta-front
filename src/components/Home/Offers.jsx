@@ -58,10 +58,20 @@ const Offers = () => {
   return (
     <div className="relative w-full max-w-7xl mx-auto overflow-hidden px-4">
       {/* Inject backend-provided CSS with fixed image URLs and CSS issues */}
-      {offerCss && <style dangerouslySetInnerHTML={{ __html: fixThemeCss(fixThemeImageUrls(offerCss)) }} />}
+      {offerCss && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: fixThemeCss(fixThemeImageUrls(offerCss)),
+          }}
+        />
+      )}
 
       {/* Render backend-provided HTML with fixed image URLs */}
-      {offerHtml && <div dangerouslySetInnerHTML={{ __html: fixThemeImageUrls(offerHtml) }} />}
+      {offerHtml && (
+        <div
+          dangerouslySetInnerHTML={{ __html: fixThemeImageUrls(offerHtml) }}
+        />
+      )}
 
       {/* Deals Section */}
       {products.length > 0 && (

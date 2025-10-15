@@ -43,7 +43,6 @@ export default function CartSidebar({ open, onClose }) {
     const lineItemId = item.id;
 
     if (!lineItemId) {
-      console.error("❌ Missing lineItemId (cart item id) for:", item);
       alert("Missing cart item ID");
       return;
     }

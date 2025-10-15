@@ -46,9 +46,13 @@ export default function Checkout() {
     ? useCustomerCheckoutPaymentMethod()
     : useCheckoutPaymentMethod();
   const orderM = isLoggedIn ? useCustomerPlaceOrder() : usePlaceOrder();
-  
+
   // New hooks for customer profile and minimum order check
-  const { data: customerProfile, isLoading: profileLoading, error: profileError } = useCustomerProfile();
+  const {
+    data: customerProfile,
+    isLoading: profileLoading,
+    error: profileError,
+  } = useCustomerProfile();
   const { refetch: checkMinimumOrder } = useCheckMinimumOrder();
   const { data: savedAddresses } = useSavedAddresses();
   const saveAddressMutation = useSaveAddress();
@@ -81,8 +85,10 @@ export default function Checkout() {
   });
 
   // Address selection states
-  const [selectedBillingAddressId, setSelectedBillingAddressId] = useState(null);
-  const [selectedShippingAddressId, setSelectedShippingAddressId] = useState(null);
+  const [selectedBillingAddressId, setSelectedBillingAddressId] =
+    useState(null);
+  const [selectedShippingAddressId, setSelectedShippingAddressId] =
+    useState(null);
   const [useBillingForShipping, setUseBillingForShipping] = useState(true);
   const [showBillingForm, setShowBillingForm] = useState(false);
   const [showShippingForm, setShowShippingForm] = useState(false);
@@ -92,11 +98,22 @@ export default function Checkout() {
   useEffect(() => {
     if (isLoggedIn && customerProfile && !profileLoading) {
       const profile = customerProfile.data || customerProfile;
-      const hasProfileData = profile.first_name || profile.last_name || profile.email;
-      
+      const hasProfileData =
+        profile.first_name || profile.last_name || profile.email;
+
       if (hasProfileData) {
-        setBilling(prevBilling => ({
-          ...prevBilling,
+        const updatedBilling = {
+          company_name: "",
+          first_name: "",
+          last_name: "",
+          email: "",
+          address: [""],
+          country: "",
+          city: "",
+          postcode: "",
+          phone: "",
+          state: "",
+          use_for_shipping: true,
           // Only update fields that exist in the profile and are not empty
           ...(profile.company_name && { company_name: profile.company_name }),
           ...(profile.first_name && { first_name: profile.first_name }),
@@ -110,14 +127,50 @@ export default function Checkout() {
           ...(profile.city && { city: profile.city }),
           ...(profile.postcode && { postcode: profile.postcode }),
           ...(profile.state && { state: profile.state }),
-        }));
-        
+        };
+
+        setBilling(updatedBilling);
+
+        // If using billing for shipping, update shipping address too
+        if (useBillingForShipping) {
+          setShipping({
+            company_name: updatedBilling.company_name,
+            first_name: updatedBilling.first_name,
+            last_name: updatedBilling.last_name,
+            email: updatedBilling.email,
+            address: updatedBilling.address,
+            country: updatedBilling.country,
+            city: updatedBilling.city,
+            postcode: updatedBilling.postcode,
+            phone: updatedBilling.phone,
+            state: updatedBilling.state,
+          });
+        }
+
         setAutofillMessage("Form autofilled with your profile information");
         // Clear message after 3 seconds
         setTimeout(() => setAutofillMessage(""), 3000);
       }
     }
-  }, [isLoggedIn, customerProfile, profileLoading]);
+  }, [isLoggedIn, customerProfile, profileLoading, useBillingForShipping]);
+
+  // Keep shipping address in sync with billing address when "use billing for shipping" is checked
+  useEffect(() => {
+    if (useBillingForShipping) {
+      setShipping({
+        company_name: billing.company_name,
+        first_name: billing.first_name,
+        last_name: billing.last_name,
+        email: billing.email,
+        address: billing.address,
+        country: billing.country,
+        city: billing.city,
+        postcode: billing.postcode,
+        phone: billing.phone,
+        state: billing.state,
+      });
+    }
+  }, [billing, useBillingForShipping]);
 
   const [shippingOptions, setShippingOptions] = useState(null);
   const [selectedShipping, setSelectedShipping] = useState("");
@@ -128,7 +181,7 @@ export default function Checkout() {
   // Address selection handlers
   const handleBillingAddressSelect = (address) => {
     setSelectedBillingAddressId(address.id);
-    setBilling({
+    const updatedBilling = {
       company_name: address.company_name || "",
       first_name: address.first_name || "",
       last_name: address.last_name || "",
@@ -140,7 +193,24 @@ export default function Checkout() {
       phone: address.phone || "",
       state: address.state || "",
       use_for_shipping: useBillingForShipping,
-    });
+    };
+    setBilling(updatedBilling);
+
+    // If using billing for shipping, update shipping address too
+    if (useBillingForShipping) {
+      setShipping({
+        company_name: updatedBilling.company_name,
+        first_name: updatedBilling.first_name,
+        last_name: updatedBilling.last_name,
+        email: updatedBilling.email,
+        address: updatedBilling.address,
+        country: updatedBilling.country,
+        city: updatedBilling.city,
+        postcode: updatedBilling.postcode,
+        phone: updatedBilling.phone,
+        state: updatedBilling.state,
+      });
+    }
     setShowBillingForm(false);
   };
 
@@ -166,6 +236,19 @@ export default function Checkout() {
     if (checked) {
       setSelectedShippingAddressId(null);
       setShowShippingForm(false);
+      // Copy billing address to shipping address
+      setShipping({
+        company_name: billing.company_name,
+        first_name: billing.first_name,
+        last_name: billing.last_name,
+        email: billing.email,
+        address: billing.address,
+        country: billing.country,
+        city: billing.city,
+        postcode: billing.postcode,
+        phone: billing.phone,
+        state: billing.state,
+      });
     }
   };
 
@@ -184,22 +267,29 @@ export default function Checkout() {
     try {
       // Save billing address if requested and user is logged in
       if (isLoggedIn && saveBillingAddress && !selectedBillingAddressId) {
-        const addressData = {
-          first_name: billing.first_name,
-          last_name: billing.last_name,
-          company_name: billing.company_name,
-          address1: billing.address[0] || "",
-          city: billing.city,
-          state: billing.state,
-          postcode: billing.postcode,
-          country: billing.country,
-          phone: billing.phone,
-          is_default: false,
-        };
-        await saveAddressMutation.mutateAsync(addressData);
+        try {
+          const addressData = {
+            first_name: billing.first_name,
+            last_name: billing.last_name,
+            company_name: billing.company_name,
+            address: billing.address, // Send as array
+            city: billing.city,
+            state: billing.state,
+            postcode: billing.postcode,
+            country: billing.country,
+            phone: billing.phone,
+            email: billing.email,
+            is_default: false,
+          };
+          await saveAddressMutation.mutateAsync(addressData);
+        } catch (error) {
+          console.error("Error saving billing address:", error);
+          // Don't throw here, just log the error and continue with checkout
+          // The user can still proceed with the current address
+        }
       }
 
-      const ships = await addressM.mutateAsync(billing);
+      const ships = await addressM.mutateAsync({ billing, shipping });
       setShippingOptions(ships);
     } catch (error) {
       console.error("Error saving address:", error);
@@ -208,7 +298,6 @@ export default function Checkout() {
 
   const handleShippingProceed = async () => {
     const pays = await shippingM.mutateAsync(selectedShipping);
-    console.log("✅ Payment methods set in state:", pays); // Add this!
     setPaymentMethods(pays);
   };
 
@@ -227,7 +316,7 @@ export default function Checkout() {
           return;
         }
       }
-      
+
       await orderM.mutateAsync();
       navigate("/", { replace: true });
     } catch (error) {
@@ -238,22 +327,22 @@ export default function Checkout() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4">
-       <Breadcrumbs items={breadcrumbs} />
-       
-       {/* Autofill message */}
-       {autofillMessage && (
-         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
-           {autofillMessage}
-         </div>
-       )}
-       
-       {/* Profile loading error */}
-       {isLoggedIn && profileError && (
-         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
-           Could not load profile information. Please fill in the form manually.
-         </div>
-       )}
-       
+      <Breadcrumbs items={breadcrumbs} />
+
+      {/* Autofill message */}
+      {autofillMessage && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
+          {autofillMessage}
+        </div>
+      )}
+
+      {/* Profile loading error */}
+      {isLoggedIn && profileError && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
+          Could not load profile information. Please fill in the form manually.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
         <div className="lg:col-span-7 space-y-8">
           {/* Billing Address Section */}
@@ -279,7 +368,7 @@ export default function Checkout() {
                   error={addressM.error}
                   isLoggedIn={isLoggedIn}
                 />
-                
+
                 {/* Save address option for logged-in users */}
                 {isLoggedIn && !selectedBillingAddressId && (
                   <div className="bg-gray-50 p-4 rounded-lg">
@@ -288,24 +377,39 @@ export default function Checkout() {
                         id="save_billing_address"
                         type="checkbox"
                         checked={saveBillingAddress}
-                        onChange={(e) => setSaveBillingAddress(e.target.checked)}
+                        onChange={(e) =>
+                          setSaveBillingAddress(e.target.checked)
+                        }
                         className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                       />
-                      <label htmlFor="save_billing_address" className="ml-2 block text-sm text-gray-700">
+                      <label
+                        htmlFor="save_billing_address"
+                        className="ml-2 block text-sm text-gray-700"
+                      >
                         Save this address for future use
                       </label>
                     </div>
                   </div>
                 )}
-                
+
                 {showBillingForm && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <button
                       onClick={() => setShowBillingForm(false)}
                       className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors"
                     >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                        />
                       </svg>
                       Back to saved addresses
                     </button>
@@ -319,8 +423,18 @@ export default function Checkout() {
           <div className="bg-white shadow-lg rounded-xl border border-gray-100 p-6">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-5 h-5 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
               <div className="flex-1">
@@ -329,18 +443,22 @@ export default function Checkout() {
                     id="use_same_address"
                     type="checkbox"
                     checked={useBillingForShipping}
-                    onChange={(e) => handleUseBillingForShippingChange(e.target.checked)}
+                    onChange={(e) =>
+                      handleUseBillingForShippingChange(e.target.checked)
+                    }
                     className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
-                  <label htmlFor="use_same_address" className="ml-3 text-sm font-medium text-gray-900">
+                  <label
+                    htmlFor="use_same_address"
+                    className="ml-3 text-sm font-medium text-gray-900"
+                  >
                     Use same address for shipping?
                   </label>
                 </div>
                 <p className="text-sm text-gray-500 mt-1">
-                  {useBillingForShipping 
-                    ? "Your billing address will be used for shipping" 
-                    : "You can set a different address for shipping"
-                  }
+                  {useBillingForShipping
+                    ? "Your billing address will be used for shipping"
+                    : "You can set a different address for shipping"}
                 </p>
               </div>
             </div>
@@ -371,15 +489,25 @@ export default function Checkout() {
                     isLoggedIn={isLoggedIn}
                     title="Shipping Address"
                   />
-                  
+
                   {showShippingForm && (
                     <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <button
                         onClick={() => setShowShippingForm(false)}
                         className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors"
                       >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        <svg
+                          className="w-4 h-4 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                          />
                         </svg>
                         Back to saved addresses
                       </button>

@@ -4,9 +4,12 @@ import BoldCollections from "./BoldCollections";
 import GameContainer from "./GameContainer";
 import ProductCarousel from "./ProductCarousel";
 import CategoryCarousel from "./CategoryCarousel";
-import FooterLinks from "./FooterLinks";
 import ServicesContent from "./ServicesContent";
-import { fixThemeImageUrls, fixThemeCss, initializeLazyLoading } from "../../utils/imageUrlFixer";
+import {
+  fixThemeImageUrls,
+  fixThemeCss,
+  initializeLazyLoading,
+} from "../../utils/imageUrlFixer";
 
 const ThemeRenderer = ({ customization }) => {
   useEffect(() => {
@@ -14,7 +17,7 @@ const ThemeRenderer = ({ customization }) => {
     const timer = setTimeout(() => {
       initializeLazyLoading();
     }, 100);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -29,15 +32,27 @@ const ThemeRenderer = ({ customization }) => {
         return <BoldCollections customization={customization} />;
       } else if (customization.name === "Game Container") {
         return <GameContainer customization={customization} />;
+      } else if (customization.name === "Services") {
+        return <ServicesContent customization={customization} />;
       } else {
         // Generic static content renderer
         return (
-          <div className="relative w-full max-w-7xl mx-auto overflow-hidden px-4">
+          <div className="relative w-full overflow-hidden px-4">
             {customization.options?.css && (
-              <style dangerouslySetInnerHTML={{ __html: fixThemeCss(fixThemeImageUrls(customization.options.css)) }} />
+              <style
+                dangerouslySetInnerHTML={{
+                  __html: fixThemeCss(
+                    fixThemeImageUrls(customization.options.css)
+                  ),
+                }}
+              />
             )}
             {customization.options?.html && (
-              <div dangerouslySetInnerHTML={{ __html: fixThemeImageUrls(customization.options.html) }} />
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: fixThemeImageUrls(customization.options.html),
+                }}
+              />
             )}
           </div>
         );
@@ -48,9 +63,6 @@ const ThemeRenderer = ({ customization }) => {
 
     case "category_carousel":
       return <CategoryCarousel customization={customization} />;
-
-    case "footer_links":
-      return <FooterLinks customization={customization} />;
 
     case "services_content":
       return <ServicesContent customization={customization} />;
