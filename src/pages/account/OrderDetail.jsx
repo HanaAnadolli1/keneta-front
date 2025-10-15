@@ -1,7 +1,7 @@
 // src/pages/account/OrderDetail.jsx
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { getOrderById, getInvoices } from "../../api/customer";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { getOrderById, getInvoices, reorder } from "../../api/customer";
 import Card from "../../components/account/Card";
 import FieldRow from "../../components/account/FieldRow";
 import InvoicePanel from "../../components/account/InvoicePanel";
@@ -33,8 +33,10 @@ function normalizeInvoice(inv) {
 
 export default function OrderDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
+  const [reordering, setReordering] = useState(false);
 
   const breadcrumbs = [
     { label: "Home", path: "/" },
@@ -82,6 +84,23 @@ export default function OrderDetail() {
     })();
   }, [id]);
 
+  const onReorder = async () => {
+    if (
+      !window.confirm("Reorder this order? Items will be added to your cart.")
+    )
+      return;
+    try {
+      setReordering(true);
+      await reorder(id);
+      alert("Items added to cart successfully!");
+      navigate("/checkout");
+    } catch (e) {
+      alert(e?.message || "Reorder failed");
+    } finally {
+      setReordering(false);
+    }
+  };
+
   if (!order)
     return (
       <div>
@@ -95,9 +114,18 @@ export default function OrderDetail() {
       <Breadcrumbs items={breadcrumbs} />
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Order #{order.id}</h2>
-        <Link className="text-blue-600 hover:underline" to="/account/orders">
-          Back to orders
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onReorder}
+            className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            disabled={reordering}
+          >
+            {reordering ? "Reordering…" : "Reorder"}
+          </button>
+          <Link className="text-blue-600 hover:underline" to="/account/orders">
+            Back to orders
+          </Link>
+        </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 

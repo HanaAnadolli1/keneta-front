@@ -695,7 +695,7 @@ export default function ProductDetails() {
             )}
             {/* VAT Text */}
             <div className="text-xs text-gray-400">
-              Cmimet perfshijne TVSH-ne
+              Çmimet përfshijnë TVSH-në.
             </div>
           </div>
 

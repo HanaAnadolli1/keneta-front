@@ -34,6 +34,7 @@ export default function AddressSelector({
     postcode: "",
     country: "",
     phone: "",
+    email: "",
     is_default: false,
   });
 
@@ -43,13 +44,29 @@ export default function AddressSelector({
     e.preventDefault();
 
     try {
+      // Transform form data to match API expectations
+      const apiData = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        company_name: formData.company_name,
+        address: [formData.address1], // Map address1 to address array
+        address2: formData.address2,
+        city: formData.city,
+        state: formData.state,
+        postcode: formData.postcode,
+        country: formData.country,
+        phone: formData.phone,
+        email: formData.email,
+        is_default: formData.is_default,
+      };
+
       if (editingAddress) {
         await updateAddressMutation.mutateAsync({
           id: editingAddress.id,
-          addressData: formData,
+          addressData: apiData,
         });
       } else {
-        await saveAddressMutation.mutateAsync(formData);
+        await saveAddressMutation.mutateAsync(apiData);
       }
 
       setShowForm(false);
@@ -65,6 +82,7 @@ export default function AddressSelector({
         postcode: "",
         country: "",
         phone: "",
+        email: "",
         is_default: false,
       });
     } catch (error) {
@@ -73,11 +91,13 @@ export default function AddressSelector({
       console.error("Error status:", error.response?.status);
 
       // Show user-friendly error message
-      alert(
-        `Failed to save address: ${
-          error.response?.data?.message || error.message
-        }`
-      );
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to save address";
+
+      alert(`Failed to save address: ${errorMessage}`);
     }
   };
 
@@ -87,13 +107,19 @@ export default function AddressSelector({
       first_name: address.first_name || "",
       last_name: address.last_name || "",
       company_name: address.company_name || "",
-      address1: address.address1 || "",
+      address1:
+        address.address1 ||
+        (Array.isArray(address.address)
+          ? address.address[0]
+          : address.address) ||
+        "", // Handle both field names and array format
       address2: address.address2 || "",
       city: address.city || "",
       state: address.state || "",
       postcode: address.postcode || "",
       country: address.country || "",
       phone: address.phone || "",
+      email: address.email || "",
       is_default: address.is_default || false,
     });
     setShowForm(true);
@@ -233,6 +259,20 @@ export default function AddressSelector({
                   value={formData.phone}
                   onChange={(e) =>
                     setFormData({ ...formData, phone: e.target.value })
+                  }
+                  className="mt-1 block w-full border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
                   }
                   className="mt-1 block w-full border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -564,7 +604,7 @@ export default function AddressSelector({
                     )}
                     <div className="space-y-1">
                       <p className="text-sm text-gray-700">
-                        {address.address1}
+                        {address.address1 || address.address}
                         {address.address2 && `, ${address.address2}`}
                       </p>
                       <p className="text-sm text-gray-600">

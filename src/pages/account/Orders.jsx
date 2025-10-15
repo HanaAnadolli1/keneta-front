@@ -1,7 +1,7 @@
 // src/pages/account/Orders.jsx
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { cancelOrder, getOrders } from "../../api/customer";
+import { Link, useNavigate } from "react-router-dom";
+import { cancelOrder, getOrders, reorder } from "../../api/customer";
 import Card from "../../components/account/Card";
 import Breadcrumbs from "../../components/Breadcrumbs";
 
@@ -29,9 +29,11 @@ function StatusPill({ children }) {
 }
 
 export default function Orders() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState("");
   const [canceling, setCanceling] = useState(null);
+  const [reordering, setReordering] = useState(null);
 
   const breadcrumbs = [
     { label: "Home", path: "/" },
@@ -66,7 +68,24 @@ export default function Orders() {
     }
   };
 
-    if (!orders)
+  const onReorder = async (id) => {
+    if (
+      !window.confirm("Reorder this order? Items will be added to your cart.")
+    )
+      return;
+    try {
+      setReordering(id);
+      await reorder(id);
+      alert("Items added to cart successfully!");
+      navigate("/checkout");
+    } catch (e) {
+      alert(e?.message || "Reorder failed");
+    } finally {
+      setReordering(null);
+    }
+  };
+
+  if (!orders)
     return (
       <div>
         <Breadcrumbs items={breadcrumbs} />
@@ -102,8 +121,12 @@ export default function Orders() {
                   return (
                     <tr key={o.id}>
                       <td className="py-3 px-4 font-medium">{o.id}</td>
-                      <td className="py-3 px-4">{o.created_at?.slice(0, 10)}</td>
-                      <td className="py-3 px-4"><StatusPill>{o.status}</StatusPill></td>
+                      <td className="py-3 px-4">
+                        {o.created_at?.slice(0, 10)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <StatusPill>{o.status}</StatusPill>
+                      </td>
                       <td className="py-3 px-4">{o.grand_total ?? o.total}</td>
                       <td className="py-3 px-4 space-x-2">
                         <Link
@@ -112,6 +135,13 @@ export default function Orders() {
                         >
                           View
                         </Link>
+                        <button
+                          onClick={() => onReorder(o.id)}
+                          className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                          disabled={reordering === o.id}
+                        >
+                          {reordering === o.id ? "Reordering…" : "Reorder"}
+                        </button>
                         {cancellable && (
                           <button
                             onClick={() => onCancel(o.id)}

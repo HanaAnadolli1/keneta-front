@@ -1,14 +1,9 @@
 // src/components/CategoryNavigator.jsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation } from "swiper/modules";
-import "swiper/css";
-import "swiper/css/navigation";
 import noImage from "../assets/no_image.jpg";
 import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 
-const MIN_FOR_CAROUSEL = 7;
 const API_PUBLIC_V1 = "https://admin.keneta-ks.com/api/v2";
 const SS_CHILDREN_CACHE = "cat.childrenCache.v1";
 const SS_TRAIL_CACHE = "cat.trailCache.v2";
@@ -86,10 +81,10 @@ function CategoryCard({ cat }) {
   return (
     <Link
       to={`/products?category=${encodeURIComponent(cat.slug)}`}
-      className="group px-2 py-2 flex flex-col items-center justify-center text-center"
+      className="group bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-2 hover:shadow-md transition-all duration-200 w-full"
       title={cat.name}
     >
-      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-2 overflow-hidden">
+      <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
         <img
           src={imgSrc}
           alt={cat.name}
@@ -100,7 +95,7 @@ function CategoryCard({ cat }) {
           }}
         />
       </div>
-      <span className="text-xs md:text-sm font-medium text-gray-800 leading-tight text-center whitespace-normal break-words">
+      <span className="text-xs font-medium text-gray-700 group-hover:text-[#00A7E5] group-hover:underline transition-colors duration-200 flex-1 truncate">
         {cat.name}
       </span>
     </Link>
@@ -216,12 +211,15 @@ export default function CategoryNavigator({ activeCategoryName }) {
 
   const getChildren = useChildrenFetcher();
 
-  const prevRef = useRef(null);
-  const nextRef = useRef(null);
-
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(true);
   const [resolvedParentId, setResolvedParentId] = useState(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState(null);
+  const [dragEnd, setDragEnd] = useState(null);
 
   // Resolve parentId from URL parameters
   useEffect(() => {
@@ -328,16 +326,47 @@ export default function CategoryNavigator({ activeCategoryName }) {
     };
   }, [resolvedParentId, getChildren, activeCategoryName]);
 
-  const isCarousel = children.length >= MIN_FOR_CAROUSEL;
+  // Responsive slides per view
+  const [slidesPerView, setSlidesPerView] = useState(6);
+
+  useEffect(() => {
+    const calculateSlidesPerView = () => {
+      const width = window.innerWidth;
+      if (width < 640) setSlidesPerView(2); // Mobile: 2 slides
+      else if (width < 768) setSlidesPerView(3); // Small tablet: 3 slides
+      else if (width < 1024) setSlidesPerView(4); // Tablet: 4 slides
+      else if (width < 1280) setSlidesPerView(5); // Desktop: 5 slides
+      else setSlidesPerView(6); // Large desktop: 6 slides
+    };
+
+    calculateSlidesPerView();
+    window.addEventListener("resize", calculateSlidesPerView);
+    return () => window.removeEventListener("resize", calculateSlidesPerView);
+  }, []);
+
+  const totalSlides = Math.ceil(children.length / slidesPerView);
+
+  const nextSlide = () => {
+    setCurrentIndex((prev) => Math.min(prev + 1, totalSlides - 1));
+  };
+
+  const prevSlide = () => {
+    setCurrentIndex((prev) => Math.max(prev - 1, 0));
+  };
+
+  const canGoNext = currentIndex < totalSlides - 1;
+  const canGoPrev = currentIndex > 0;
 
   if (loading) {
     return (
       <div className="mb-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        <div className="flex" style={{ gap: "12px" }}>
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="px-2 py-2 text-center">
-              <div className="w-16 h-16 mx-auto bg-gray-200 animate-pulse rounded-full" />
-              <div className="h-3 w-24 mx-auto mt-2 bg-gray-200 animate-pulse rounded" />
+            <div key={i} className="flex-shrink-0">
+              <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-2 animate-pulse">
+                <div className="w-8 h-8 bg-gray-200 rounded" />
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+              </div>
             </div>
           ))}
         </div>
@@ -347,89 +376,137 @@ export default function CategoryNavigator({ activeCategoryName }) {
 
   if (!children.length) return null;
 
-  if (!isCarousel) {
-    return (
-      <div className="mb-3">
-        {/* Mobile */}
-        <div className="md:hidden">
-          {children.length > 4 ? (
-            <Swiper
-              className="!w-full !max-w-full"
-              modules={[Navigation]}
-              navigation={false}
-              spaceBetween={12}
-              slidesPerView={4}
-            >
-              {children.map((c) => (
-                <SwiperSlide key={c.id}>
-                  <CategoryCard cat={c} />
-                </SwiperSlide>
-              ))}
-            </Swiper>
-          ) : (
-            <div className="grid grid-cols-4 gap-4">
-              {children.map((c) => (
-                <CategoryCard key={c.id} cat={c} />
-              ))}
-            </div>
-          )}
-        </div>
+  // Touch/swipe and mouse drag handling
+  const minSwipeDistance = 50;
 
-        {/* Desktop */}
-        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-          {children.map((c) => (
-            <CategoryCard key={c.id} cat={c} />
+  const onTouchStart = (e) => {
+    e.preventDefault();
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e) => {
+    e.preventDefault();
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = (e) => {
+    e.preventDefault();
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && canGoNext) {
+      nextSlide();
+    }
+    if (isRightSwipe && canGoPrev) {
+      prevSlide();
+    }
+
+    setTouchStart(null);
+    setTouchEnd(null);
+  };
+
+  // Mouse drag handlers
+  const onMouseDown = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart(e.clientX);
+    setDragEnd(null);
+  };
+
+  const onMouseMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setDragEnd(e.clientX);
+  };
+
+  const onMouseUp = (e) => {
+    if (!isDragging) {
+      setIsDragging(false);
+      return;
+    }
+
+    if (dragStart && dragEnd) {
+      const distance = dragStart - dragEnd;
+      const isLeftDrag = distance > minSwipeDistance;
+      const isRightDrag = distance < -minSwipeDistance;
+
+      if (isLeftDrag && canGoNext) {
+        nextSlide();
+      }
+      if (isRightDrag && canGoPrev) {
+        prevSlide();
+      }
+    }
+
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+  };
+
+  const onMouseLeave = () => {
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+  };
+
+  // Always show slider implementation
+  return (
+    <div className="mb-3">
+      {/* Slider Content */}
+      <div
+        className={`overflow-hidden select-none ${
+          isDragging ? "cursor-grabbing" : "cursor-grab"
+        }`}
+        style={{ userSelect: "none" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseLeave}
+      >
+        <div
+          className="flex transition-transform duration-300 ease-in-out"
+          style={{
+            transform: `translateX(-${currentIndex * (100 / totalSlides)}%)`,
+            width: `${totalSlides * 100}%`,
+            gap: "12px",
+          }}
+        >
+          {children.map((cat) => (
+            <div
+              key={cat.id}
+              className="flex-shrink-0"
+              style={{
+                width: "auto",
+                minWidth: "120px",
+                maxWidth: "200px",
+              }}
+            >
+              <CategoryCard cat={cat} />
+            </div>
           ))}
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="mb-3 relative w-full max-w-full overflow-hidden">
-      <button
-        ref={prevRef}
-        className="hidden md:flex absolute left-[-11px] top-1/2 -translate-y-1/2 z-10 h-7 w-7 items-center justify-center text-[var(--secondary)]"
-        aria-label="Prev"
-        type="button"
-      >
-        <IoIosArrowBack />
-      </button>
-      <button
-        ref={nextRef}
-        className="hidden md:flex absolute right-[-11px] top-1/2 -translate-y-1/2 z-10 h-7 w-7 items-center justify-center text-[var(--secondary)]"
-        aria-label="Next"
-        type="button"
-      >
-        <IoIosArrowForward />
-      </button>
-
-      <Swiper
-        className="!w-full !max-w-full"
-        modules={[Navigation]}
-        navigation={{ prevEl: prevRef.current, nextEl: nextRef.current }}
-        onInit={(swiper) => {
-          swiper.params.navigation.prevEl = prevRef.current;
-          swiper.params.navigation.nextEl = nextRef.current;
-          swiper.navigation.init();
-          swiper.navigation.update();
-        }}
-        spaceBetween={16}
-        slidesPerView={4}
-        breakpoints={{
-          480: { slidesPerView: 4 },
-          640: { slidesPerView: 4 },
-          768: { slidesPerView: 6 },
-          1024: { slidesPerView: 7 },
-          1280: { slidesPerView: 7 },
-        }}
-      >
-        {children.map((cat) => (
-          <SwiperSlide key={cat.id}>
-            <CategoryCard cat={cat} />
-          </SwiperSlide>
+      {/* Dots Indicator */}
+      <div className="flex justify-center mt-4 space-x-2">
+        {Array.from({ length: totalSlides }).map((_, index) => (
+          <button
+            key={index}
+            onClick={() => setCurrentIndex(index)}
+            className={`w-2 h-2 rounded-full transition-all duration-200 ${
+              index === currentIndex ? "bg-blue-500" : "bg-gray-300"
+            }`}
+            aria-label={`Go to slide ${index + 1}`}
+          />
         ))}
-      </Swiper>
+      </div>
     </div>
   );
 }

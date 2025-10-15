@@ -171,7 +171,7 @@ function ProductCard({
       </Link>
 
       {/* Bottom action row always aligned */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-2">
         {inStock ? (
           <button
             onClick={() => handleAddToCart?.(product)}

@@ -181,6 +181,10 @@ export function cancelOrder(id) {
   return apiFetch(`${API_V1}/customer/orders/${id}/cancel`, { method: "POST" });
 }
 
+export function reorder(id) {
+  return apiFetch(`${API_V1}/customer/orders/reorder/${id}`);
+}
+
 // --- GDPR ---
 export function getGdprRequests() {
   return apiFetch(`${API_V1}/customer/gdpr`);

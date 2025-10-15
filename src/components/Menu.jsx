@@ -163,9 +163,6 @@ export default function Menu() {
               className="min-w-[240px] h-full overflow-visible bg-white"
             >
               {level.map((cat, itemIndex) => {
-                // show icons ONLY for the first two items of the first column (level-2)
-                const showIcon =
-                  colIndex === 0 && itemIndex < 2 && getCatIconUrl(cat);
                 return (
                   <li
                     key={cat.id}
@@ -177,7 +174,8 @@ export default function Menu() {
                       className="block hover:text-[#1a3c5c]"
                     >
                       <span className="inline-flex items-center gap-2">
-                        {showIcon && (
+                        {/* Show icon for all subcategories that have icons */}
+                        {getCatIconUrl(cat) && (
                           <img
                             src={getCatIconUrl(cat)}
                             alt=""
@@ -255,8 +253,8 @@ export default function Menu() {
                         className="block px-5 py-2 text-sm font-medium text-[#132232] hover:text-[#1a3c5c] transition-colors"
                       >
                         <span className="inline-flex items-center gap-2">
-                          {/* Only show icon for first and second root categories */}
-                          {idx < 2 && getCatIconUrl(cat) && (
+                          {/* Show icon for all root categories that have icons */}
+                          {getCatIconUrl(cat) && (
                             <img
                               src={getCatIconUrl(cat)}
                               alt=""
@@ -394,7 +392,8 @@ export default function Menu() {
                           aria-controls={`root-${root.id}`}
                         >
                           <span className="font-medium text-[15px] text-[#132232] inline-flex items-center gap-2">
-                            {idx < 2 && getCatIconUrl(root) && (
+                            {/* Show icon for all root categories that have icons */}
+                            {getCatIconUrl(root) && (
                               <img
                                 src={getCatIconUrl(root)}
                                 alt=""
@@ -457,16 +456,19 @@ export default function Menu() {
                                       aria-expanded={open2}
                                       aria-controls={`lvl2-${c2.id}`}
                                     >
-                                      {i2 < 2 && getCatIconUrl(c2) && (
-                                        <img
-                                          src={getCatIconUrl(c2)}
-                                          alt=""
-                                          className="w-5 h-5 object-contain"
-                                          loading="lazy"
-                                          referrerPolicy="no-referrer"
-                                        />
-                                      )}
-                                      {c2.name}
+                                      <span className="inline-flex items-center gap-2">
+                                        {/* Show icon for all second level categories that have icons */}
+                                        {getCatIconUrl(c2) && (
+                                          <img
+                                            src={getCatIconUrl(c2)}
+                                            alt=""
+                                            className="w-5 h-5 object-contain"
+                                            loading="lazy"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                        )}
+                                        {c2.name}
+                                      </span>
                                     </button>
                                     <div className="flex items-center gap-2 pr-1">
                                       <Link

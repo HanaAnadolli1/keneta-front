@@ -102,8 +102,18 @@ export default function Checkout() {
         profile.first_name || profile.last_name || profile.email;
 
       if (hasProfileData) {
-        setBilling((prevBilling) => ({
-          ...prevBilling,
+        const updatedBilling = {
+          company_name: "",
+          first_name: "",
+          last_name: "",
+          email: "",
+          address: [""],
+          country: "",
+          city: "",
+          postcode: "",
+          phone: "",
+          state: "",
+          use_for_shipping: true,
           // Only update fields that exist in the profile and are not empty
           ...(profile.company_name && { company_name: profile.company_name }),
           ...(profile.first_name && { first_name: profile.first_name }),
@@ -117,14 +127,50 @@ export default function Checkout() {
           ...(profile.city && { city: profile.city }),
           ...(profile.postcode && { postcode: profile.postcode }),
           ...(profile.state && { state: profile.state }),
-        }));
+        };
+
+        setBilling(updatedBilling);
+
+        // If using billing for shipping, update shipping address too
+        if (useBillingForShipping) {
+          setShipping({
+            company_name: updatedBilling.company_name,
+            first_name: updatedBilling.first_name,
+            last_name: updatedBilling.last_name,
+            email: updatedBilling.email,
+            address: updatedBilling.address,
+            country: updatedBilling.country,
+            city: updatedBilling.city,
+            postcode: updatedBilling.postcode,
+            phone: updatedBilling.phone,
+            state: updatedBilling.state,
+          });
+        }
 
         setAutofillMessage("Form autofilled with your profile information");
         // Clear message after 3 seconds
         setTimeout(() => setAutofillMessage(""), 3000);
       }
     }
-  }, [isLoggedIn, customerProfile, profileLoading]);
+  }, [isLoggedIn, customerProfile, profileLoading, useBillingForShipping]);
+
+  // Keep shipping address in sync with billing address when "use billing for shipping" is checked
+  useEffect(() => {
+    if (useBillingForShipping) {
+      setShipping({
+        company_name: billing.company_name,
+        first_name: billing.first_name,
+        last_name: billing.last_name,
+        email: billing.email,
+        address: billing.address,
+        country: billing.country,
+        city: billing.city,
+        postcode: billing.postcode,
+        phone: billing.phone,
+        state: billing.state,
+      });
+    }
+  }, [billing, useBillingForShipping]);
 
   const [shippingOptions, setShippingOptions] = useState(null);
   const [selectedShipping, setSelectedShipping] = useState("");
@@ -135,7 +181,7 @@ export default function Checkout() {
   // Address selection handlers
   const handleBillingAddressSelect = (address) => {
     setSelectedBillingAddressId(address.id);
-    setBilling({
+    const updatedBilling = {
       company_name: address.company_name || "",
       first_name: address.first_name || "",
       last_name: address.last_name || "",
@@ -147,7 +193,24 @@ export default function Checkout() {
       phone: address.phone || "",
       state: address.state || "",
       use_for_shipping: useBillingForShipping,
-    });
+    };
+    setBilling(updatedBilling);
+
+    // If using billing for shipping, update shipping address too
+    if (useBillingForShipping) {
+      setShipping({
+        company_name: updatedBilling.company_name,
+        first_name: updatedBilling.first_name,
+        last_name: updatedBilling.last_name,
+        email: updatedBilling.email,
+        address: updatedBilling.address,
+        country: updatedBilling.country,
+        city: updatedBilling.city,
+        postcode: updatedBilling.postcode,
+        phone: updatedBilling.phone,
+        state: updatedBilling.state,
+      });
+    }
     setShowBillingForm(false);
   };
 
@@ -173,6 +236,19 @@ export default function Checkout() {
     if (checked) {
       setSelectedShippingAddressId(null);
       setShowShippingForm(false);
+      // Copy billing address to shipping address
+      setShipping({
+        company_name: billing.company_name,
+        first_name: billing.first_name,
+        last_name: billing.last_name,
+        email: billing.email,
+        address: billing.address,
+        country: billing.country,
+        city: billing.city,
+        postcode: billing.postcode,
+        phone: billing.phone,
+        state: billing.state,
+      });
     }
   };
 
@@ -191,22 +267,29 @@ export default function Checkout() {
     try {
       // Save billing address if requested and user is logged in
       if (isLoggedIn && saveBillingAddress && !selectedBillingAddressId) {
-        const addressData = {
-          first_name: billing.first_name,
-          last_name: billing.last_name,
-          company_name: billing.company_name,
-          address1: billing.address[0] || "",
-          city: billing.city,
-          state: billing.state,
-          postcode: billing.postcode,
-          country: billing.country,
-          phone: billing.phone,
-          is_default: false,
-        };
-        await saveAddressMutation.mutateAsync(addressData);
+        try {
+          const addressData = {
+            first_name: billing.first_name,
+            last_name: billing.last_name,
+            company_name: billing.company_name,
+            address: billing.address, // Send as array
+            city: billing.city,
+            state: billing.state,
+            postcode: billing.postcode,
+            country: billing.country,
+            phone: billing.phone,
+            email: billing.email,
+            is_default: false,
+          };
+          await saveAddressMutation.mutateAsync(addressData);
+        } catch (error) {
+          console.error("Error saving billing address:", error);
+          // Don't throw here, just log the error and continue with checkout
+          // The user can still proceed with the current address
+        }
       }
 
-      const ships = await addressM.mutateAsync(billing);
+      const ships = await addressM.mutateAsync({ billing, shipping });
       setShippingOptions(ships);
     } catch (error) {
       console.error("Error saving address:", error);
