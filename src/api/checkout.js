@@ -4,7 +4,7 @@ import { ensureSession } from "./hooks";
 import { ensureCsrfCookie, getCsrfToken } from "../utils/csrf";
 import axios from "./axios";
 
-const BASE = `${API_CART}/checkout/onepage`;
+const BASE = `${API_CART}/checkout`;
 
 function isLoggedIn() {
   return !!localStorage.getItem("token");
@@ -63,7 +63,7 @@ export function useCheckoutAddress() {
         ensureSession();
         await ensureCsrfCookie();
         const token = getCsrfToken();
-        const res = await fetch(`${BASE}/addresses`, {
+        const res = await fetch(`${BASE}/save-address`, {
           method: "POST",
           credentials: "include",
           headers: {
@@ -98,7 +98,7 @@ export function useCheckoutShippingMethod() {
         ensureSession();
         await ensureCsrfCookie();
         const token = getCsrfToken();
-        const res = await fetch(`${BASE}/shipping-methods`, {
+        const res = await fetch(`${BASE}/save-shipping`, {
           method: "POST",
           credentials: "include",
           headers: {
@@ -132,7 +132,7 @@ export function useCheckoutPaymentMethod() {
         ensureSession();
         await ensureCsrfCookie();
         const token = getCsrfToken();
-        const res = await fetch(`${BASE}/payment-methods`, {
+        const res = await fetch(`${BASE}/save-payment`, {
           method: "POST",
           credentials: "include",
           headers: {
@@ -162,7 +162,7 @@ export function usePlaceOrder() {
         ensureSession();
         await ensureCsrfCookie();
         const token = getCsrfToken();
-        const res = await fetch(`${BASE}/orders`, {
+        const res = await fetch(`${BASE}/save-order`, {
           method: "POST",
           credentials: "include",
           headers: {
@@ -189,7 +189,7 @@ export function useCheckoutSummary() {
         return res.data.data;
       } else {
         ensureSession();
-        const res = await fetch(`${BASE}/summary`, {
+        const res = await fetch(`${BASE}/cart`, {
           credentials: "include",
           headers: { Accept: "application/json" },
         });

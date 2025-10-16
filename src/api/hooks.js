@@ -118,7 +118,7 @@ export function useCart() {
         return res.data.data;
       }
       // Guest cart
-      const res = await fetch(`${API_CART}/checkout/cart`, {
+      const res = await fetch(`${API_CART}/cart`, {
         credentials: "include",
         signal,
         headers: { Accept: "application/json" },
@@ -172,9 +172,9 @@ export function useCartMutations() {
 
       // Try different approaches for guest cart
       const approaches = [
-        // Approach 1: Original fetch with checkout/cart
+        // Approach 1: Use non-v2 cart endpoint
         async () => {
-          const res = await fetch(`${API_CART}/checkout/cart`, {
+          const res = await fetch(`${API_CART}/cart`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -188,18 +188,9 @@ export function useCartMutations() {
           return res.json();
         },
 
-        // Approach 2: Try axios with guest cart endpoint
+        // Approach 2: Try with different parameter format
         async () => {
-          const res = await axios.post("/checkout/cart", {
-            product_id: productId,
-            quantity,
-          });
-          return res.data;
-        },
-
-        // Approach 3: Try with different parameter format
-        async () => {
-          const res = await fetch(`${API_CART}/checkout/cart`, {
+          const res = await fetch(`${API_CART}/cart`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -211,15 +202,6 @@ export function useCartMutations() {
           });
           if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
           return res.json();
-        },
-
-        // Approach 4: Try direct cart endpoint
-        async () => {
-          const res = await axios.post("/cart", {
-            product_id: productId,
-            quantity,
-          });
-          return res.data;
         },
       ];
 
@@ -250,7 +232,7 @@ export function useCartMutations() {
         });
       }
       const csrf = getCsrfToken();
-      const res = await fetch(`${API_CART}/checkout/cart`, {
+      const res = await fetch(`${API_CART}/cart`, {
         method: "PUT",
         credentials: "include",
         headers: {
@@ -278,7 +260,7 @@ export function useCartMutations() {
         return axios.delete(`/customer/cart/remove/${lineItemId}`);
       }
       const csrf = getCsrfToken();
-      const res = await fetch(`${API_CART}/checkout/cart`, {
+      const res = await fetch(`${API_CART}/cart`, {
         method: "POST",
         credentials: "include",
         headers: {
