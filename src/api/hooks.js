@@ -118,7 +118,7 @@ export function useCart() {
         return res.data.data;
       }
       // Guest cart
-      const res = await fetch(`${API_CART}/cart`, {
+      const res = await fetch(`${API_CART}/checkout/cart`, {
         credentials: "include",
         signal,
         headers: { Accept: "application/json" },
@@ -172,9 +172,9 @@ export function useCartMutations() {
 
       // Try different approaches for guest cart
       const approaches = [
-        // Approach 1: Use non-v2 cart endpoint
+        // Approach 1: Use the working checkout/cart endpoint
         async () => {
-          const res = await fetch(`${API_CART}/cart`, {
+          const res = await fetch(`${API_CART}/checkout/cart`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -190,7 +190,7 @@ export function useCartMutations() {
 
         // Approach 2: Try with different parameter format
         async () => {
-          const res = await fetch(`${API_CART}/cart`, {
+          const res = await fetch(`${API_CART}/checkout/cart`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -232,7 +232,7 @@ export function useCartMutations() {
         });
       }
       const csrf = getCsrfToken();
-      const res = await fetch(`${API_CART}/cart`, {
+      const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "PUT",
         credentials: "include",
         headers: {
@@ -260,7 +260,7 @@ export function useCartMutations() {
         return axios.delete(`/customer/cart/remove/${lineItemId}`);
       }
       const csrf = getCsrfToken();
-      const res = await fetch(`${API_CART}/cart`, {
+      const res = await fetch(`${API_CART}/checkout/cart`, {
         method: "POST",
         credentials: "include",
         headers: {
