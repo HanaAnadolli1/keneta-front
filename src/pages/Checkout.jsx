@@ -18,6 +18,7 @@ import {
   useCheckMinimumOrder,
   useSavedAddresses,
   useSaveAddress,
+  useCustomerShippingMethods,
 } from "../api/customerCheckout";
 
 import AddressForm from "../components/AddressForm";
@@ -35,10 +36,8 @@ export default function Checkout() {
 
   const breadcrumbs = [{ label: "Home", path: "/" }, { label: "Checkout" }];
 
-  // 💡 Dynamically select correct hooks
-  const addressM = isLoggedIn
-    ? useCustomerCheckoutAddress()
-    : useCheckoutAddress();
+  // 💡 Use unified checkout address hook for both guest and customer
+  const addressM = useCheckoutAddress();
   const shippingM = isLoggedIn
     ? useCustomerCheckoutShippingMethod()
     : useCheckoutShippingMethod();
@@ -56,6 +55,8 @@ export default function Checkout() {
   const { refetch: checkMinimumOrder } = useCheckMinimumOrder();
   const { data: savedAddresses } = useSavedAddresses();
   const saveAddressMutation = useSaveAddress();
+  const { refetch: fetchCustomerShippingMethods } =
+    useCustomerShippingMethods();
 
   const [billing, setBilling] = useState({
     company_name: "",
@@ -289,7 +290,10 @@ export default function Checkout() {
         }
       }
 
+      // Use the unified approach for both guest and customer
+      // The addressM hook now handles both cases internally
       const ships = await addressM.mutateAsync({ billing, shipping });
+      console.log("Address API returned shipping methods:", ships);
       setShippingOptions(ships);
     } catch (error) {
       console.error("Error saving address:", error);

@@ -8,14 +8,24 @@ export default function ShippingOptions({
   loading,
   error,
 }) {
+  // Debug logging
+  console.log("ShippingOptions received methods:", methods);
+  console.log("Methods type:", typeof methods);
+  console.log("Methods is array:", Array.isArray(methods));
+
   // Normalize to array
   const shippingGroups = Array.isArray(methods)
     ? methods
     : Object.values(methods || {});
 
+  console.log("Shipping groups:", shippingGroups);
+
   const rates = shippingGroups.flatMap((group) => {
+    console.log("Processing group:", group);
     return group?.rates || [];
   });
+
+  console.log("Final rates:", rates);
 
   return (
     <div className="mt-8 bg-white shadow rounded-lg p-8 space-y-6">

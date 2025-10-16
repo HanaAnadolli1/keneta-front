@@ -6,18 +6,78 @@ export function useCustomerCheckoutAddress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ billing, shipping }) => {
+      // First save the address using the customer API
       const res = await axios.post("/customer/checkout/save-address", {
         billing,
         shipping,
       });
 
-      const shippingData = res.data?.data;
-      const methods =
-        shippingData?.rates || shippingData?.shippingMethods || {};
+      console.log("Customer checkout address API response:", res.data);
 
-      return methods;
+      // The customer save-address API doesn't return shipping methods
+      // We'll return empty object and let the main checkout logic handle shipping methods
+      console.log(
+        "Customer address saved successfully, shipping methods will be handled separately"
+      );
+      return {};
     },
     onSuccess: () => qc.invalidateQueries(["checkoutSummary"]),
+  });
+}
+
+// Get available shipping methods for customers
+export function useCustomerShippingMethods() {
+  return useQuery({
+    queryKey: ["customerShippingMethods"],
+    queryFn: async () => {
+      const res = await axios.get("/customer/cart");
+      console.log("CustomerShippingMethods - Cart API response:", res.data);
+      console.log(
+        "CustomerShippingMethods - Full cart structure:",
+        JSON.stringify(res.data, null, 2)
+      );
+
+      const cartData = res.data?.data || res.data;
+
+      // Look for shipping methods in various possible locations
+      const shippingMethods =
+        cartData?.shipping_methods ||
+        cartData?.available_shipping_methods ||
+        cartData?.shipping_methods_available ||
+        cartData?.shipping_options ||
+        cartData?.shipping ||
+        res.data?.shipping_methods ||
+        res.data?.available_shipping_methods ||
+        {};
+
+      console.log(
+        "CustomerShippingMethods - Extracted shipping methods:",
+        shippingMethods
+      );
+
+      // If no shipping methods in cart, try dedicated endpoint
+      if (Object.keys(shippingMethods).length === 0) {
+        try {
+          const shippingRes = await axios.get(
+            "/customer/checkout/shipping-methods"
+          );
+          console.log(
+            "CustomerShippingMethods - Direct shipping API response:",
+            shippingRes.data
+          );
+          return shippingRes.data?.data || shippingRes.data || {};
+        } catch (error) {
+          console.error(
+            "CustomerShippingMethods - Error fetching direct shipping:",
+            error
+          );
+        }
+      }
+
+      return shippingMethods;
+    },
+    enabled: false, // Only run when manually triggered
+    staleTime: 0,
   });
 }
 
