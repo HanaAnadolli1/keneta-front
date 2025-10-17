@@ -6,6 +6,7 @@ import { MdCompareArrows } from "react-icons/md";
 import { useCompare } from "../context/CompareContext";
 import useSaleFlag from "../hooks/useSaleFlag";
 import { useToast } from "../context/ToastContext";
+import Spinner from "./Spinner";
 
 function ProductListItem({
   product,
@@ -191,14 +192,21 @@ function ProductListItem({
                 <button
                   onClick={() => handleAddToCart?.(product)}
                   disabled={busy}
-                  className={`rounded-xl px-6 py-2 text-sm font-semibold transition
+                  className={`rounded-xl px-6 py-2 text-sm font-semibold transition flex items-center justify-center gap-2
                     ${
                       busy
                         ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                         : "bg-[var(--primary)] text-white border border-[var(--primary)] hover:bg-white hover:text-[var(--primary)]"
                     }`}
                 >
-                  {busy ? "Adding…" : "Add To Cart"}
+                  {busy ? (
+                    <>
+                      <Spinner size="sm" />
+                      <span>Adding…</span>
+                    </>
+                  ) : (
+                    "Add To Cart"
+                  )}
                 </button>
               ) : (
                 <button

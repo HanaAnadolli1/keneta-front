@@ -18,6 +18,7 @@ import { FaHeart } from "react-icons/fa";
 import { MdCompareArrows } from "react-icons/md";
 import { useWishlist } from "../context/WishlistContext";
 import { useCompare } from "../context/CompareContext";
+import Spinner from "../components/Spinner";
 import { useToast } from "../context/ToastContext";
 
 import ProductReviews from "../components/ProductReviews";
@@ -737,17 +738,22 @@ export default function ProductDetails() {
             <button
               onClick={handleAdd}
               disabled={addItem.isPending || !inStock}
-              className={`px-6 py-3 rounded-lg font-semibold text-white transition ${
+              className={`px-6 py-3 rounded-lg font-semibold text-white transition flex items-center justify-center gap-2 min-w-[140px] ${
                 addItem.isPending || !inStock
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[var(--primary)] hover:bg-[var(--secondary)]"
               }`}
             >
-              {addItem.isPending
-                ? "Adding…"
-                : !inStock
-                ? "Out of Stock"
-                : "Add to Cart"}
+              {addItem.isPending ? (
+                <>
+                  <Spinner size="sm" />
+                  <span>Adding…</span>
+                </>
+              ) : !inStock ? (
+                "Out of Stock"
+              ) : (
+                "Add to Cart"
+              )}
             </button>
           </div>
 

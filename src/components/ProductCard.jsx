@@ -6,6 +6,7 @@ import { MdCompareArrows } from "react-icons/md";
 import { useCompare } from "../context/CompareContext";
 import useSaleFlag from "../hooks/useSaleFlag";
 import { useToast } from "../context/ToastContext";
+import Spinner from "./Spinner";
 
 function ProductCard({
   product,
@@ -119,7 +120,7 @@ function ProductCard({
               "https://via.placeholder.com/480x360"
             }
             alt={product?.name}
-            className="w-full h-48 sm:h-56 object-contain transition-transform duration-300 group-hover:scale-[1.03]"
+            className="w-full aspect-square object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             loading="lazy"
           />
         </div>
@@ -176,14 +177,21 @@ function ProductCard({
           <button
             onClick={() => handleAddToCart?.(product)}
             disabled={busy}
-            className={`w-full rounded-xl px-4 py-2 text-sm font-semibold transition
+            className={`w-full rounded-xl px-4 py-2 text-sm font-semibold transition flex items-center justify-center gap-2
               ${
                 busy
                   ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                   : "bg-[var(--primary)] text-white border border-[var(--primary)] hover:bg-white hover:text-[var(--primary)] hover:border-[var(--primary)]"
               }`}
           >
-            {busy ? "Adding…" : "Add to Cart"}
+            {busy ? (
+              <>
+                <Spinner size="sm" />
+                <span>Adding…</span>
+              </>
+            ) : (
+              "Add to Cart"
+            )}
           </button>
         ) : (
           <button

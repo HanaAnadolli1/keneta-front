@@ -1,10 +1,12 @@
 // src/components/Footer.jsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useLanguage } from "../context/LanguageContext";
 import logo from "../assets/logo_footer.svg";
 
 export default function Footer() {
   const year = new Date().getFullYear();
+  const { t } = useLanguage();
 
   // Newsletter state
   const [email, setEmail] = useState("");
@@ -52,7 +54,7 @@ export default function Footer() {
     setErrorMsg("");
 
     if (!validateEmail(email)) {
-      setErrorMsg("Ju lutem shkruani një email të vlefshëm.");
+      setErrorMsg(t("validation.email"));
       return;
     }
 
@@ -73,17 +75,14 @@ export default function Footer() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setSuccessMsg(
-          data?.message || "You have successfully subscribed to our newsletter."
+          data?.message || t("messages.success.newsletterSubscribe")
         );
         setEmail("");
       } else {
-        setErrorMsg(
-          data?.message ||
-            "Nuk u arrit të kryhet abonimi. Ju lutem provoni sërish."
-        );
+        setErrorMsg(data?.message || t("messages.error.newsletterSubscribe"));
       }
     } catch {
-      setErrorMsg("Gabim rrjeti. Ju lutem provoni sërish.");
+      setErrorMsg(t("messages.error.networkError"));
     } finally {
       setSubmitting(false);
     }
@@ -101,14 +100,14 @@ export default function Footer() {
               <img src={logo} alt="Keneta Logo" className="w-40 md:w-48" />
             </Link>
             <p className="mt-4 text-sm leading-6 text-[var(--third)]">
-              Mjetet dhe pajisjet më të mira për hapësirën tuaj të gjelbër.
+              {t("footer.companyDescription")}
             </p>
           </div>
 
           {/* Nav 1 (1 col) - Column 1 from API */}
           <nav className="md:col-span-1">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
-              {footerLinks?.column_1_title || "Navigimi"}
+              {footerLinks?.column_1_title || t("footer.navigation")}
             </h4>
             <ul className="space-y-2 text-sm">
               {loadingLinks ? (
@@ -153,7 +152,7 @@ export default function Footer() {
                       to="/products"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Produktet
+                      {t("common.products")}
                     </Link>
                   </li>
                   <li>
@@ -161,7 +160,7 @@ export default function Footer() {
                       to="/brands"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Brendet
+                      {t("common.brands")}
                     </Link>
                   </li>
                   <li>
@@ -169,17 +168,17 @@ export default function Footer() {
                       to="/deals"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Deals
+                      {t("common.deals")}
                     </Link>
                   </li>
-                  <li>
+                  {/* <li>
                     <Link
                       to="/outlet"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Outlet
+                      {t("footer.outlet")}
                     </Link>
-                  </li>
+                  </li> */}
                 </>
               )}
             </ul>
@@ -188,7 +187,7 @@ export default function Footer() {
           {/* Nav 2 (1 col) - Column 2 from API */}
           <nav className="md:col-span-1">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
-              {footerLinks?.column_2_title || "Ndihmë"}
+              {footerLinks?.column_2_title || t("footer.help")}
             </h4>
             <ul className="space-y-2 text-sm">
               {loadingLinks ? (
@@ -233,7 +232,7 @@ export default function Footer() {
                       to="/shipping"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Dërgesat
+                      {t("footer.shipping")}
                     </Link>
                   </li>
                   <li>
@@ -241,7 +240,7 @@ export default function Footer() {
                       to="/returns"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Kthimet & Garancia
+                      {t("footer.returns")}
                     </Link>
                   </li>
                   <li>
@@ -249,7 +248,7 @@ export default function Footer() {
                       to="/contact"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Kontakt
+                      {t("footer.contact")}
                     </Link>
                   </li>
                   <li>
@@ -257,7 +256,7 @@ export default function Footer() {
                       to="/faq"
                       className="text-[var(--third)] hover:text-[var(--primary)] transition-colors"
                     >
-                      Pyetjet e shpeshta
+                      {t("footer.faq")}
                     </Link>
                   </li>
                 </>
@@ -268,10 +267,10 @@ export default function Footer() {
           {/* Newsletter (2 cols on md+) */}
           <div className="md:col-span-2 w-full">
             <h4 className="text-sm font-semibold tracking-wide text-[var(--primary)] mb-3">
-              Newsletter
+              {t("footer.newsletter")}
             </h4>
             <p className="text-[var(--third)] text-sm mb-3">
-              Merrni ofertat dhe të rejat e fundit.
+              {t("footer.newsletterDescription")}
             </p>
 
             {/* Keep on one line, don't let input shrink, give it a reasonable min width */}
@@ -280,13 +279,13 @@ export default function Footer() {
               className="flex flex-nowrap items-stretch w-full"
             >
               <label htmlFor="newsletter" className="sr-only">
-                Email juaj
+                {t("footer.newsletterPlaceholder")}
               </label>
 
               <input
                 id="newsletter"
                 type="email"
-                placeholder="Email juaj"
+                placeholder={t("footer.newsletterPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-10 px-3 rounded-l-xl bg-white outline-none
@@ -303,7 +302,7 @@ export default function Footer() {
                            bg-[var(--secondary)] hover:bg-[var(--third)] transition-colors
                            disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {submitting ? "Duke u dërguar…" : "Abonohu"}
+                {submitting ? t("common.loading") : t("footer.subscribe")}
               </button>
             </form>
 
@@ -366,7 +365,7 @@ export default function Footer() {
           </ul>
 
           <p className="text-xs text-[var(--third)] text-center md:text-left">
-            &copy; {year} Keneta. Të gjitha të drejtat e rezervuara.
+            &copy; {year} Keneta. {t("footer.allRightsReserved")}
           </p>
         </section>
       </div>

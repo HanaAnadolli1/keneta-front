@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu as MenuIcon, X as CloseIcon, ChevronDown } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 const API_BASE = "https://admin.keneta-ks.com/api/v2";
 
@@ -33,6 +34,7 @@ function getCatIconUrl(cat) {
 }
 
 export default function Menu() {
+  const { t } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState("categories"); // "categories" | "pages"
 
@@ -47,10 +49,10 @@ export default function Menu() {
   // desktop top nav "pages"
   const pages = [
     // { label: "Produktet", path: "/products" },
-    { label: "Brendet", path: "/brands" },
-    { label: "Deals", path: "/deals" },
-    { label: "Të rejat", path: "/new-arrivals" },
-    { label: "Outlet", path: "/outlet" },
+    { label: t("common.brands"), path: "/brands" },
+    { label: t("common.deals"), path: "/deals" },
+    { label: t("menu.newArrivals"), path: "/new-arrivals" },
+    // { label: t("footer.outlet"), path: "/outlet" },
   ];
 
   // root categories (abortable + cached)
@@ -222,7 +224,7 @@ export default function Menu() {
               }}
             >
               <MenuIcon className="mr-2" size={20} />
-              Kategoritë
+              {t("menu.categories")}
               <ChevronDown
                 size={18}
                 className={`ml-1 transition-transform duration-200 ${
@@ -317,11 +319,11 @@ export default function Menu() {
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-gray-100">
               <div className="flex items-center justify-between px-3 py-3">
                 <span className="font-semibold text-[#132232] text-[16px]">
-                  Menu
+                  {t("menu.title")}
                 </span>
                 <button
                   onClick={closeAll}
-                  aria-label="Mbyll"
+                  aria-label={t("modal.close")}
                   className="p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition"
                 >
                   <CloseIcon size={20} />
@@ -331,8 +333,8 @@ export default function Menu() {
               <div className="px-3 pb-2">
                 <div className="grid grid-cols-2 bg-gray-100 rounded-xl p-1">
                   {[
-                    { key: "categories", label: "Kategoritë" },
-                    { key: "pages", label: "Faqet" },
+                    { key: "categories", label: t("menu.categories") },
+                    { key: "pages", label: t("menu.pages") },
                   ].map((tab) => (
                     <button
                       key={tab.key}
@@ -413,7 +415,7 @@ export default function Menu() {
                               className="text-xs font-medium text-[#1a3c5c] hover:underline"
                               onClick={closeAll}
                             >
-                              Shiko të gjitha
+                              {t("menu.viewAll")}
                             </Link>
                             <ChevronDown
                               size={18}
@@ -434,7 +436,7 @@ export default function Menu() {
                           >
                             {lvl2.length === 0 && (
                               <li className="text-sm text-gray-500 py-2 px-1">
-                                Po ngarkohet…
+                                {t("common.loading")}
                               </li>
                             )}
                             {lvl2.map((c2, i2) => {
@@ -478,7 +480,7 @@ export default function Menu() {
                                         className="text-xs text-[#1a3c5c] hover:underline"
                                         onClick={closeAll}
                                       >
-                                        Shiko
+                                        {t("menu.view")}
                                       </Link>
                                       <ChevronDown
                                         size={16}
@@ -499,7 +501,7 @@ export default function Menu() {
                                     >
                                       {lvl3.length === 0 && (
                                         <li className="text-sm text-gray-500 py-2 px-1">
-                                          Po ngarkohet…
+                                          {t("common.loading")}
                                         </li>
                                       )}
                                       {lvl3.map((c3) => {
@@ -534,7 +536,7 @@ export default function Menu() {
                                                   className="text-xs text-[#1a3c5c] hover:underline"
                                                   onClick={closeAll}
                                                 >
-                                                  Shiko
+                                                  {t("menu.view")}
                                                 </Link>
                                                 <ChevronDown
                                                   size={16}
@@ -555,7 +557,7 @@ export default function Menu() {
                                               >
                                                 {lvl4.length === 0 && (
                                                   <li className="text-sm text-gray-500 py-2 px-1">
-                                                    Po ngarkohet…
+                                                    {t("common.loading")}
                                                   </li>
                                                 )}
                                                 {lvl4.map((c4) => (

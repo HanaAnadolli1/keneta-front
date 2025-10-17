@@ -5,12 +5,14 @@ import {
   fixThemeCss,
   initializeLazyLoading,
 } from "../../utils/imageUrlFixer";
+import { useLanguage } from "../../context/LanguageContext";
 import noImage from "../../assets/no_image.jpg";
 
 const CategoryCarousel = ({ customization }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -85,6 +87,9 @@ const CategoryCarousel = ({ customization }) => {
         <div className="flex justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]"></div>
         </div>
+        <div className="text-center mt-4 text-gray-600">
+          {t("categoryCarousel.loading")}
+        </div>
       </div>
     );
   }
@@ -93,7 +98,7 @@ const CategoryCarousel = ({ customization }) => {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="text-center text-red-600">
-          <p>Error loading categories: {error}</p>
+          <p>{t("categoryCarousel.error", { error })}</p>
         </div>
       </div>
     );
@@ -124,7 +129,7 @@ const CategoryCarousel = ({ customization }) => {
       ) : (
         <div>
           <h2 className="text-xl font-semibold text-gray-800 mb-6 text-center">
-            Top categories
+            {t("categoryCarousel.title")}
           </h2>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

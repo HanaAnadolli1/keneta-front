@@ -10,6 +10,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { WishlistProvider } from "./context/WishlistContext";
 import { CompareProvider } from "./context/CompareContext";
 import { ToastProvider } from "./context/ToastContext";
+import { LanguageProvider } from "./context/LanguageContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,15 +56,17 @@ async function applyThemeColors() {
 
   ReactDOM.createRoot(document.getElementById("root")).render(
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <WishlistProvider>
-          <CompareProvider>
-            <AuthProvider>
-              <App />
-            </AuthProvider>
-          </CompareProvider>
-        </WishlistProvider>
-      </ToastProvider>
+      <LanguageProvider>
+        <ToastProvider>
+          <WishlistProvider>
+            <CompareProvider>
+              <AuthProvider>
+                <App />
+              </AuthProvider>
+            </CompareProvider>
+          </WishlistProvider>
+        </ToastProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 })();

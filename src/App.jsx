@@ -17,6 +17,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 
 import useLoadColors from "./hooks/useLoadColors";
+import { useLanguage } from "./context/LanguageContext";
 
 // Account (protected) routes + layout
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -33,12 +34,12 @@ import Reviews from "./pages/account/Reviews";
 import BackToTop from "./components/BackToTop";
 
 function NotFound() {
+  const { t } = useLanguage();
+
   return (
     <div className="container mx-auto px-4 py-10 text-center">
-      <h2 className="text-2xl font-semibold">404 - Page Not Found</h2>
-      <p className="mt-4 text-gray-600">
-        Sorry, we couldn’t find the page you’re looking for.
-      </p>
+      <h2 className="text-2xl font-semibold">{t("common.notFound")}</h2>
+      <p className="mt-4 text-gray-600">{t("common.notFoundMessage")}</p>
     </div>
   );
 }

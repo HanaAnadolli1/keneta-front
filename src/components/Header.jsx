@@ -6,9 +6,11 @@ import { AuthContext } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useCompare } from "../context/CompareContext";
 import { useCart } from "../api/hooks";
+import { useLanguage } from "../context/LanguageContext";
 import Menu from "./Menu";
 import CartSidebar from "./CartSidebar";
 import BottomNav from "./BottomNav";
+import LanguageDropdown from "./LanguageDropdown";
 import logo from "../assets/logo.svg";
 import Search from "./Search";
 
@@ -23,6 +25,7 @@ export default function Header() {
   const { count: compareCount } = useCompare();
   const { data: cart } = useCart();
   const { currentUser, logout } = useContext(AuthContext);
+  const { t } = useLanguage();
 
   // Calculate cart total quantity (sum of all item quantities)
   const cartCount = Array.isArray(cart?.items)
@@ -116,12 +119,14 @@ export default function Header() {
         {/* Top Bar */}
         <div className="bg-[var(--primary)] text-white text-xs md:text-sm flex justify-center">
           <div className="w-full max-w-7xl flex flex-wrap justify-between items-center px-4 md:px-6 py-2 gap-2">
-            <div>Lokacioni i depos tonë</div>
+            <div>{t("header.topBar.warehouseLocation")}</div>
             <div className="hidden md:block text-center">
-              Pakot standarte transportohen falas për blerjet mbi 50€
+              {t("header.topBar.freeShipping")}
             </div>
-            <div>B2B</div>
+            <div>{t("header.topBar.b2b")}</div>
           </div>
+          {/* Language Dropdown */}
+          <LanguageDropdown />
         </div>
 
         {/* Main Header */}
@@ -157,7 +162,7 @@ export default function Header() {
                   )}
                 </Link>
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  Compare Products
+                  {t("common.compareProducts")}
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               </div>
@@ -176,7 +181,7 @@ export default function Header() {
                   )}
                 </Link>
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  Wishlist
+                  {t("common.wishlist")}
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               </div>
@@ -189,7 +194,7 @@ export default function Header() {
                 >
                   {currentUser?.first_name ||
                     currentUser?.name ||
-                    "Llogaria ime"}
+                    t("header.account.myAccount")}
                   <FiChevronDown className="ml-1" />
                 </button>
                 {isDropdownOpen && currentUser && (
@@ -199,13 +204,13 @@ export default function Header() {
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setIsDropdownOpen(false)}
                     >
-                      Profilin tim
+                      {t("header.account.myProfile")}
                     </Link>
                     <button
                       onClick={handleLogout}
                       className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
-                      Dil
+                      {t("header.account.logout")}
                     </button>
                   </div>
                 )}
@@ -216,7 +221,7 @@ export default function Header() {
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setIsDropdownOpen(false)}
                     >
-                      Kyçu
+                      {t("header.account.login")}
                     </Link>
                   </div>
                 )}
@@ -236,7 +241,7 @@ export default function Header() {
                   )}
                 </div>
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  Shopping Cart
+                  {t("common.shoppingCart")}
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                 </div>
               </div>
