@@ -5,9 +5,12 @@ import { Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/navigation";
 import { FaCartPlus } from "react-icons/fa";
+import { useLanguage } from "../../context/LanguageContext";
+import { getThemeHtml, getThemeCss } from "../../utils/translations";
 import { fixThemeImageUrls, fixThemeCss } from "../../utils/imageUrlFixer";
 
 const Offers = () => {
+  const { language } = useLanguage();
   const [offerHtml, setOfferHtml] = useState("");
   const [offerCss, setOfferCss] = useState("");
   const [products, setProducts] = useState([]);
@@ -26,7 +29,8 @@ const Offers = () => {
             item.type === "static_content" && item.name === "Offer Information"
         );
         if (offerSection) {
-          const { html, css } = offerSection.options;
+          const html = getThemeHtml(offerSection, language);
+          const css = getThemeCss(offerSection, language);
           setOfferHtml(html);
           setOfferCss(css);
         }
@@ -53,7 +57,7 @@ const Offers = () => {
     };
 
     fetchOfferAndDeals();
-  }, []);
+  }, [language]);
 
   return (
     <div className="relative w-full max-w-7xl mx-auto overflow-hidden px-4">

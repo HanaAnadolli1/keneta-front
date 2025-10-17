@@ -306,3 +306,19 @@ export function useApplyCoupon() {
     onSuccess: () => qc.invalidateQueries(["cart"]),
   });
 }
+
+// --- Locales ---
+export function useLocales() {
+  return useQuery({
+    queryKey: ["locales"],
+    queryFn: async () => {
+      const res = await fetch(`${API_V1}/locales`, {
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(`Fetch locales failed: ${res.status}`);
+      const json = await res.json();
+      return json.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}

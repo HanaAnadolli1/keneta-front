@@ -123,10 +123,12 @@ export default function Header() {
             <div className="hidden md:block text-center">
               {t("header.topBar.freeShipping")}
             </div>
-            <div>{t("header.topBar.b2b")}</div>
+            <div className="flex items-center gap-2">
+              <div>{t("header.topBar.b2b")}</div>
+              {/* Language Dropdown */}
+              <LanguageDropdown />
+            </div>
           </div>
-          {/* Language Dropdown */}
-          <LanguageDropdown />
         </div>
 
         {/* Main Header */}

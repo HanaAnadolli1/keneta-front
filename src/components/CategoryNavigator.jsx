@@ -1,6 +1,8 @@
 // src/components/CategoryNavigator.jsx
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useLanguage } from "../context/LanguageContext";
+import { getCategoryName } from "../utils/translations";
 import noImage from "../assets/no_image.jpg";
 import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 
@@ -50,6 +52,8 @@ function normCat(c) {
 }
 
 function CategoryCard({ cat }) {
+  const { language } = useLanguage();
+
   // Fix image URLs - convert relative paths to full URLs
   const getImageSrc = () => {
     const logoUrl = cat.logo_url;
@@ -77,17 +81,18 @@ function CategoryCard({ cat }) {
   };
 
   const imgSrc = getImageSrc();
+  const translatedName = getCategoryName(cat, language);
 
   return (
     <Link
       to={`/products?category=${encodeURIComponent(cat.slug)}`}
       className="group bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-2 hover:shadow-md transition-all duration-200 w-full"
-      title={cat.name}
+      title={translatedName}
     >
       <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
         <img
           src={imgSrc}
-          alt={cat.name}
+          alt={translatedName}
           className="w-8 h-8 object-contain"
           loading="lazy"
           onError={(e) => {
@@ -96,7 +101,7 @@ function CategoryCard({ cat }) {
         />
       </div>
       <span className="text-xs font-medium text-gray-700 group-hover:text-[#00A7E5] group-hover:underline transition-colors duration-200 flex-1 truncate">
-        {cat.name}
+        {translatedName}
       </span>
     </Link>
   );

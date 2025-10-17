@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu as MenuIcon, X as CloseIcon, ChevronDown } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { getCategoryName } from "../utils/translations";
 
 const API_BASE = "https://admin.keneta-ks.com/api/v2";
 
@@ -34,7 +35,7 @@ function getCatIconUrl(cat) {
 }
 
 export default function Menu() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState("categories"); // "categories" | "pages"
 
@@ -186,7 +187,7 @@ export default function Menu() {
                             referrerPolicy="no-referrer"
                           />
                         )}
-                        {cat.name}
+                        {getCategoryName(cat, language)}
                       </span>
                     </Link>
                   </li>
@@ -265,7 +266,7 @@ export default function Menu() {
                               referrerPolicy="no-referrer"
                             />
                           )}
-                          {cat.name}
+                          {getCategoryName(cat, language)}
                         </span>
                       </Link>
                     </li>

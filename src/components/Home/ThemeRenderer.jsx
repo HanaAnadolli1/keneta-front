@@ -1,4 +1,6 @@
 import React, { useEffect } from "react";
+import { useLanguage } from "../../context/LanguageContext";
+import { getThemeHtml, getThemeCss } from "../../utils/translations";
 import TopCollections from "./TopCollections";
 import BoldCollections from "./BoldCollections";
 import GameContainer from "./GameContainer";
@@ -12,6 +14,8 @@ import {
 } from "../../utils/imageUrlFixer";
 
 const ThemeRenderer = ({ customization }) => {
+  const { language } = useLanguage();
+
   useEffect(() => {
     // Initialize lazy loading after component mounts
     const timer = setTimeout(() => {
@@ -36,21 +40,22 @@ const ThemeRenderer = ({ customization }) => {
         return <ServicesContent customization={customization} />;
       } else {
         // Generic static content renderer
+        const translatedHtml = getThemeHtml(customization, language);
+        const translatedCss = getThemeCss(customization, language);
+
         return (
           <div className="relative w-full overflow-hidden px-4">
-            {customization.options?.css && (
+            {translatedCss && (
               <style
                 dangerouslySetInnerHTML={{
-                  __html: fixThemeCss(
-                    fixThemeImageUrls(customization.options.css)
-                  ),
+                  __html: fixThemeCss(fixThemeImageUrls(translatedCss)),
                 }}
               />
             )}
-            {customization.options?.html && (
+            {translatedHtml && (
               <div
                 dangerouslySetInnerHTML={{
-                  __html: fixThemeImageUrls(customization.options.html),
+                  __html: fixThemeImageUrls(translatedHtml),
                 }}
               />
             )}

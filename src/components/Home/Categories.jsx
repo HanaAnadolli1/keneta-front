@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { useLanguage } from "../../context/LanguageContext";
+import { getCategoryName } from "../../utils/translations";
 import noImage from "../../assets/no_image.jpg";
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState(null);
+  const { language } = useLanguage();
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -67,12 +70,12 @@ const Categories = () => {
               <div className="w-12 h-12 flex items-center justify-center mb-3">
                 <img
                   src={cat.logo_url || noImage}
-                  alt={cat.name}
+                  alt={getCategoryName(cat, language)}
                   className="w-8 h-8 object-contain"
                 />
               </div>
               <span className="text-sm font-medium text-gray-700 group-hover:text-[#00A7E5] group-hover:underline transition-colors duration-200">
-                {cat.name}
+                {getCategoryName(cat, language)}
               </span>
             </a>
           ))}

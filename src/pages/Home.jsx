@@ -1,5 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLanguage } from "../context/LanguageContext";
+import { getThemeImages } from "../utils/translations";
 
 import Carousel from "../components/Home/Carousel";
 import Offers from "../components/Home/Offers";
@@ -8,8 +10,10 @@ import DealsCarousel from "../components/Home/DealsCarousel";
 import ThemeRenderer from "../components/Home/ThemeRenderer";
 
 function useThemeCustomizations() {
+  const { language } = useLanguage();
+
   return useQuery({
-    queryKey: ["home", "themeCustomizations"],
+    queryKey: ["home", "themeCustomizations", language],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await fetch(
@@ -31,13 +35,12 @@ function useThemeCustomizations() {
       const imageCarousels = activeCustomizations
         .filter((x) => x?.type === "image_carousel")
         .map((x) => {
-          const translated =
-            x?.translations?.[0]?.options?.images ?? x?.options?.images ?? [];
+          const translatedImages = getThemeImages(x, language);
           return {
             id: x.id,
             name: x.name,
             sort_order: Number(x?.sort_order ?? 0),
-            images: translated.map((img) => ({
+            images: translatedImages.map((img) => ({
               image: img?.image ?? "",
               title: img?.title ?? "",
               subtitle: img?.subtitle ?? "",
@@ -76,6 +79,7 @@ function useThemeCustomizations() {
 }
 
 export default function Home() {
+  const { language } = useLanguage();
   const { data, isLoading, error } = useThemeCustomizations();
   const groupedCarousels = data?.groupedCarousels ?? [];
   const customizations = data?.customizations ?? [];
